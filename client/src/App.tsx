@@ -14,6 +14,7 @@ import AssignmentsManagement from './components/AssignmentsManagement';
 import MyScoopers from './components/MyScoopers';
 import MyLovedOnes from './components/MyLovedOnes';
 import AccountSetup from './components/AccountSetup';
+import OnboardingVerify from './components/OnboardingVerify';
 import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 
@@ -103,6 +104,12 @@ function AppContent() {
 
   if (!isAuthenticated) {
     return <LoginForm />;
+  }
+
+  // Compliance gate: Redirect Super Scoopers, Guardians, and Job Coaches who haven't completed ROI
+  const requiresOnboarding = (user?.role === 'Super Scooper' || user?.role === 'Guardian' || user?.role === 'Job Coach') && !user?.roiStatus;
+  if (requiresOnboarding) {
+    return <OnboardingVerify />;
   }
 
   const renderContent = () => {

@@ -7,6 +7,7 @@ interface User {
   role: string;
   isActive: boolean;
   userType: 'user' | 'employee';
+  roiStatus: boolean;
 }
 
 interface SessionData {
@@ -25,6 +26,7 @@ interface AuthContextType {
   showSessionWarning: boolean;
   timeUntilExpiry: number;
   extendSession: () => void;
+  updateRoiStatus: (status: boolean) => void;
 }
 
 // Session configuration - industry standards for shift management
@@ -206,7 +208,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             name: data.user.name || `${data.user.first_name || ''} ${data.user.last_name || ''}`.trim(),
             role: data.user.role,
             isActive: data.user.is_active,
-            userType: 'employee'
+            userType: 'employee',
+            roiStatus: data.user.roi_status ?? false
           };
           
           setUser(userData);
@@ -233,6 +236,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateRoiStatus = useCallback((status: boolean) => {
+    if (user) {
+      const updatedUser = { ...user, roiStatus: status };
+      setUser(updatedUser);
+      // Update session storage
+      const session = getSession();
+      if (session) {
+        session.user = updatedUser;
+        localStorage.setItem('golden-scoop-session', JSON.stringify(session));
+      }
+    }
+  }, [user]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -253,7 +269,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshSession,
       showSessionWarning,
       timeUntilExpiry,
-      extendSession
+      extendSession,
+      updateRoiStatus
     }}>
       {children}
     </AuthContext.Provider>

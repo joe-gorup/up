@@ -22,6 +22,11 @@ export const employees = pgTable("employees", {
   password: text("password"), // Only set if has_system_access is true
   last_login: timestamp("last_login", { withTimezone: true }),
   
+  // ROI compliance fields
+  date_of_birth: date("date_of_birth"),
+  roi_status: boolean("roi_status").default(false),
+  roi_signed_at: timestamp("roi_signed_at", { withTimezone: true }),
+  
   // Profile/safety information
   allergies: jsonb("allergies").default(sql`'[]'::jsonb`),
   emergency_contacts: jsonb("emergency_contacts").default(sql`'[]'::jsonb`),

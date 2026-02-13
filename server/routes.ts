@@ -105,7 +105,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           first_name: foundEmployee.first_name,
           last_name: foundEmployee.last_name,
           role: foundEmployee.role,
-          is_active: foundEmployee.is_active
+          is_active: foundEmployee.is_active,
+          roi_status: foundEmployee.roi_status ?? false
         },
         token
       });
@@ -115,6 +116,155 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+
+  // Onboarding/Compliance endpoints
+  // Verify DOB - for Guardians, verifies against their linked Super Scooper's DOB
+  app.post("/api/onboarding/verify-dob", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { date_of_birth } = req.body;
+
+      if (!date_of_birth) {
+        return res.status(400).json({ error: 'Date of birth is required' });
+      }
+
+      // Normalize the input date to YYYY-MM-DD format
+      const inputDOB = new Date(date_of_birth).toISOString().split('T')[0];
+
+      if (user.role === 'Guardian') {
+        // For Guardians, look up their linked Super Scooper and verify against that DOB
+        const relationships = await db.select().from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+
+        if (relationships.length === 0) {
+          return res.status(400).json({ error: 'No linked family member found' });
+        }
+
+        // Get the first linked Super Scooper (primary relationship)
+        const scooperId = relationships[0].scooper_id;
+        const [scooper] = await db.select().from(employees)
+          .where(eq(employees.id, scooperId))
+          .limit(1);
+
+        if (!scooper) {
+          return res.status(400).json({ error: 'Linked family member not found' });
+        }
+
+        if (!scooper.date_of_birth) {
+          return res.status(400).json({ error: 'Family member date of birth not set in system' });
+        }
+
+        // Compare DOBs
+        const scooperDOB = new Date(scooper.date_of_birth).toISOString().split('T')[0];
+        if (inputDOB !== scooperDOB) {
+          logger.warn({ guardianId: user.id, scooperId }, 'DOB verification failed for Guardian');
+          return res.status(400).json({ error: 'Date of birth does not match our records' });
+        }
+
+        logger.info({ guardianId: user.id, scooperId }, 'DOB verification successful for Guardian');
+        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+      } else {
+        // For Super Scoopers/Employees, verify against their own DOB
+        const [employee] = await db.select().from(employees)
+          .where(eq(employees.id, user.id))
+          .limit(1);
+
+        if (!employee) {
+          return res.status(404).json({ error: 'Employee not found' });
+        }
+
+        if (!employee.date_of_birth) {
+          return res.status(400).json({ error: 'Date of birth not set in system' });
+        }
+
+        // Compare DOBs
+        const employeeDOB = new Date(employee.date_of_birth).toISOString().split('T')[0];
+        if (inputDOB !== employeeDOB) {
+          logger.warn({ employeeId: user.id }, 'DOB verification failed for Employee');
+          return res.status(400).json({ error: 'Date of birth does not match our records' });
+        }
+
+        logger.info({ employeeId: user.id }, 'DOB verification successful for Employee');
+        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+      }
+    } catch (error) {
+      logger.error({ error, userId: (req as any).user?.id }, 'DOB verification failed');
+      res.status(500).json({ error: 'Verification failed' });
+    }
+  });
+
+  // Sign ROI - marks the user (and their linked Super Scooper for Guardians) as having signed
+  app.post("/api/onboarding/sign-roi", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const now = new Date();
+
+      // Update the current user's ROI status
+      await db.update(employees)
+        .set({ 
+          roi_status: true, 
+          roi_signed_at: now,
+          updated_at: now
+        })
+        .where(eq(employees.id, user.id));
+
+      // For Guardians, also update their linked Super Scooper's ROI status
+      if (user.role === 'Guardian') {
+        const relationships = await db.select().from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+
+        for (const rel of relationships) {
+          await db.update(employees)
+            .set({ 
+              roi_status: true, 
+              roi_signed_at: now,
+              updated_at: now
+            })
+            .where(eq(employees.id, rel.scooper_id));
+        }
+
+        logger.info({ 
+          guardianId: user.id, 
+          scooperIds: relationships.map(r => r.scooper_id) 
+        }, 'ROI signed by Guardian for self and linked Super Scoopers');
+      } else {
+        logger.info({ employeeId: user.id }, 'ROI signed by Employee');
+      }
+
+      res.json({ success: true, message: 'ROI signed successfully', roi_status: true });
+    } catch (error) {
+      logger.error({ error, userId: (req as any).user?.id }, 'ROI signing failed');
+      res.status(500).json({ error: 'Failed to sign ROI' });
+    }
+  });
+
+  // Get current user's onboarding status
+  app.get("/api/onboarding/status", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+
+      const [employee] = await db.select().from(employees)
+        .where(eq(employees.id, user.id))
+        .limit(1);
+
+      if (!employee) {
+        return res.status(404).json({ error: 'Employee not found' });
+      }
+
+      // Determine if onboarding is required based on role
+      const requiresOnboarding = (user.role === 'Super Scooper' || user.role === 'Guardian' || user.role === 'Job Coach') 
+        && !employee.roi_status;
+
+      res.json({
+        roi_status: employee.roi_status ?? false,
+        roi_signed_at: employee.roi_signed_at,
+        requires_onboarding: requiresOnboarding
+      });
+    } catch (error) {
+      logger.error({ error, userId: (req as any).user?.id }, 'Failed to get onboarding status');
+      res.status(500).json({ error: 'Failed to get onboarding status' });
+    }
+  });
 
   // NOTE: Users management has been consolidated into employees table
   // All user management is now handled through /api/employees endpoints
