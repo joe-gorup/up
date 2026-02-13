@@ -35,6 +35,10 @@ export const employees = pgTable("employees", {
   roi_guardian_phone: text("roi_guardian_phone"),
   roi_guardian_relationship: text("roi_guardian_relationship"),
   
+  // Service provider information
+  has_service_provider: boolean("has_service_provider").default(false),
+  service_providers: jsonb("service_providers").default(sql`'[]'::jsonb`),
+  
   // Profile/safety information
   allergies: jsonb("allergies").default(sql`'[]'::jsonb`),
   emergency_contacts: jsonb("emergency_contacts").default(sql`'[]'::jsonb`),
