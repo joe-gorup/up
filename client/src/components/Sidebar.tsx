@@ -34,7 +34,7 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
-    const userRole = user?.role?.toLowerCase() || 'shift_manager';
+    const userRole = user?.role?.toLowerCase() || 'shift manager';
     return item.roles.includes(userRole);
   });
 

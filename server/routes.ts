@@ -1474,7 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'alex.johnson@goldenscoopice.org',
             password: 'password',
             name: 'Alex Johnson',
-            role: 'shift_manager',
+            role: 'Shift Manager',
             is_active: true
           },
           {
@@ -1482,7 +1482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'emma.davis@goldenscoopice.org',
             password: 'password',
             name: 'Emma Davis',
-            role: 'shift_manager',
+            role: 'Shift Manager',
             is_active: true
           },
           {
@@ -1490,7 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'jordan.smith@goldenscoopice.org',
             password: 'password',
             name: 'Jordan Smith',
-            role: 'shift_manager',
+            role: 'Shift Manager',
             is_active: true
           }
         ];
