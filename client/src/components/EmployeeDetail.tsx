@@ -34,23 +34,36 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [guardianForm, setGuardianForm] = useState({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
   const [guardianSaving, setGuardianSaving] = useState(false);
   const [guardianError, setGuardianError] = useState('');
+  const [coachMentees, setCoachMentees] = useState<any[]>([]);
+  const [selectedMenteeId, setSelectedMenteeId] = useState('');
+  const [menteeError, setMenteeError] = useState('');
 
   useEffect(() => {
     async function fetchRelationships() {
       const isManager = ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '');
       if (!isManager) return;
       try {
-        const [guardianRes, coachRes] = await Promise.all([
-          apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
-          apiRequest(`/api/coach-assignments/scooper/${employeeId}`)
-        ]);
-        if (guardianRes.ok) {
-          const data = await guardianRes.json();
-          setConnectedGuardians(data);
-        }
-        if (coachRes.ok) {
-          const data = await coachRes.json();
-          setAssignedCoaches(data);
+        const employee = employees.find(e => e.id === employeeId);
+
+        if (employee?.role === 'Job Coach') {
+          const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+          if (menteeRes.ok) {
+            const data = await menteeRes.json();
+            setCoachMentees(data);
+          }
+        } else {
+          const [guardianRes, coachRes] = await Promise.all([
+            apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
+            apiRequest(`/api/coach-assignments/scooper/${employeeId}`)
+          ]);
+          if (guardianRes.ok) {
+            const data = await guardianRes.json();
+            setConnectedGuardians(data);
+          }
+          if (coachRes.ok) {
+            const data = await coachRes.json();
+            setAssignedCoaches(data);
+          }
         }
       } catch (err) {
       }
@@ -197,6 +210,45 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
       setGuardianError('Failed to create guardian');
     } finally {
       setGuardianSaving(false);
+    }
+  };
+
+  const handleAssignMentee = async () => {
+    if (!selectedMenteeId) return;
+    setMenteeError('');
+    try {
+      const res = await apiRequest('/api/coach-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coach_id: employeeId,
+          scooper_id: selectedMenteeId,
+          assigned_by: user?.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setMenteeError(data.error || 'Failed to assign mentee');
+        return;
+      }
+      setSelectedMenteeId('');
+      const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+      if (menteeRes.ok) {
+        const data = await menteeRes.json();
+        setCoachMentees(data);
+      }
+    } catch (err) {
+      setMenteeError('Failed to assign mentee');
+    }
+  };
+
+  const handleRemoveMentee = async (assignmentId: string) => {
+    if (!window.confirm('Are you sure you want to remove this mentee assignment?')) return;
+    try {
+      await apiRequest(`/api/coach-assignments/${assignmentId}`, { method: 'DELETE' });
+      setCoachMentees(prev => prev.filter(a => a.id !== assignmentId));
+    } catch (err) {
+      console.error('Failed to remove mentee:', err);
     }
   };
 
@@ -351,6 +403,79 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
+          {employee.role === 'Job Coach' && ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-green-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Assigned Mentees</h2>
+                </div>
+              </div>
+
+              {user?.role === 'Administrator' && (
+                <div className="mb-4">
+                  {menteeError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg mb-3">{menteeError}</div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={selectedMenteeId}
+                      onChange={e => setSelectedMenteeId(e.target.value)}
+                      className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">Select an employee to assign...</option>
+                      {employees
+                        .filter(e =>
+                          e.isActive &&
+                          e.role === 'Super Scooper' &&
+                          !coachMentees.some(m => m.scooper_id === e.id)
+                        )
+                        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+                        .map(e => (
+                          <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                        ))
+                      }
+                    </select>
+                    <button
+                      onClick={handleAssignMentee}
+                      disabled={!selectedMenteeId}
+                      className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      Assign
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {coachMentees.length > 0 ? (
+                <div className="space-y-3">
+                  {coachMentees.map((assignment: any) => (
+                    <div key={assignment.id} className="flex items-center justify-between bg-green-50 px-4 py-3 rounded-xl">
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{getPersonName(assignment.scooper_id)}</p>
+                        <p className="text-xs text-gray-500">
+                          {employees.find(e => e.id === assignment.scooper_id)?.email || ''}
+                        </p>
+                      </div>
+                      {user?.role === 'Administrator' && (
+                        <button
+                          onClick={() => handleRemoveMentee(assignment.id)}
+                          className="text-red-400 hover:text-red-600 p-1"
+                          title="Remove assignment"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No mentees assigned yet.</p>
+              )}
             </div>
           )}
 
