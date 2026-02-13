@@ -162,7 +162,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         logger.info({ guardianId: user.id, scooperId }, 'DOB verification successful for Guardian');
-        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+        return res.json({
+          verified: true,
+          message: 'Date of birth verified successfully',
+          employee: {
+            name: `${scooper.first_name || ''} ${scooper.last_name || ''}`.trim() || scooper.name,
+            date_of_birth: scooper.date_of_birth,
+            email: scooper.email || '',
+          }
+        });
       } else {
         // For Super Scoopers/Employees, verify against their own DOB
         const [employee] = await db.select().from(employees)
@@ -185,7 +193,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         logger.info({ employeeId: user.id }, 'DOB verification successful for Employee');
-        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+        return res.json({
+          verified: true,
+          message: 'Date of birth verified successfully',
+          employee: {
+            name: `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || employee.name,
+            date_of_birth: employee.date_of_birth,
+            email: employee.email || '',
+          }
+        });
       }
     } catch (error) {
       logger.error({ error, userId: (req as any).user?.id }, 'DOB verification failed');

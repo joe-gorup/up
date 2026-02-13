@@ -14,6 +14,7 @@ export default function OnboardingVerify() {
 
   const [consentType, setConsentType] = useState<'release_all' | 'no_release' | null>(null);
   const [noReleaseDetails, setNoReleaseDetails] = useState('');
+  const [employeeInfo, setEmployeeInfo] = useState<{ name: string; date_of_birth: string; email: string } | null>(null);
 
   const [guardianName, setGuardianName] = useState('');
   const [guardianAddress, setGuardianAddress] = useState('');
@@ -139,6 +140,9 @@ export default function OnboardingVerify() {
       const data = await response.json();
 
       if (response.ok && data.verified) {
+        if (data.employee) {
+          setEmployeeInfo(data.employee);
+        }
         setStep('sign-roi');
       } else {
         setError(data.error || 'Date of birth verification failed. Please try again.');
@@ -307,11 +311,6 @@ export default function OnboardingVerify() {
               </h2>
             </div>
 
-            <div className="text-center mb-4">
-              <p className="text-sm font-semibold text-gray-800">The Golden Scoop</p>
-              <p className="text-xs text-gray-500">Authorization For Exchange of Information</p>
-            </div>
-
             <div
               ref={roiScrollRef}
               onScroll={() => {
@@ -320,21 +319,52 @@ export default function OnboardingVerify() {
                   setHasScrolledROI(true);
                 }
               }}
-              className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-2 max-h-52 sm:max-h-72 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3">
-              <p>
-                I hereby authorize The Golden Scoop to exchange information, including health and employment information.
-              </p>
+              className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-2 max-h-52 sm:max-h-72 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3 border border-gray-200">
+
+              <div className="text-center mb-2">
+                <p className="text-sm font-bold text-gray-900">The Golden Scoop</p>
+                <p className="text-xs font-semibold text-gray-700">Authorization For Exchange of Information</p>
+              </div>
+
+              {employeeInfo && (
+                <div className="border-t border-b border-gray-300 py-2 space-y-1 text-xs text-gray-800">
+                  <div className="flex flex-wrap gap-x-6">
+                    <span><span className="font-semibold">Employee Name:</span> {employeeInfo.name}</span>
+                  </div>
+                  <div className="flex flex-wrap gap-x-6">
+                    <span><span className="font-semibold">Date of Birth:</span> {employeeInfo.date_of_birth ? new Date(employeeInfo.date_of_birth + 'T00:00:00').toLocaleDateString() : '—'}</span>
+                  </div>
+                </div>
+              )}
 
               <p>
-                This release covers all employment records, medical records, including diagnosis, evaluations, assessments, school records, and other information that may be relevant to the parties. This authorization is valid for information to be exchanged in any format, including but not limited to: written, audio/visual, electronic/digital, verbal.
+                I hereby authorize The Golden Scoop to exchange information, including health and employment information, with:
               </p>
 
-              <p>
-                I understand the information in my health record may include information relating to sexually transmitted disease, Acquired Immunodeficiency Syndrome (AIDS), or Human Immunodeficiency Virus (HIV). It may also include information about behavioral or mental health services, and treatment for alcohol and drug abuse.
-              </p>
+              <div className="space-y-2 pl-2">
+                <p className="border-b border-gray-400 pb-1">
+                  <span className="font-semibold">Agency &/or Person:</span> The Golden Scoop — Management & Human Resources
+                </p>
+                <p className="border-b border-gray-400 pb-1">
+                  <span className="font-semibold">Agency &/or Person:</span> Vocational Rehabilitation Services / Job Coaching Agencies
+                </p>
+                <p className="border-b border-gray-400 pb-1">
+                  <span className="font-semibold">Agency &/or Person:</span> Parents, Guardians, or Authorized Representatives
+                </p>
+              </div>
 
               <p>
-                I understand that this authorization may be revoked by the person named above and/or their guardian at any time except to the extent the action has already taken place. I understand that if I revoke this authorization I must do so in writing and present my written revocation to leadership or Human Resources. Unless otherwise revoked, this authorization will expire one year from date of signature.
+                This release covers all employment records, medical records, including diagnosis, evaluations, assessments, school records, and other information that may be relevant to the parties. This authorization is valid for information to be exchanged in any format, including but not limited to: written, audio/visual, electronic/digital, verbal. Please list below if there are any records you do not consent to releasing:
+              </p>
+
+              <div className="border border-gray-300 rounded-lg p-3 bg-white">
+                <p className="text-xs italic text-gray-500">
+                  I understand the information in my health record may include information relating to sexually transmitted disease, Acquired Immunodeficiency Syndrome (AIDS), or Human Immunodeficiency Virus (HIV). It may also include information about behavioral or mental health services, and treatment for alcohol and drug abuse.
+                </p>
+              </div>
+
+              <p>
+                I understand that this authorization may be revoked by the person named above and/or their guardian at any time except to the extent the action has already taken place. I understand that if I revoke this authorization I must do so in writing and present my written revocation to leadership or Human Resources. <strong>Unless otherwise revoked, this authorization will expire one year from date of signature.</strong>
               </p>
 
               <p>
