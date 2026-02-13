@@ -106,8 +106,8 @@ function AppContent() {
     return <LoginForm />;
   }
 
-  // Compliance gate: Redirect Super Scoopers, Guardians, and Job Coaches who haven't completed ROI
-  const requiresOnboarding = (user?.role === 'Super Scooper' || user?.role === 'Guardian' || user?.role === 'Job Coach') && !user?.roiStatus;
+  // Compliance gate: Redirect Super Scoopers and Guardians who haven't completed ROI
+  const requiresOnboarding = (user?.role === 'Super Scooper' || user?.role === 'Guardian') && !user?.roiStatus;
   if (requiresOnboarding) {
     return <OnboardingVerify />;
   }
