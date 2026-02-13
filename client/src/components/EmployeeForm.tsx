@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
-import { ArrowLeft, Plus, X, AlertTriangle, Phone, Heart, Brain, Shield, Upload, Key, Mail, CheckCircle, Lock, Award, Star, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { ArrowLeft, Plus, X, AlertTriangle, Phone, Heart, Brain, Shield, Upload, Key, Mail, CheckCircle, Lock, Award, Star, Trash2, ChevronDown, ChevronUp, Building2 } from 'lucide-react';
 import { useData, Employee, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -193,7 +193,9 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
     emergencyContacts: [{ name: '', relationship: '', phone: '' }],
     interestsMotivators: [''],
     challenges: [''],
-    regulationStrategies: ['']
+    regulationStrategies: [''],
+    hasServiceProvider: false,
+    serviceProviders: [{ name: '', type: '' }]
   });
 
   const getSystemAccessByRole = (role: string) => {
@@ -224,7 +226,9 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
           emergencyContacts: employee.emergencyContacts.length > 0 ? employee.emergencyContacts : [{ name: '', relationship: '', phone: '' }],
           interestsMotivators: employee.interestsMotivators.length > 0 ? employee.interestsMotivators : [''],
           challenges: employee.challenges.length > 0 ? employee.challenges : [''],
-          regulationStrategies: employee.regulationStrategies.length > 0 ? employee.regulationStrategies : ['']
+          regulationStrategies: employee.regulationStrategies.length > 0 ? employee.regulationStrategies : [''],
+          hasServiceProvider: employee.hasServiceProvider || false,
+          serviceProviders: employee.serviceProviders && employee.serviceProviders.length > 0 ? employee.serviceProviders : [{ name: '', type: '' }]
         });
         // For existing employees, hide password fields by default
         setShowPasswordFields(false);
@@ -286,7 +290,9 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         emergencyContacts: formData.emergencyContacts.filter(c => c.name.trim() !== '' || c.relationship.trim() !== '' || c.phone.trim() !== ''),
         interestsMotivators: formData.interestsMotivators.filter(i => i.trim() !== ''),
         challenges: formData.challenges.filter(c => c.trim() !== ''),
-        regulationStrategies: formData.regulationStrategies.filter(r => r.trim() !== '')
+        regulationStrategies: formData.regulationStrategies.filter(r => r.trim() !== ''),
+        hasServiceProvider: formData.hasServiceProvider,
+        serviceProviders: formData.hasServiceProvider ? formData.serviceProviders.filter(p => p.name.trim() !== '') : []
       };
 
       if (employeeId) {
@@ -729,6 +735,96 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
             </button>
           </div>
         </div>
+
+        {/* Service Provider Information */}
+        {formData.role === 'Super Scooper' && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+          <div className="flex items-center space-x-2 mb-4">
+            <Building2 className="h-5 w-5 text-indigo-500" />
+            <h2 className="text-xl font-semibold text-gray-900">Service Provider</h2>
+          </div>
+          <p className="text-sm text-gray-500 mb-4">
+            Does this employee utilize a service provider organization or individual (e.g., Personal Care Assistant)?
+          </p>
+
+          <label className="flex items-center space-x-3 mb-4 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={formData.hasServiceProvider}
+              onChange={(e) => setFormData(prev => ({ ...prev, hasServiceProvider: e.target.checked }))}
+              className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+            />
+            <span className="text-sm font-medium text-gray-700">Yes, this employee has a service provider</span>
+          </label>
+
+          {formData.hasServiceProvider && (
+            <div className="space-y-3 mt-4 pl-2 border-l-2 border-indigo-200">
+              {formData.serviceProviders.map((provider, index) => (
+                <div key={index} className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-medium text-gray-700">Provider {index + 1}</h3>
+                    {formData.serviceProviders.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(prev => ({
+                          ...prev,
+                          serviceProviders: prev.serviceProviders.filter((_, i) => i !== index)
+                        }))}
+                        className="p-1 text-red-600 hover:bg-red-50 rounded"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Organization / Individual Name</label>
+                      <input
+                        type="text"
+                        value={provider.name}
+                        onChange={(e) => {
+                          const updated = [...formData.serviceProviders];
+                          updated[index] = { ...updated[index], name: e.target.value };
+                          setFormData(prev => ({ ...prev, serviceProviders: updated }));
+                        }}
+                        className={INPUT_BASE_CLASSES}
+                        placeholder="e.g., ABC Home Care Services"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Type / Role</label>
+                      <input
+                        type="text"
+                        value={provider.type}
+                        onChange={(e) => {
+                          const updated = [...formData.serviceProviders];
+                          updated[index] = { ...updated[index], type: e.target.value };
+                          setFormData(prev => ({ ...prev, serviceProviders: updated }));
+                        }}
+                        className={INPUT_BASE_CLASSES}
+                        placeholder="e.g., PCA, Job Coach Agency, etc."
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({
+                    ...prev,
+                    serviceProviders: [...prev.serviceProviders, { name: '', type: '' }]
+                  }))}
+                  className="flex items-center space-x-2 text-indigo-600 hover:text-indigo-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Add Provider</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+        )}
 
         {/* About Me - Support Information */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">

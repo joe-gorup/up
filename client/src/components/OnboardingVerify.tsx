@@ -14,7 +14,9 @@ export default function OnboardingVerify() {
 
   const [consentType, setConsentType] = useState<'release_all' | 'no_release' | null>(null);
   const [noReleaseDetails, setNoReleaseDetails] = useState('');
-  const [employeeInfo, setEmployeeInfo] = useState<{ name: string; date_of_birth: string; email: string } | null>(null);
+  const [employeeInfo, setEmployeeInfo] = useState<{ name: string; date_of_birth: string; email: string; has_service_provider: boolean; service_providers: Array<{ name: string; type: string }> } | null>(null);
+
+  const [roiServiceProviders, setRoiServiceProviders] = useState<Array<{ name: string; type: string }>>([]);
 
   const [guardianName, setGuardianName] = useState('');
   const [guardianAddress, setGuardianAddress] = useState('');
@@ -60,6 +62,9 @@ export default function OnboardingVerify() {
   useEffect(() => {
     if (step === 'sign-roi') {
       setTimeout(initCanvas, 100);
+      if (isGuardian && roiServiceProviders.length === 0) {
+        setRoiServiceProviders([{ name: '', type: '' }]);
+      }
     }
   }, [step, initCanvas]);
 
@@ -142,6 +147,11 @@ export default function OnboardingVerify() {
       if (response.ok && data.verified) {
         if (data.employee) {
           setEmployeeInfo(data.employee);
+          if (data.employee.service_providers && data.employee.service_providers.length > 0) {
+            setRoiServiceProviders(data.employee.service_providers);
+          } else if (isGuardian) {
+            setRoiServiceProviders([{ name: '', type: '' }]);
+          }
         }
         setStep('sign-roi');
       } else {
@@ -195,6 +205,7 @@ export default function OnboardingVerify() {
         body.guardian_city_state_zip = guardianCityStateZip;
         body.guardian_phone = guardianPhone;
         body.guardian_relationship = guardianRelationship;
+        body.service_providers = roiServiceProviders.filter(p => p.name.trim() !== '');
       }
 
       const response = await fetch('/api/onboarding/sign-roi', {
@@ -345,9 +356,17 @@ export default function OnboardingVerify() {
                 <p className="border-b border-gray-400 pb-1">
                   <span className="font-semibold">Agency &/or Person:</span> The Golden Scoop — Management & Human Resources
                 </p>
-                <p className="border-b border-gray-400 pb-1">
-                  <span className="font-semibold">Agency &/or Person:</span> Vocational Rehabilitation Services / Job Coaching Agencies
-                </p>
+                {roiServiceProviders.length > 0 ? (
+                  roiServiceProviders.map((provider, index) => (
+                    <p key={index} className="border-b border-gray-400 pb-1">
+                      <span className="font-semibold">Agency &/or Person:</span> {provider.name}{provider.type ? ` (${provider.type})` : ''}
+                    </p>
+                  ))
+                ) : (
+                  <p className="border-b border-gray-400 pb-1">
+                    <span className="font-semibold">Agency &/or Person:</span> <span className="italic text-gray-400">No service providers on file</span>
+                  </p>
+                )}
                 <p className="border-b border-gray-400 pb-1">
                   <span className="font-semibold">Agency &/or Person:</span> Parents, Guardians, or Authorized Representatives
                 </p>
@@ -383,6 +402,63 @@ export default function OnboardingVerify() {
             )}
 
             <div className={!hasScrolledROI ? 'opacity-40 pointer-events-none select-none' : ''}>
+
+            {isGuardian && (
+              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                <h3 className="text-sm font-semibold text-indigo-800 mb-2">
+                  Service Providers
+                </h3>
+                <p className="text-xs text-indigo-600 mb-3">
+                  Add any service provider organizations or individuals (e.g., Personal Care Assistant) that should be authorized to exchange information.
+                </p>
+                <div className="space-y-2">
+                  {roiServiceProviders.map((provider, index) => (
+                    <div key={index} className="flex gap-2 items-start">
+                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={provider.name}
+                          onChange={(e) => {
+                            const updated = [...roiServiceProviders];
+                            updated[index] = { ...updated[index], name: e.target.value };
+                            setRoiServiceProviders(updated);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                          placeholder="Organization / Individual name"
+                        />
+                        <input
+                          type="text"
+                          value={provider.type}
+                          onChange={(e) => {
+                            const updated = [...roiServiceProviders];
+                            updated[index] = { ...updated[index], type: e.target.value };
+                            setRoiServiceProviders(updated);
+                          }}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+                          placeholder="Type (e.g., PCA, Job Coach)"
+                        />
+                      </div>
+                      {roiServiceProviders.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => setRoiServiceProviders(prev => prev.filter((_, i) => i !== index))}
+                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg mt-0.5"
+                        >
+                          <span className="text-xs">✕</span>
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => setRoiServiceProviders(prev => [...prev, { name: '', type: '' }])}
+                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium mt-1"
+                  >
+                    + Add another provider
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="mb-4 sm:mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">

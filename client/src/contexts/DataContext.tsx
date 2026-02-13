@@ -22,6 +22,8 @@ export interface Employee {
   interestsMotivators: string[];
   challenges: string[];
   regulationStrategies: string[];
+  hasServiceProvider: boolean;
+  serviceProviders: Array<{ name: string; type: string }>;
   last_login: string | null;
   roi_status: boolean;
   createdAt: string;
@@ -197,6 +199,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: emp.interests_motivators || [],
           challenges: emp.challenges || [],
           regulationStrategies: emp.regulation_strategies || [],
+          hasServiceProvider: emp.has_service_provider || false,
+          serviceProviders: emp.service_providers || [],
           last_login: emp.last_login || null,
           roi_status: emp.roi_status || false,
           createdAt: emp.created_at,
@@ -376,6 +380,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Music', 'Art', 'Praise and recognition'],
         challenges: ['Loud noises', 'Sudden changes'],
         regulationStrategies: ['5-minute breaks', 'Visual schedules', 'Calm voice'],
+        hasServiceProvider: false,
+        serviceProviders: [],
         last_login: null,
         roi_status: false,
         createdAt: '2024-01-15T00:00:00Z',
@@ -397,6 +403,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Animals', 'Colorful stickers', 'Team activities'],
         challenges: ['Complex instructions'],
         regulationStrategies: ['Break tasks into steps', 'Use positive reinforcement'],
+        hasServiceProvider: false,
+        serviceProviders: [],
         last_login: null,
         roi_status: false,
         createdAt: '2024-01-20T00:00:00Z',
@@ -486,7 +494,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           emergency_contacts: employeeData.emergencyContacts,
           interests_motivators: employeeData.interestsMotivators,
           challenges: employeeData.challenges,
-          regulation_strategies: employeeData.regulationStrategies
+          regulation_strategies: employeeData.regulationStrategies,
+          has_service_provider: employeeData.hasServiceProvider,
+          service_providers: employeeData.serviceProviders,
         }),
       });
 
@@ -506,6 +516,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: newEmployee.interests_motivators || [],
           challenges: newEmployee.challenges || [],
           regulationStrategies: newEmployee.regulation_strategies || [],
+          hasServiceProvider: newEmployee.has_service_provider || false,
+          serviceProviders: newEmployee.service_providers || [],
           last_login: newEmployee.last_login || null,
           roi_status: newEmployee.roi_status || false,
           createdAt: newEmployee.created_at,
@@ -539,6 +551,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.interestsMotivators) updateData.interests_motivators = updates.interestsMotivators;
       if (updates.challenges) updateData.challenges = updates.challenges;
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
+      if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
+      if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
 
       const response = await apiRequest(`/api/employees/${id}`, {
         method: 'PUT',
@@ -564,6 +578,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: updatedEmployee.interests_motivators || [],
           challenges: updatedEmployee.challenges || [],
           regulationStrategies: updatedEmployee.regulation_strategies || [],
+          hasServiceProvider: updatedEmployee.has_service_provider || false,
+          serviceProviders: updatedEmployee.service_providers || [],
           last_login: updatedEmployee.last_login || null,
           roi_status: updatedEmployee.roi_status || false,
           createdAt: updatedEmployee.created_at,

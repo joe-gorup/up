@@ -169,6 +169,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: `${scooper.first_name || ''} ${scooper.last_name || ''}`.trim() || scooper.name,
             date_of_birth: scooper.date_of_birth,
             email: scooper.email || '',
+            has_service_provider: scooper.has_service_provider || false,
+            service_providers: scooper.service_providers || [],
           }
         });
       } else {
@@ -200,6 +202,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             name: `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || employee.name,
             date_of_birth: employee.date_of_birth,
             email: employee.email || '',
+            has_service_provider: employee.has_service_provider || false,
+            service_providers: employee.service_providers || [],
           }
         });
       }
@@ -222,7 +226,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         guardian_address,
         guardian_city_state_zip,
         guardian_phone,
-        guardian_relationship
+        guardian_relationship,
+        service_providers
       } = req.body;
 
       const updateData: any = { 
@@ -252,13 +257,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const relationships = await db.select().from(guardian_relationships)
           .where(eq(guardian_relationships.guardian_id, user.id));
 
+        const scooperUpdate: any = { 
+          roi_status: true, 
+          roi_signed_at: now,
+          updated_at: now
+        };
+        if (service_providers && Array.isArray(service_providers)) {
+          const cleanProviders = service_providers.filter((p: any) => p.name && p.name.trim() !== '');
+          scooperUpdate.has_service_provider = cleanProviders.length > 0;
+          scooperUpdate.service_providers = cleanProviders;
+        }
         for (const rel of relationships) {
           await db.update(employees)
-            .set({ 
-              roi_status: true, 
-              roi_signed_at: now,
-              updated_at: now
-            })
+            .set(scooperUpdate)
             .where(eq(employees.id, rel.scooper_id));
         }
 
