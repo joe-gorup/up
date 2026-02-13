@@ -26,6 +26,7 @@ export default function OnboardingVerify() {
 
   const [hasScrolledROI, setHasScrolledROI] = useState(false);
   const roiScrollRef = useRef<HTMLDivElement>(null);
+  const roiBottomRef = useRef<HTMLDivElement>(null);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
@@ -62,11 +63,21 @@ export default function OnboardingVerify() {
   useEffect(() => {
     if (step === 'sign-roi') {
       setTimeout(initCanvas, 100);
-      if (isGuardian && roiServiceProviders.length === 0) {
+      if (roiServiceProviders.length === 0) {
         setRoiServiceProviders([{ name: '', type: '' }]);
       }
     }
   }, [step, initCanvas]);
+
+  useEffect(() => {
+    if (step !== 'sign-roi' || !roiBottomRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) setHasScrolledROI(true); },
+      { threshold: 0.5 }
+    );
+    observer.observe(roiBottomRef.current);
+    return () => observer.disconnect();
+  }, [step]);
 
   const getPosition = (e: React.TouchEvent | React.MouseEvent) => {
     const canvas = canvasRef.current;
@@ -197,6 +208,7 @@ export default function OnboardingVerify() {
         signature: signatureData,
         consent_type: consentType,
         date: new Date().toISOString(),
+        service_providers: roiServiceProviders.filter(p => p.name.trim() !== ''),
       };
 
       if (isGuardian) {
@@ -205,7 +217,6 @@ export default function OnboardingVerify() {
         body.guardian_city_state_zip = guardianCityStateZip;
         body.guardian_phone = guardianPhone;
         body.guardian_relationship = guardianRelationship;
-        body.service_providers = roiServiceProviders.filter(p => p.name.trim() !== '');
       }
 
       const response = await fetch('/api/onboarding/sign-roi', {
@@ -315,68 +326,83 @@ export default function OnboardingVerify() {
 
         {step === 'sign-roi' && (
           <div>
-            <div className="flex items-center space-x-2 mb-3 sm:mb-4">
-              <FileCheck className="h-5 w-5 text-blue-600" />
-              <h2 className="text-base sm:text-lg font-medium text-gray-900">
-                Authorization For Exchange of Information
+            <div className="text-center mb-4 sm:mb-6">
+              <FileCheck className="h-6 w-6 text-blue-600 mx-auto mb-2" />
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900">
+                The Golden Scoop
               </h2>
+              <p className="text-sm text-gray-600">Authorization For Exchange of Information</p>
             </div>
 
-            <div
-              ref={roiScrollRef}
-              onScroll={() => {
-                const el = roiScrollRef.current;
-                if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
-                  setHasScrolledROI(true);
-                }
-              }}
-              className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-2 max-h-52 sm:max-h-72 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3 border border-gray-200">
+            {employeeInfo && (
+              <div className="border-t border-b border-gray-200 py-3 mb-4 sm:mb-6 space-y-1">
+                <p className="text-sm text-gray-800">
+                  <span className="font-semibold">Employee Name:</span> {employeeInfo.name}
+                </p>
+                <p className="text-sm text-gray-800">
+                  <span className="font-semibold">Date of Birth:</span> {employeeInfo.date_of_birth ? new Date(employeeInfo.date_of_birth + 'T00:00:00').toLocaleDateString() : '—'}
+                </p>
+              </div>
+            )}
 
-              <div className="text-center mb-2">
-                <p className="text-sm font-bold text-gray-900">The Golden Scoop</p>
-                <p className="text-xs font-semibold text-gray-700">Authorization For Exchange of Information</p>
+            <p className="text-sm text-gray-700 mb-4">
+              I hereby authorize The Golden Scoop to exchange information, including health and employment information, with:
+            </p>
+
+            <div className="space-y-3 mb-6 pl-1">
+              <div className="border-b border-gray-200 pb-2">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Agency &/or Person</label>
+                <p className="text-sm text-gray-800 font-medium">The Golden Scoop — Management & Human Resources</p>
               </div>
 
-              {employeeInfo && (
-                <div className="border-t border-b border-gray-300 py-2 space-y-1 text-xs text-gray-800">
-                  <div className="flex flex-wrap gap-x-6">
-                    <span><span className="font-semibold">Employee Name:</span> {employeeInfo.name}</span>
-                  </div>
-                  <div className="flex flex-wrap gap-x-6">
-                    <span><span className="font-semibold">Date of Birth:</span> {employeeInfo.date_of_birth ? new Date(employeeInfo.date_of_birth + 'T00:00:00').toLocaleDateString() : '—'}</span>
+              {roiServiceProviders.map((provider, index) => (
+                <div key={index} className="border-b border-gray-200 pb-2">
+                  <label className="block text-xs font-semibold text-gray-500 mb-1">Agency &/or Person</label>
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={provider.name}
+                      onChange={(e) => {
+                        const updated = [...roiServiceProviders];
+                        updated[index] = { ...updated[index], name: e.target.value };
+                        setRoiServiceProviders(updated);
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      placeholder="Enter agency or person name"
+                    />
+                    {roiServiceProviders.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setRoiServiceProviders(prev => prev.filter((_, i) => i !== index))}
+                        className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        <span className="text-sm">✕</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-              )}
+              ))}
 
-              <p>
-                I hereby authorize The Golden Scoop to exchange information, including health and employment information, with:
-              </p>
+              <button
+                type="button"
+                onClick={() => setRoiServiceProviders(prev => [...prev, { name: '', type: '' }])}
+                className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+              >
+                + Add another agency / person
+              </button>
 
-              <div className="space-y-2 pl-2">
-                <p className="border-b border-gray-400 pb-1">
-                  <span className="font-semibold">Agency &/or Person:</span> The Golden Scoop — Management & Human Resources
-                </p>
-                {roiServiceProviders.length > 0 ? (
-                  roiServiceProviders.map((provider, index) => (
-                    <p key={index} className="border-b border-gray-400 pb-1">
-                      <span className="font-semibold">Agency &/or Person:</span> {provider.name}
-                    </p>
-                  ))
-                ) : (
-                  <p className="border-b border-gray-400 pb-1">
-                    <span className="font-semibold">Agency &/or Person:</span> <span className="italic text-gray-400">No service providers on file</span>
-                  </p>
-                )}
-                <p className="border-b border-gray-400 pb-1">
-                  <span className="font-semibold">Agency &/or Person:</span> Parents, Guardians, or Authorized Representatives
-                </p>
+              <div className="border-b border-gray-200 pb-2">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Agency &/or Person</label>
+                <p className="text-sm text-gray-800 font-medium">Parents, Guardians, or Authorized Representatives</p>
               </div>
+            </div>
 
+            <div className="text-sm text-gray-700 space-y-4 mb-6">
               <p>
                 This release covers all employment records, medical records, including diagnosis, evaluations, assessments, school records, and other information that may be relevant to the parties. This authorization is valid for information to be exchanged in any format, including but not limited to: written, audio/visual, electronic/digital, verbal. Please list below if there are any records you do not consent to releasing:
               </p>
 
-              <div className="border border-gray-300 rounded-lg p-3 bg-white">
+              <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
                 <p className="text-xs italic text-gray-500">
                   I understand the information in my health record may include information relating to sexually transmitted disease, Acquired Immunodeficiency Syndrome (AIDS), or Human Immunodeficiency Virus (HIV). It may also include information about behavioral or mental health services, and treatment for alcohol and drug abuse.
                 </p>
@@ -391,63 +417,16 @@ export default function OnboardingVerify() {
               </p>
             </div>
 
+            <div ref={roiBottomRef} />
+
             {!hasScrolledROI && (
               <p className="text-xs text-amber-600 mb-4 sm:mb-6 flex items-center gap-1.5">
                 <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-                Please scroll through and read the full document above before continuing.
+                Please scroll through and read the entire document before signing.
               </p>
-            )}
-            {hasScrolledROI && (
-              <div className="mb-2 sm:mb-4" />
             )}
 
             <div className={!hasScrolledROI ? 'opacity-40 pointer-events-none select-none' : ''}>
-
-            {isGuardian && (
-              <div className="mb-4 sm:mb-6 p-3 sm:p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
-                <h3 className="text-sm font-semibold text-indigo-800 mb-2">
-                  Service Providers
-                </h3>
-                <p className="text-xs text-indigo-600 mb-3">
-                  Add any service provider organizations or individuals (e.g., Personal Care Assistant) that should be authorized to exchange information.
-                </p>
-                <div className="space-y-2">
-                  {roiServiceProviders.map((provider, index) => (
-                    <div key={index} className="flex gap-2 items-start">
-                      <div className="flex-1">
-                        <input
-                          type="text"
-                          value={provider.name}
-                          onChange={(e) => {
-                            const updated = [...roiServiceProviders];
-                            updated[index] = { ...updated[index], name: e.target.value };
-                            setRoiServiceProviders(updated);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder="Agency &/or Person"
-                        />
-                      </div>
-                      {roiServiceProviders.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => setRoiServiceProviders(prev => prev.filter((_, i) => i !== index))}
-                          className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg mt-0.5"
-                        >
-                          <span className="text-xs">✕</span>
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => setRoiServiceProviders(prev => [...prev, { name: '', type: '' }])}
-                    className="text-xs text-indigo-600 hover:text-indigo-700 font-medium mt-1"
-                  >
-                    + Add another provider
-                  </button>
-                </div>
-              </div>
-            )}
 
             <div className="mb-4 sm:mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -600,7 +579,7 @@ export default function OnboardingVerify() {
 
             <button
               onClick={handleSignROI}
-              disabled={loading || !hasSignature}
+              disabled={loading || !hasSignature || !hasScrolledROI}
               className="w-full bg-green-600 text-white py-4 px-4 rounded-xl font-medium hover:bg-green-700 focus:ring-4 focus:ring-green-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-base"
             >
               {loading ? 'Submitting...' : 'I Agree & Sign'}

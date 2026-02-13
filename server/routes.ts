@@ -247,6 +247,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.roi_guardian_relationship = guardian_relationship || null;
       }
 
+      if (service_providers && Array.isArray(service_providers)) {
+        const cleanProviders = service_providers.filter((p: any) => p.name && p.name.trim() !== '');
+        updateData.has_service_provider = cleanProviders.length > 0;
+        updateData.service_providers = cleanProviders;
+      }
+
       // Update the current user's ROI status
       await db.update(employees)
         .set(updateData)
