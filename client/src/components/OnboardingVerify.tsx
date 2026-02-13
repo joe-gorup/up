@@ -350,11 +350,6 @@ export default function OnboardingVerify() {
             </p>
 
             <div className="space-y-3 mb-6 pl-1">
-              <div className="border-b border-gray-200 pb-2">
-                <label className="block text-xs font-semibold text-gray-500 mb-1">Agency &/or Person</label>
-                <p className="text-sm text-gray-800 font-medium">The Golden Scoop — Management & Human Resources</p>
-              </div>
-
               {roiServiceProviders.map((provider, index) => (
                 <div key={index} className="border-b border-gray-200 pb-2">
                   <label className="block text-xs font-semibold text-gray-500 mb-1">Agency &/or Person</label>
