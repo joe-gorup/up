@@ -1,0 +1,4 @@
+name,role,profile_image_url,is_active,allergies,emergency_contacts,interests_motivators,challenges,regulation_strategies
+"John Smith","Super Scooper","","true","[""Peanuts""]","[{""name"":""Jane Smith"",""relationship"":""Mother"",""phone"":""555-1234""}]","[""Sports"",""Music""]","[""Loud environments""]","[""Regular breaks"",""Calm communication""]"
+"Sarah Wilson","Assistant Manager","","true","[]","[{""name"":""Mike Wilson"",""relationship"":""Father"",""phone"":""555-5678""}]","[""Leadership"",""Team building""]","[""Multitasking under pressure""]","[""Written task lists"",""Priority setting""]"
+"Tyler Chen","Super Scooper","","true","[""Dairy"",""Shellfish""]","[{""name"":""Lisa Chen"",""relationship"":""Guardian"",""phone"":""555-9012""}]","[""Technology"",""Problem solving""]","[""Social interactions""]","[""Visual instructions"",""Structured environment""]"

@@ -1,0 +1,107 @@
+Great idea! After all the recent changes, a comprehensive evaluation is essential. Let me create a structured plan to audit the codebase for deprecation opportunities and optimization potential.
+
+Phase 1: Code Deprecation & Cleanup Analysis
+Legacy Feature Audit
+Shift Management System (Legacy)
+
+Evaluate if shift roster functionality can be fully removed
+Check for any remaining shift-related API endpoints
+Review shift summary components and database tables
+Assess migration path to assessment sessions only
+Unused Components & Functions
+
+Scan for unreferenced React components
+Identify dead code in utility functions
+Check for orphaned database queries
+Review unused TypeScript interfaces
+Duplicate Functionality
+
+Compare shift vs assessment session workflows
+Identify overlapping UI patterns that can be consolidated
+Review similar API endpoints that could be merged
+Check for redundant state management
+Dependency Analysis
+Package Audit
+Review unused npm dependencies
+Check for outdated packages with security vulnerabilities
+Identify packages that could be replaced with lighter alternatives
+Assess if any Radix UI components are unused
+Phase 2: Performance & Stability Evaluation
+Database Performance
+Query Optimization
+
+Analyze slow queries in step progress fetching
+Review index usage and effectiveness
+Check for N+1 query problems
+Evaluate database connection pooling
+Data Structure Efficiency
+
+Review JSONB field usage (allergies, contacts, etc.)
+Assess if any relational data should be normalized
+Check for optimal data types and constraints
+Frontend Performance
+Bundle Size Analysis
+
+Measure current JavaScript bundle size
+Identify opportunities for code splitting
+Review unused CSS and component bloat
+Assess image optimization needs
+Runtime Performance
+
+Evaluate React re-render patterns
+Check for memory leaks in state management
+Review component loading and lazy loading opportunities
+Assess API call efficiency and caching
+Application Stability
+Error Handling & Resilience
+
+Review error boundaries and fallback UI
+Check API error handling completeness
+Evaluate user input validation coverage
+Assess offline/connection error scenarios
+Security Assessment
+
+Review authentication flow security
+Check for SQL injection vulnerabilities
+Evaluate XSS protection measures
+Assess user permission enforcement
+Phase 3: Cost Optimization Analysis
+Database Costs
+Storage Optimization
+
+Analyze data growth patterns
+Review backup and retention policies
+Check for unnecessary data duplication
+Evaluate archiving strategies for old records
+Connection Efficiency
+
+Review database connection usage
+Assess query batching opportunities
+Check connection pooling configuration
+Hosting Optimization
+Resource Usage
+
+Monitor memory and CPU usage patterns
+Evaluate auto-scaling needs
+Review static asset delivery optimization
+Assess CDN requirements
+Development Efficiency
+
+Review build time optimization
+Check development workflow efficiency
+Evaluate testing coverage and speed
+Assess deployment pipeline optimization
+Implementation Priority
+High Priority (Immediate)
+Remove confirmed legacy shift management code
+Fix any performance bottlenecks in step progress queries
+Clean up unused dependencies
+Medium Priority (Next Week)
+Optimize database indexes and queries
+Implement code splitting for bundle size
+Enhance error handling and user feedback
+Low Priority (Future)
+Advanced caching strategies
+Progressive Web App features
+Advanced monitoring and analytics
+Would you like me to start with any specific phase of this evaluation? I'd recommend beginning with the Legacy Feature Audit to identify what can be safely removed, then moving to Database Performance analysis since that's where the biggest cost savings typically come from.

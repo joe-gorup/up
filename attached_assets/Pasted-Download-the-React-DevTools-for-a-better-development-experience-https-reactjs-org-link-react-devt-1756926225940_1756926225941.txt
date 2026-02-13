@@ -1,0 +1,132 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+(index):1 Access to fetch at 'https://accounts.google.com/ListAccounts?authuser=0&listPages=1&fwput=10&rdr=2&pid=666&gpsia=1&source=ogb&atic=1&mo=1&mn=1&hl=en&ts=1097' from origin 'https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev' has been blocked by CORS policy: No 'Access-Control-Allow-Origin' header is present on the requested resource.
+accounts.google.com/ListAccounts?authuser=0&listPages=1&fwput=10&rdr=2&pid=666&gpsia=1&source=ogb&atic=1&mo=1&mn=1&hl=en&ts=1097:1  Failed to load resource: net::ERR_FAILED
+(index):1 Uncaught (in promise) Error: A listener indicated an asynchronous response by returning true, but the message channel closed before a response was received
+/api/login:1  Failed to load resource: the server responded with a status of 401 (Unauthorized)
+174chunk-NUMECXU6.js?v=5627d386:521 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at EmployeeProgress (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/EmployeeProgress.tsx?t=1756926089967:94:44)
+    at div
+    at div
+    at ActiveShift (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/ActiveShift.tsx?t=1756926089967:28:115)
+    at main
+    at div
+    at div
+    at AppContent (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/App.tsx?t=1756926089967&v=j8nvSLfxb3uAysALz32Tf:32:97)
+    at DataProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/DataContext.tsx:22:32)
+    at AuthProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/AuthContext.tsx:30:32)
+    at App
+printWarning @ chunk-NUMECXU6.js?v=5627d386:521
+69EmployeeProgress.tsx:162 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at EmployeeProgress (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/EmployeeProgress.tsx?t=1756926089967:94:44)
+    at div
+    at div
+    at ActiveShift (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/ActiveShift.tsx?t=1756926089967:28:115)
+    at main
+    at div
+    at div
+    at AppContent (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/App.tsx?t=1756926089967&v=j8nvSLfxb3uAysALz32Tf:32:97)
+    at DataProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/DataContext.tsx:22:32)
+    at AuthProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/AuthContext.tsx:30:32)
+    at App
+printWarning @ chunk-NUMECXU6.js?v=5627d386:521
+error @ chunk-NUMECXU6.js?v=5627d386:505
+checkForNestedUpdates @ chunk-NUMECXU6.js?v=5627d386:19665
+scheduleUpdateOnFiber @ chunk-NUMECXU6.js?v=5627d386:18533
+dispatchSetState @ chunk-NUMECXU6.js?v=5627d386:12403
+(anonymous) @ EmployeeProgress.tsx:162
+commitHookEffectListMount @ chunk-NUMECXU6.js?v=5627d386:16915
+commitPassiveMountOnFiber @ chunk-NUMECXU6.js?v=5627d386:18156
+commitPassiveMountEffects_complete @ chunk-NUMECXU6.js?v=5627d386:18129
+commitPassiveMountEffects_begin @ chunk-NUMECXU6.js?v=5627d386:18119
+commitPassiveMountEffects @ chunk-NUMECXU6.js?v=5627d386:18109
+flushPassiveEffectsImpl @ chunk-NUMECXU6.js?v=5627d386:19490
+flushPassiveEffects @ chunk-NUMECXU6.js?v=5627d386:19447
+(anonymous) @ chunk-NUMECXU6.js?v=5627d386:19328
+workLoop @ chunk-NUMECXU6.js?v=5627d386:197
+flushWork @ chunk-NUMECXU6.js?v=5627d386:176
+performWorkUntilDeadline @ chunk-NUMECXU6.js?v=5627d386:384
+EmployeeProgress.tsx:47 Button clicked: verbal_prompt stepId: a5c6de1f-3523-4f87-824a-717983e38a23
+EmployeeProgress.tsx:49 Calling onChange with: verbal_prompt
+EmployeeProgress.tsx:790 OutcomeSelector onChange triggered: verbal_prompt
+EmployeeProgress.tsx:180 handleOutcomeChange called: {goalId: '49c8da84-1f7c-41a6-aea1-3c0481210253', stepId: 'a5c6de1f-3523-4f87-824a-717983e38a23', outcome: 'verbal_prompt'}
+EmployeeProgress.tsx:198 Setting outcomes for key: a5c6de1f-3523-4f87-824a-717983e38a23 to: {outcome: 'verbal_prompt', notes: ''}
+EmployeeProgress.tsx:204 Updated outcomes: {a5c6de1f-3523-4f87-824a-717983e38a23: {…}}
+EmployeeProgress.tsx:204 Updated outcomes: {a5c6de1f-3523-4f87-824a-717983e38a23: {…}}
+16EmployeeProgress.tsx:162 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at EmployeeProgress (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/EmployeeProgress.tsx?t=1756926089967:94:44)
+    at div
+    at div
+    at ActiveShift (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/ActiveShift.tsx?t=1756926089967:28:115)
+    at main
+    at div
+    at div
+    at AppContent (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/App.tsx?t=1756926089967&v=j8nvSLfxb3uAysALz32Tf:32:97)
+    at DataProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/DataContext.tsx:22:32)
+    at AuthProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/AuthContext.tsx:30:32)
+    at App
+printWarning @ chunk-NUMECXU6.js?v=5627d386:521
+error @ chunk-NUMECXU6.js?v=5627d386:505
+checkForNestedUpdates @ chunk-NUMECXU6.js?v=5627d386:19665
+scheduleUpdateOnFiber @ chunk-NUMECXU6.js?v=5627d386:18533
+dispatchSetState @ chunk-NUMECXU6.js?v=5627d386:12403
+(anonymous) @ EmployeeProgress.tsx:162
+commitHookEffectListMount @ chunk-NUMECXU6.js?v=5627d386:16915
+commitPassiveMountOnFiber @ chunk-NUMECXU6.js?v=5627d386:18156
+commitPassiveMountEffects_complete @ chunk-NUMECXU6.js?v=5627d386:18129
+commitPassiveMountEffects_begin @ chunk-NUMECXU6.js?v=5627d386:18119
+commitPassiveMountEffects @ chunk-NUMECXU6.js?v=5627d386:18109
+flushPassiveEffectsImpl @ chunk-NUMECXU6.js?v=5627d386:19490
+flushPassiveEffects @ chunk-NUMECXU6.js?v=5627d386:19447
+(anonymous) @ chunk-NUMECXU6.js?v=5627d386:19328
+workLoop @ chunk-NUMECXU6.js?v=5627d386:197
+flushWork @ chunk-NUMECXU6.js?v=5627d386:176
+performWorkUntilDeadline @ chunk-NUMECXU6.js?v=5627d386:384
+EmployeeProgress.tsx:212 handleNotesChange called: {goalId: '49c8da84-1f7c-41a6-aea1-3c0481210253', stepId: 'a5c6de1f-3523-4f87-824a-717983e38a23', notes: 'a'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'a'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'a'}
+EmployeeProgress.tsx:212 handleNotesChange called: {goalId: '49c8da84-1f7c-41a6-aea1-3c0481210253', stepId: 'a5c6de1f-3523-4f87-824a-717983e38a23', notes: 's'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 's'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 's'}
+EmployeeProgress.tsx:162 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at EmployeeProgress (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/EmployeeProgress.tsx?t=1756926089967:94:44)
+    at div
+    at div
+    at ActiveShift (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/ActiveShift.tsx?t=1756926089967:28:115)
+    at main
+    at div
+    at div
+    at AppContent (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/App.tsx?t=1756926089967&v=j8nvSLfxb3uAysALz32Tf:32:97)
+    at DataProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/DataContext.tsx:22:32)
+    at AuthProvider (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/contexts/AuthContext.tsx:30:32)
+    at App
+printWarning @ chunk-NUMECXU6.js?v=5627d386:521
+error @ chunk-NUMECXU6.js?v=5627d386:505
+checkForNestedUpdates @ chunk-NUMECXU6.js?v=5627d386:19665
+scheduleUpdateOnFiber @ chunk-NUMECXU6.js?v=5627d386:18533
+dispatchSetState @ chunk-NUMECXU6.js?v=5627d386:12403
+(anonymous) @ EmployeeProgress.tsx:162
+commitHookEffectListMount @ chunk-NUMECXU6.js?v=5627d386:16915
+commitPassiveMountOnFiber @ chunk-NUMECXU6.js?v=5627d386:18156
+commitPassiveMountEffects_complete @ chunk-NUMECXU6.js?v=5627d386:18129
+commitPassiveMountEffects_begin @ chunk-NUMECXU6.js?v=5627d386:18119
+commitPassiveMountEffects @ chunk-NUMECXU6.js?v=5627d386:18109
+flushPassiveEffectsImpl @ chunk-NUMECXU6.js?v=5627d386:19490
+flushPassiveEffects @ chunk-NUMECXU6.js?v=5627d386:19447
+(anonymous) @ chunk-NUMECXU6.js?v=5627d386:19328
+workLoop @ chunk-NUMECXU6.js?v=5627d386:197
+flushWork @ chunk-NUMECXU6.js?v=5627d386:176
+performWorkUntilDeadline @ chunk-NUMECXU6.js?v=5627d386:384
+EmployeeProgress.tsx:212 handleNotesChange called: {goalId: '49c8da84-1f7c-41a6-aea1-3c0481210253', stepId: 'a5c6de1f-3523-4f87-824a-717983e38a23', notes: 'd'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'd'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'd'}
+EmployeeProgress.tsx:212 handleNotesChange called: {goalId: '49c8da84-1f7c-41a6-aea1-3c0481210253', stepId: 'a5c6de1f-3523-4f87-824a-717983e38a23', notes: 'i'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'i'}
+EmployeeProgress.tsx:219 Updated localNotes: {a5c6de1f-3523-4f87-824a-717983e38a23: 'i'}
+EmployeeProgress.tsx:162 Warning: Maximum update depth exceeded. This can happen when a component calls setState inside useEffect, but useEffect either doesn't have a dependency array, or one of the dependencies changes on every render.
+    at EmployeeProgress (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/EmployeeProgress.tsx?t=1756926089967:94:44)
+    at div
+    at div
+    at ActiveShift (https://b6ec83d4-8485-4c61-a6bb-16da86838487-00-1yboipk8lza3v.riker.replit.dev/src/components/ActiveShift.tsx?t=1756926089967:28:115)
+    at main
+    at div
+    at div
