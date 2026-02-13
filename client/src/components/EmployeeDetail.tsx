@@ -577,14 +577,16 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
               {connectedGuardians.length > 0 ? (
                 <div className="space-y-3">
                   {connectedGuardians.map((rel: any) => {
-                    const guardian = employees.find(e => e.id === rel.guardian_id);
+                    const guardianName = rel.guardian_first_name && rel.guardian_last_name
+                      ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
+                      : getPersonName(rel.guardian_id);
                     return (
                       <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
                         <div>
-                          <p className="font-medium text-gray-900 text-sm">{getPersonName(rel.guardian_id)}</p>
+                          <p className="font-medium text-gray-900 text-sm">{guardianName}</p>
                           <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                            {guardian?.email && (
-                              <p className="text-xs text-gray-500">{guardian.email}</p>
+                            {rel.guardian_email && (
+                              <p className="text-xs text-gray-500">{rel.guardian_email}</p>
                             )}
                             {rel.relationship_type && (
                               <p className="text-xs text-purple-600">{rel.relationship_type}</p>

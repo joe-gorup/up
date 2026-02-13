@@ -2575,7 +2575,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { scooperId } = req.params;
       const relationships = await db.select().from(guardian_relationships).where(eq(guardian_relationships.scooper_id, scooperId));
-      res.json(relationships);
+      const enriched = await Promise.all(relationships.map(async (rel) => {
+        const guardian = await db.select().from(employees).where(eq(employees.id, rel.guardian_id)).limit(1);
+        return {
+          ...rel,
+          guardian_first_name: guardian[0]?.first_name || null,
+          guardian_last_name: guardian[0]?.last_name || null,
+          guardian_email: guardian[0]?.email || null,
+        };
+      }));
+      res.json(enriched);
     } catch (error) {
       logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch guardian relationships by scooper');
       res.status(500).json({ error: 'Failed to fetch guardian relationships' });
