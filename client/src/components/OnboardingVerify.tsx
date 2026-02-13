@@ -21,6 +21,9 @@ export default function OnboardingVerify() {
   const [guardianPhone, setGuardianPhone] = useState('');
   const [guardianRelationship, setGuardianRelationship] = useState('');
 
+  const [hasScrolledROI, setHasScrolledROI] = useState(false);
+  const roiScrollRef = useRef<HTMLDivElement>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isDrawing, setIsDrawing] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
@@ -309,7 +312,15 @@ export default function OnboardingVerify() {
               <p className="text-xs text-gray-500">Authorization For Exchange of Information</p>
             </div>
 
-            <div className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-4 sm:mb-6 max-h-48 sm:max-h-64 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3">
+            <div
+              ref={roiScrollRef}
+              onScroll={() => {
+                const el = roiScrollRef.current;
+                if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - 10) {
+                  setHasScrolledROI(true);
+                }
+              }}
+              className="bg-gray-50 rounded-xl p-3 sm:p-4 mb-2 max-h-52 sm:max-h-72 overflow-y-auto text-xs sm:text-sm text-gray-700 space-y-3">
               <p>
                 I hereby authorize The Golden Scoop to exchange information, including health and employment information.
               </p>
@@ -330,6 +341,18 @@ export default function OnboardingVerify() {
                 I have read the above Authorization for Release of Information / Permission to Obtain and do hereby acknowledge that I am familiar with and fully understand the terms and conditions of this release.
               </p>
             </div>
+
+            {!hasScrolledROI && (
+              <p className="text-xs text-amber-600 mb-4 sm:mb-6 flex items-center gap-1.5">
+                <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+                Please scroll through and read the full document above before continuing.
+              </p>
+            )}
+            {hasScrolledROI && (
+              <div className="mb-2 sm:mb-4" />
+            )}
+
+            <div className={!hasScrolledROI ? 'opacity-40 pointer-events-none select-none' : ''}>
 
             <div className="mb-4 sm:mb-6">
               <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -491,6 +514,8 @@ export default function OnboardingVerify() {
             <p className="text-xs text-gray-400 text-center mt-3">
               Date: {new Date().toLocaleDateString()}
             </p>
+
+            </div>
           </div>
         )}
 
