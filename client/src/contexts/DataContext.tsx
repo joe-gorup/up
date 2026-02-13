@@ -23,6 +23,7 @@ export interface Employee {
   challenges: string[];
   regulationStrategies: string[];
   last_login: string | null;
+  roi_status: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -197,6 +198,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: emp.challenges || [],
           regulationStrategies: emp.regulation_strategies || [],
           last_login: emp.last_login || null,
+          roi_status: emp.roi_status || false,
           createdAt: emp.created_at,
           updatedAt: emp.updated_at
         }));
@@ -375,6 +377,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         challenges: ['Loud noises', 'Sudden changes'],
         regulationStrategies: ['5-minute breaks', 'Visual schedules', 'Calm voice'],
         last_login: null,
+        roi_status: false,
         createdAt: '2024-01-15T00:00:00Z',
         updatedAt: '2024-01-15T00:00:00Z'
       },
@@ -395,6 +398,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         challenges: ['Complex instructions'],
         regulationStrategies: ['Break tasks into steps', 'Use positive reinforcement'],
         last_login: null,
+        roi_status: false,
         createdAt: '2024-01-20T00:00:00Z',
         updatedAt: '2024-01-20T00:00:00Z'
       }
@@ -503,6 +507,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: newEmployee.challenges || [],
           regulationStrategies: newEmployee.regulation_strategies || [],
           last_login: newEmployee.last_login || null,
+          roi_status: newEmployee.roi_status || false,
           createdAt: newEmployee.created_at,
           updatedAt: newEmployee.updated_at
         };
@@ -560,6 +565,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: updatedEmployee.challenges || [],
           regulationStrategies: updatedEmployee.regulation_strategies || [],
           last_login: updatedEmployee.last_login || null,
+          roi_status: updatedEmployee.roi_status || false,
           createdAt: updatedEmployee.created_at,
           updatedAt: updatedEmployee.updated_at
         };

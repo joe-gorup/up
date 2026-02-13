@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star } from 'lucide-react';
+import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star, FileCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeForm from './EmployeeForm';
@@ -175,6 +175,11 @@ export default function EmployeeManagement() {
                             {certifications.some(c => c.employeeId === employee.id && c.certificationType === 'shift_manager' && c.passed) && (
                               <span title="Shift Manager Certified" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100">
                                 <Award className="h-3 w-3 text-blue-600" />
+                              </span>
+                            )}
+                            {employee.roi_status && (
+                              <span title="ROI Signed" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100">
+                                <FileCheck className="h-3 w-3 text-green-600" />
                               </span>
                             )}
                           </div>
