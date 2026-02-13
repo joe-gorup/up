@@ -12,7 +12,7 @@ export default function OnboardingVerify() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [consentType, setConsentType] = useState<'release_all' | 'no_release'>('release_all');
+  const [consentType, setConsentType] = useState<'release_all' | 'no_release' | null>(null);
   const [noReleaseDetails, setNoReleaseDetails] = useState('');
 
   const [guardianName, setGuardianName] = useState('');
@@ -150,6 +150,16 @@ export default function OnboardingVerify() {
   const handleSignROI = async () => {
     setError('');
 
+    if (!consentType) {
+      setError('Please select one of the authorization options above before signing.');
+      return;
+    }
+
+    if (consentType === 'no_release') {
+      setError('You have chosen not to authorize the release of records. Unfortunately, account setup cannot continue without this authorization. Please contact your supervisor or Human Resources for assistance.');
+      return;
+    }
+
     if (!hasSignature) {
       setError('Please provide your signature before submitting.');
       return;
@@ -171,10 +181,6 @@ export default function OnboardingVerify() {
         consent_type: consentType,
         date: new Date().toISOString(),
       };
-
-      if (consentType === 'no_release') {
-        body.no_release_details = noReleaseDetails;
-      }
 
       if (isGuardian) {
         body.guardian_name = guardianName;
@@ -337,7 +343,7 @@ export default function OnboardingVerify() {
                     name="consent"
                     value="release_all"
                     checked={consentType === 'release_all'}
-                    onChange={() => setConsentType('release_all')}
+                    onChange={() => { setConsentType('release_all'); setError(''); }}
                     className="mt-0.5 h-4 w-4 text-blue-600"
                   />
                   <span className="text-sm text-gray-800 font-medium">Release of all information</span>
@@ -350,19 +356,18 @@ export default function OnboardingVerify() {
                     name="consent"
                     value="no_release"
                     checked={consentType === 'no_release'}
-                    onChange={() => setConsentType('no_release')}
+                    onChange={() => { setConsentType('no_release'); setError(''); }}
                     className="mt-0.5 h-4 w-4 text-blue-600"
                   />
-                  <span className="text-sm text-gray-800 font-medium">I do NOT authorize the release of these records:</span>
+                  <span className="text-sm text-gray-800 font-medium">I do NOT authorize the release of these records</span>
                 </label>
 
                 {consentType === 'no_release' && (
-                  <textarea
-                    value={noReleaseDetails}
-                    onChange={(e) => setNoReleaseDetails(e.target.value)}
-                    placeholder="Please specify which records you do not consent to releasing..."
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm min-h-[80px] resize-y"
-                  />
+                  <div className="bg-amber-50 border border-amber-200 rounded-xl p-3">
+                    <p className="text-sm text-amber-800">
+                      Selecting this option will prevent you from completing account setup. Authorization is required to continue.
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
