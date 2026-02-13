@@ -156,7 +156,7 @@ export default function OnboardingVerify() {
     }
 
     if (consentType === 'no_release') {
-      setError('You have chosen not to authorize the release of records. Unfortunately, account setup cannot continue without this authorization. Please contact your supervisor or Human Resources for assistance.');
+      setError('You have chosen not to authorize the release of records. Unfortunately, account setup cannot continue without this authorization. Please contact The Golden Scoop for help.');
       return;
     }
 
