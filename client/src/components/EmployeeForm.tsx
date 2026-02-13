@@ -776,35 +776,19 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Organization / Individual Name</label>
-                      <input
-                        type="text"
-                        value={provider.name}
-                        onChange={(e) => {
-                          const updated = [...formData.serviceProviders];
-                          updated[index] = { ...updated[index], name: e.target.value };
-                          setFormData(prev => ({ ...prev, serviceProviders: updated }));
-                        }}
-                        className={INPUT_BASE_CLASSES}
-                        placeholder="e.g., ABC Home Care Services"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Type / Role</label>
-                      <input
-                        type="text"
-                        value={provider.type}
-                        onChange={(e) => {
-                          const updated = [...formData.serviceProviders];
-                          updated[index] = { ...updated[index], type: e.target.value };
-                          setFormData(prev => ({ ...prev, serviceProviders: updated }));
-                        }}
-                        className={INPUT_BASE_CLASSES}
-                        placeholder="e.g., PCA, Job Coach Agency, etc."
-                      />
-                    </div>
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Agency &/or Person</label>
+                    <input
+                      type="text"
+                      value={provider.name}
+                      onChange={(e) => {
+                        const updated = [...formData.serviceProviders];
+                        updated[index] = { ...updated[index], name: e.target.value };
+                        setFormData(prev => ({ ...prev, serviceProviders: updated }));
+                      }}
+                      className={INPUT_BASE_CLASSES}
+                      placeholder="e.g., ABC Home Care Services, PCA name, etc."
+                    />
                   </div>
                 </div>
               ))}

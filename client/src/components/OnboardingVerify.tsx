@@ -359,7 +359,7 @@ export default function OnboardingVerify() {
                 {roiServiceProviders.length > 0 ? (
                   roiServiceProviders.map((provider, index) => (
                     <p key={index} className="border-b border-gray-400 pb-1">
-                      <span className="font-semibold">Agency &/or Person:</span> {provider.name}{provider.type ? ` (${provider.type})` : ''}
+                      <span className="font-semibold">Agency &/or Person:</span> {provider.name}
                     </p>
                   ))
                 ) : (
@@ -414,7 +414,7 @@ export default function OnboardingVerify() {
                 <div className="space-y-2">
                   {roiServiceProviders.map((provider, index) => (
                     <div key={index} className="flex gap-2 items-start">
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <div className="flex-1">
                         <input
                           type="text"
                           value={provider.name}
@@ -424,18 +424,7 @@ export default function OnboardingVerify() {
                             setRoiServiceProviders(updated);
                           }}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder="Organization / Individual name"
-                        />
-                        <input
-                          type="text"
-                          value={provider.type}
-                          onChange={(e) => {
-                            const updated = [...roiServiceProviders];
-                            updated[index] = { ...updated[index], type: e.target.value };
-                            setRoiServiceProviders(updated);
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                          placeholder="Type (e.g., PCA, Job Coach)"
+                          placeholder="Agency &/or Person"
                         />
                       </div>
                       {roiServiceProviders.length > 1 && (
