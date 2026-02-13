@@ -26,6 +26,14 @@ export const employees = pgTable("employees", {
   date_of_birth: date("date_of_birth"),
   roi_status: boolean("roi_status").default(false),
   roi_signed_at: timestamp("roi_signed_at", { withTimezone: true }),
+  roi_signature: text("roi_signature"),
+  roi_consent_type: text("roi_consent_type"),
+  roi_no_release_details: text("roi_no_release_details"),
+  roi_guardian_name: text("roi_guardian_name"),
+  roi_guardian_address: text("roi_guardian_address"),
+  roi_guardian_city_state_zip: text("roi_guardian_city_state_zip"),
+  roi_guardian_phone: text("roi_guardian_phone"),
+  roi_guardian_relationship: text("roi_guardian_relationship"),
   
   // Profile/safety information
   allergies: jsonb("allergies").default(sql`'[]'::jsonb`),

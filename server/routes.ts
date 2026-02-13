@@ -198,14 +198,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as AuthUser;
       const now = new Date();
+      const { 
+        signature, 
+        consent_type, 
+        no_release_details,
+        guardian_name,
+        guardian_address,
+        guardian_city_state_zip,
+        guardian_phone,
+        guardian_relationship
+      } = req.body;
+
+      const updateData: any = { 
+        roi_status: true, 
+        roi_signed_at: now,
+        updated_at: now,
+        roi_signature: signature || null,
+        roi_consent_type: consent_type || 'release_all',
+        roi_no_release_details: no_release_details || null,
+      };
+
+      if (user.role === 'Guardian') {
+        updateData.roi_guardian_name = guardian_name || null;
+        updateData.roi_guardian_address = guardian_address || null;
+        updateData.roi_guardian_city_state_zip = guardian_city_state_zip || null;
+        updateData.roi_guardian_phone = guardian_phone || null;
+        updateData.roi_guardian_relationship = guardian_relationship || null;
+      }
 
       // Update the current user's ROI status
       await db.update(employees)
-        .set({ 
-          roi_status: true, 
-          roi_signed_at: now,
-          updated_at: now
-        })
+        .set(updateData)
         .where(eq(employees.id, user.id));
 
       // For Guardians, also update their linked Super Scooper's ROI status

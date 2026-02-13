@@ -1,0 +1,28 @@
+Here is the specific, standalone prompt you can paste into the Replit Agent to build the ROI interface. It is designed to connect directly to the backend logic Warp just pushed to your repository.
+Replit Agent Prompt:
+"I need to build the frontend user interface for my ROI (Release of Information) compliance flow in client/src/components/OnboardingVerify.tsx.
+1. Context & Role Logic:
+The app should detect the logged-in user's role from the AuthContext.
+ * If the user is a Guardian, they must fill out the 'Authorized Representative' section at the bottom.
+ * If the user is an Employee (Super Scooper), they only need to provide the primary signature.
+2. Form Structure (Based on the Golden Scoop ROI Document):
+Build a mobile-responsive, multi-step form that includes:
+ * Header: 'The Golden Scoop: Authorization For Exchange of Information'.
+ * Disclosure Text: Display the following legal clauses in a scrollable container:
+   * 'This release covers all employment records, medical records, diagnosis, evaluations, and school records.'
+   * 'I understand information may include data relating to STDs, AIDS, HIV, behavioral/mental health services, and alcohol/drug abuse treatment.'
+   * 'This authorization may be revoked in writing at any time and expires one year from the date of signature.'
+ * Consent Toggles: Provide a radio selection for 'Release of all information' OR 'I do NOT authorize the release of these records' (with a text area for specifics).
+ * Guardian Fields (Conditional): If the user is a Guardian, include inputs for: Printed Name, Street Address, City/State/Zip, Phone, and Relationship to Employee.
+ * Signature Pad: A canvas-based signature component for the user to sign with their finger/stylus.
+3. Integration:
+ * Verification Gate: Ensure the 'Identity Verification' (DOB check) happens before this form is visible.
+ * Submission: On submit, call POST /api/onboarding/sign-roi with the form data, the date, and the signature image.
+ * Success: Upon success, call updateRoiStatus(true) in the AuthContext and redirect the user to the main dashboard.
+4. Styling:
+Use a clean, accessible layout. Buttons should be large and 'thumb-friendly' for mobile users."
+Next Steps for you
+ * Pull changes from GitHub in Replit to ensure the Agent sees the new routes Warp added.
+ * Paste the prompt above into the Replit Agent.
+ * Verify that the signature pad works correctly on a mobile device or tablet once the build is complete.
+Would you like me to draft a specific test plan so you can verify the Guardian "Authorized Representative" fields appear correctly for those users?
