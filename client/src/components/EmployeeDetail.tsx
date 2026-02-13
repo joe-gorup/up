@@ -315,7 +315,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         </div>
         
         <div className="flex flex-wrap gap-2 sm:space-x-3">
-          {user?.role === 'Administrator' && (
+          {user?.role === 'Administrator' && employee.role !== 'Job Coach' && (
             <button
               onClick={() => setShowGoalAssignment(true)}
               className="flex items-center space-x-2 bg-blue-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors text-sm sm:text-base"
@@ -754,6 +754,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         </div>
 
         {/* Right Column - Goals */}
+        {employee.role !== 'Job Coach' && (
         <div className="lg:col-span-2 space-y-6">
           {/* Active Goals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
@@ -1052,6 +1053,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );
