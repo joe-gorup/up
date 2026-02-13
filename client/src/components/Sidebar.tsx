@@ -61,7 +61,7 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-semibold text-white">Golden Scoop</h2>
-              <p className="text-sm text-gray-400 capitalize">{user?.role === 'employee' ? 'Employee Portal' : user?.role?.replace('_', ' ') || 'Loading...'}</p>
+              <p className="text-sm text-gray-400 capitalize">{user?.role || 'Loading...'}</p>
             </div>
             <button
               onClick={() => setCollapsed(true)}
@@ -102,7 +102,7 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
         <div className="p-4 border-t border-gray-700">
           <div className="mb-3">
             <p className="text-sm font-medium text-white">{user?.name}</p>
-            <p className="text-xs text-gray-400 capitalize">{user?.role?.replace('_', ' ')}</p>
+            <p className="text-xs text-gray-400 capitalize">{user?.role}</p>
           </div>
           <button
             onClick={logout}
