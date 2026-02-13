@@ -173,7 +173,7 @@ export default function EmployeeManagement() {
                                 <Star className="h-3 w-3 text-amber-600" />
                               </span>
                             )}
-                            {certifications.some(c => c.employeeId === employee.id && c.certificationType === 'shift_manager' && c.passed) && (
+                            {certifications.some(c => c.employeeId === employee.id && c.certificationType === 'shift_lead' && c.passed) && (
                               <span title="Shift Lead Certified" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100">
                                 <Award className="h-3 w-3 text-blue-600" />
                               </span>

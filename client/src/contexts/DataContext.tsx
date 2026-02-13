@@ -94,7 +94,7 @@ export interface AssessmentSummary {
 export interface PromotionCertification {
   id: string;
   employeeId: string;
-  certificationType: 'mentor' | 'shift_manager';
+  certificationType: 'mentor' | 'shift_lead';
   dateCompleted: string;
   score: number;
   passingScore: number;

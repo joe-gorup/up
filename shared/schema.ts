@@ -384,7 +384,7 @@ export function getEmployeeDisplayName(employee: Employee): string {
 export const promotion_certifications = pgTable("promotion_certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").notNull().references(() => employees.id),
-  certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_manager'
+  certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_lead'
   date_completed: text("date_completed").notNull(),
   score: integer("score").notNull(),
   passing_score: integer("passing_score").notNull(),

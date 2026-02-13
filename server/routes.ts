@@ -275,7 +275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Determine if onboarding is required based on role
-      const requiresOnboarding = (user.role === 'Super Scooper' || user.role === 'Guardian' || user.role === 'Job Coach') 
+      const requiresOnboarding = (user.role === 'Super Scooper' || user.role === 'Guardian') 
         && !employee.roi_status;
 
       res.json({

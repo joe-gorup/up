@@ -18,10 +18,10 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
 
   const employeeCerts = employeeId ? certifications.filter(c => c.employeeId === employeeId) : [];
   const hasMentorCert = employeeCerts.some(c => c.certificationType === 'mentor' && c.passed);
-  const hasShiftManagerCert = employeeCerts.some(c => c.certificationType === 'shift_manager' && c.passed);
+  const hasShiftLeadCert = employeeCerts.some(c => c.certificationType === 'shift_lead' && c.passed);
 
   const [showCertForm, setShowCertForm] = useState(false);
-  const [certType, setCertType] = useState<'mentor' | 'shift_manager'>('mentor');
+  const [certType, setCertType] = useState<'mentor' | 'shift_lead'>('mentor');
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
@@ -941,8 +941,8 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                   </button>
                   <button
                     type="button"
-                    onClick={() => { setCertType('shift_manager'); setChecklistAnswers({}); }}
-                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_manager' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
+                    className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                   >
                     Shift Lead
                   </button>
