@@ -430,7 +430,6 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
               >
                 <option value="Super Scooper">Super Scooper</option>
                 <option value="Job Coach">Job Coach</option>
-                <option value="Guardian">Guardian</option>
                 <option value="Shift Manager">Shift Manager</option>
                 <option value="Assistant Manager">Assistant Manager</option>
                 <option value="Administrator">Administrator</option>

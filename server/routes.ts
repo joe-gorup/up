@@ -2629,6 +2629,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create guardian + link to scooper in one step
+  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { scooper_id, first_name, last_name, email, phone, relationship_type } = req.body;
+
+      if (!scooper_id || !first_name || !last_name) {
+        return res.status(400).json({ error: 'scooper_id, first_name, and last_name are required' });
+      }
+
+      const [scooper] = await db.select().from(employees).where(eq(employees.id, scooper_id)).limit(1);
+      if (!scooper) {
+        return res.status(404).json({ error: 'Super Scooper not found' });
+      }
+      if (scooper.role !== 'Super Scooper') {
+        return res.status(400).json({ error: 'Referenced employee is not a Super Scooper' });
+      }
+
+      if (email && email.trim() !== '') {
+        const existing = await db.select().from(employees).where(eq(employees.email, email)).limit(1);
+        if (existing.length > 0) {
+          return res.status(409).json({ error: 'An employee with this email already exists' });
+        }
+      }
+
+      const user = (req as any).user;
+      const guardianData: any = {
+        first_name,
+        last_name,
+        name: `${first_name} ${last_name}`,
+        email: email && email.trim() !== '' ? email.trim() : null,
+        phone: phone || null,
+        role: 'Guardian',
+        is_active: true,
+        has_system_access: false,
+      };
+
+      const [newGuardian] = await db.insert(employees).values(guardianData).returning();
+
+      const [newRelationship] = await db.insert(guardian_relationships).values({
+        guardian_id: newGuardian.id,
+        scooper_id,
+        relationship_type: relationship_type || 'guardian',
+        assigned_by: user?.id,
+      }).returning();
+
+      const { password: _, ...guardianWithoutPassword } = newGuardian;
+      logger.info({ guardianId: newGuardian.id, scooperId: scooper_id }, 'Guardian created and linked to scooper');
+      res.json({ guardian: guardianWithoutPassword, relationship: newRelationship });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'This guardian relationship already exists' });
+      }
+      logger.error({ error }, 'Failed to create guardian with relationship');
+      res.status(500).json({ error: 'Failed to create guardian' });
+    }
+  });
+
   // Promotion Certifications endpoints
   app.get("/api/certifications/:employeeId", authenticateToken, async (req: Request, res: Response) => {
     try {

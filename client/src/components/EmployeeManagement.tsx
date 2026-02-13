@@ -17,6 +17,7 @@ export default function EmployeeManagement() {
 
   const filteredEmployees = employees
     .filter(employee => {
+      if (employee.role === 'Guardian') return false;
       const matchesSearch = `${employee.first_name} ${employee.last_name}`.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'active' && employee.isActive) ||
@@ -217,6 +218,14 @@ export default function EmployeeManagement() {
                     
                     <td className="py-4 px-3 sm:px-6 text-right">
                       <div className="flex items-center justify-end space-x-2">
+                        <button
+                          onClick={() => handleViewEmployee(employee.id)}
+                          className="p-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors"
+                          title="View profile"
+                          data-testid={`button-view-${employee.id}`}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
                         <button
                           onClick={() => handleEditEmployee(employee.id)}
                           className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"

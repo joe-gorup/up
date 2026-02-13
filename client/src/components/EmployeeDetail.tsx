@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Trash2 } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -30,6 +30,10 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [invitationLoading, setInvitationLoading] = useState(false);
   const [invitationCopied, setInvitationCopied] = useState(false);
   const [invitationError, setInvitationError] = useState('');
+  const [showAddGuardian, setShowAddGuardian] = useState(false);
+  const [guardianForm, setGuardianForm] = useState({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
+  const [guardianSaving, setGuardianSaving] = useState(false);
+  const [guardianError, setGuardianError] = useState('');
 
   useEffect(() => {
     async function fetchRelationships() {
@@ -160,6 +164,52 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     }
   };
 
+  const handleCreateGuardian = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuardianSaving(true);
+    setGuardianError('');
+    try {
+      const res = await apiRequest('/api/guardian-relationships/create-with-guardian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scooper_id: employeeId,
+          first_name: guardianForm.first_name.trim(),
+          last_name: guardianForm.last_name.trim(),
+          email: guardianForm.email.trim(),
+          phone: guardianForm.phone.trim(),
+          relationship_type: guardianForm.relationship_type,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setGuardianError(data.error || 'Failed to create guardian');
+        return;
+      }
+      setGuardianForm({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
+      setShowAddGuardian(false);
+      const guardianRes = await apiRequest(`/api/guardian-relationships/scooper/${employeeId}`);
+      if (guardianRes.ok) {
+        const data = await guardianRes.json();
+        setConnectedGuardians(data);
+      }
+    } catch (err) {
+      setGuardianError('Failed to create guardian');
+    } finally {
+      setGuardianSaving(false);
+    }
+  };
+
+  const handleRemoveGuardian = async (relationshipId: string) => {
+    if (!window.confirm('Are you sure you want to remove this guardian?')) return;
+    try {
+      await apiRequest(`/api/guardian-relationships/${relationshipId}`, { method: 'DELETE' });
+      setConnectedGuardians(prev => prev.filter(r => r.id !== relationshipId));
+    } catch (err) {
+      console.error('Failed to remove guardian:', err);
+    }
+  };
+
   const getGoalProgress = (goal: any) => {
     const requiredSteps = goal.steps.filter((step: any) => step.isRequired);
     return {
@@ -287,44 +337,150 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             </div>
           )}
 
-          {/* Connected People */}
-          {(connectedGuardians.length > 0 || assignedCoaches.length > 0) && (
+          {/* Job Coaches */}
+          {assignedCoaches.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center space-x-2 mb-4">
-                <Users className="h-5 w-5 text-purple-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Connected People</h2>
+                <UserCheck className="h-5 w-5 text-green-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h2>
+              </div>
+              <div className="space-y-2">
+                {assignedCoaches.map((assignment: any) => (
+                  <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg">
+                    {getPersonName(assignment.coach_id)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Guardians Section - for Super Scoopers, visible to managers */}
+          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Shield className="h-5 w-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Guardians</h2>
+                </div>
+                {user?.role === 'Administrator' && (
+                  <button
+                    onClick={() => setShowAddGuardian(!showAddGuardian)}
+                    className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
+                  >
+                    {showAddGuardian ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
+                  </button>
+                )}
               </div>
 
-              {assignedCoaches.length > 0 && (
-                <div className="mb-4">
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <UserCheck className="h-4 w-4 text-green-500 mr-2" />
-                    Job Coach{assignedCoaches.length > 1 ? 'es' : ''}
-                  </h3>
-                  <div className="space-y-2 ml-6">
-                    {assignedCoaches.map((assignment: any) => (
-                      <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg">
-                        {getPersonName(assignment.coach_id)}
-                      </div>
-                    ))}
+              {showAddGuardian && (
+                <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-4 mb-4 space-y-3">
+                  <h3 className="font-medium text-gray-900 text-sm">New Guardian</h3>
+                  {guardianError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.first_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.last_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={guardianForm.email}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        value={guardianForm.phone}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
+                      <select
+                        value={guardianForm.relationship_type}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="Parent/Guardian">Parent/Guardian</option>
+                        <option value="Legal Guardian">Legal Guardian</option>
+                        <option value="Case Manager">Case Manager</option>
+                        <option value="Family Member">Family Member</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
                   </div>
-                </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={guardianSaving}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {guardianSaving ? 'Saving...' : 'Add Guardian'}
+                    </button>
+                  </div>
+                </form>
               )}
 
-              {connectedGuardians.length > 0 && (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <Shield className="h-4 w-4 text-purple-500 mr-2" />
-                    Guardian{connectedGuardians.length > 1 ? 's' : ''}
-                  </h3>
-                  <div className="space-y-2 ml-6">
-                    {connectedGuardians.map((rel: any) => (
-                      <div key={rel.id} className="text-sm bg-purple-50 text-purple-800 px-3 py-2 rounded-lg">
-                        {getPersonName(rel.guardian_id)}
+              {connectedGuardians.length > 0 ? (
+                <div className="space-y-3">
+                  {connectedGuardians.map((rel: any) => {
+                    const guardian = employees.find(e => e.id === rel.guardian_id);
+                    return (
+                      <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{getPersonName(rel.guardian_id)}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                            {guardian?.email && (
+                              <p className="text-xs text-gray-500">{guardian.email}</p>
+                            )}
+                            {rel.relationship_type && (
+                              <p className="text-xs text-purple-600">{rel.relationship_type}</p>
+                            )}
+                          </div>
+                        </div>
+                        {user?.role === 'Administrator' && (
+                          <button
+                            onClick={() => handleRemoveGuardian(rel.id)}
+                            className="text-red-400 hover:text-red-600 p-1"
+                            title="Remove guardian"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })}
                 </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No guardians linked yet.</p>
               )}
             </div>
           )}
