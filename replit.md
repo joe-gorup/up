@@ -8,6 +8,16 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## Phase 7: ROI Compliance Flow (February 2026)
+- **Full ROI Document**: OnboardingVerify.tsx rebuilt with complete legal text from The Golden Scoop Authorization For Exchange of Information document
+- **Consent Toggles**: Radio selection for "Release of all information" vs "I do NOT authorize the release of these records" with text area for specifics
+- **Canvas Signature Pad**: Touch/stylus-enabled signature canvas for mobile and desktop, with clear button
+- **Guardian Fields**: Conditional "Authorized Representative" section (Printed Name, Address, City/State/Zip, Phone, Relationship) shown only for Guardian role
+- **Schema Updates**: New fields on employees table: roi_signature, roi_consent_type, roi_no_release_details, roi_guardian_name/address/city_state_zip/phone/relationship
+- **Backend Updates**: POST /api/onboarding/sign-roi accepts and stores signature image data, consent choice, and guardian details
+- **DOB Verification Gate**: Identity verification (DOB check) required before ROI form is visible
+- **Mobile-Responsive**: Thumb-friendly buttons, responsive text sizes, touch-optimized signature pad
+
 ## Phase 6: Promotion Certifications (February 2026)
 - **New Database Table**: `promotion_certifications` tracks employee certifications with type, date, score, passing criteria, checklist results, and certifier
 - **Two Certification Types**: Mentor (32 items, 84% passing) and Shift Manager (56 items across 4 categories, 90% passing)
