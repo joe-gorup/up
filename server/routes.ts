@@ -338,7 +338,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       // Check for existing employee with same email to prevent duplicates (only if email provided)
       if (req.body.email && req.body.email.trim() !== '') {
@@ -386,7 +386,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const updateData = { ...req.body, updated_at: new Date() };
@@ -716,7 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mapped;
   };
 
-  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb(req.body);
       const [newProgress] = await db.insert(step_progress).values(mappedData).returning();
@@ -728,7 +728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save step progress as draft
-  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb({ ...req.body, status: 'draft' });
       
@@ -786,7 +786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Submit step progress (convert draft to submitted or create new submitted)
-  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { employee_id, assessment_session_id, date, documenter_user_id } = req.body;
       
@@ -934,7 +934,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { employee_ids, location, date } = req.body;
@@ -1059,7 +1059,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1137,7 +1137,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete/end an assessment session (releases lock)
-  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1183,7 +1183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Renew session lock (extends expiry time)
-  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1353,7 +1353,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const [newSummary] = await db.insert(assessment_summaries).values(req.body).returning();
       res.json(newSummary);
@@ -1474,7 +1474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'alex.johnson@goldenscoopice.org',
             password: 'password',
             name: 'Alex Johnson',
-            role: 'Shift Manager',
+            role: 'Shift Lead',
             is_active: true
           },
           {
@@ -1482,7 +1482,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'emma.davis@goldenscoopice.org',
             password: 'password',
             name: 'Emma Davis',
-            role: 'Shift Manager',
+            role: 'Shift Lead',
             is_active: true
           },
           {
@@ -1490,7 +1490,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'jordan.smith@goldenscoopice.org',
             password: 'password',
             name: 'Jordan Smith',
-            role: 'Shift Manager',
+            role: 'Shift Lead',
             is_active: true
           }
         ];
@@ -2285,7 +2285,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/objects/upload", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/objects/upload", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -2300,7 +2300,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
       if (!imageURL) {
@@ -2484,7 +2484,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/coach-assignments/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.get("/api/coach-assignments/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { scooperId } = req.params;
       const assignments = await db.select().from(coach_assignments).where(eq(coach_assignments.scooper_id, scooperId));
@@ -2571,7 +2571,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/guardian-relationships/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.get("/api/guardian-relationships/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { scooperId } = req.params;
       const relationships = await db.select().from(guardian_relationships).where(eq(guardian_relationships.scooper_id, scooperId));
@@ -2630,7 +2630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create guardian + link to scooper in one step
-  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { scooper_id, first_name, last_name, email, phone, relationship_type } = req.body;
 
@@ -2711,7 +2711,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const parsed = insertPromotionCertificationSchema.parse(req.body);
       const [cert] = await db.insert(promotion_certifications).values(parsed).returning();

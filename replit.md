@@ -20,9 +20,9 @@ Preferred communication style: Simple, everyday language.
 
 ## Phase 6: Promotion Certifications (February 2026)
 - **New Database Table**: `promotion_certifications` tracks employee certifications with type, date, score, passing criteria, checklist results, and certifier
-- **Two Certification Types**: Mentor (32 items, 84% passing) and Shift Manager (56 items across 4 categories, 90% passing)
+- **Two Certification Types**: Mentor (32 items, 84% passing) and Shift Lead (56 items across 4 categories, 90% passing)
 - **Employee Form Integration**: New "Promotion Certifications" section in employee edit form with full checklist UI, auto-scoring, and pass/fail tracking
-- **Employee Table Badges**: Star icon (amber) for Mentor certified, Award icon (blue) for Shift Manager certified next to employee names
+- **Employee Table Badges**: Star icon (amber) for Mentor certified, Award icon (blue) for Shift Lead certified next to employee names
 - **API Endpoints**: GET/POST/DELETE /api/certifications with role-based access control
 
 ## Phase 5: Design System Standardization (February 2026)

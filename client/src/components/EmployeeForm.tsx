@@ -197,7 +197,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
   });
 
   const getSystemAccessByRole = (role: string) => {
-    return ["Administrator", "Shift Manager", "Assistant Manager", "Job Coach", "Guardian"].includes(role);
+    return ["Administrator", "Shift Lead", "Assistant Manager", "Job Coach", "Guardian"].includes(role);
   };
 
   // Update hasSystemAccess when role changes
@@ -430,7 +430,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
               >
                 <option value="Super Scooper">Super Scooper</option>
                 <option value="Job Coach">Job Coach</option>
-                <option value="Shift Manager">Shift Manager</option>
+                <option value="Shift Lead">Shift Lead</option>
                 <option value="Assistant Manager">Assistant Manager</option>
                 <option value="Administrator">Administrator</option>
               </select>
@@ -879,7 +879,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                       )}
                       <div>
                         <p className="font-medium text-gray-900">
-                          {cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Manager Certification'}
+                          {cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Lead Certification'}
                         </p>
                         <p className="text-sm text-gray-500">
                           {new Date(cert.dateCompleted).toLocaleDateString()}
@@ -944,7 +944,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                     onClick={() => { setCertType('shift_manager'); setChecklistAnswers({}); }}
                     className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_manager' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                   >
-                    Shift Manager
+                    Shift Lead
                   </button>
                 </div>
 

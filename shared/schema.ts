@@ -322,7 +322,7 @@ export const SYSTEM_ROLES = [
   "Super Scooper",
   "Job Coach", 
   "Guardian",
-  "Shift Manager",
+  "Shift Lead",
   "Assistant Manager",
   "Administrator"
 ] as const;
@@ -331,7 +331,7 @@ export type SystemRole = typeof SYSTEM_ROLES[number];
 
 // Role-based access control helpers  
 export function canDocumentOnOthers(role: string): boolean {
-  return role === "Administrator" || role === "Shift Manager" || role === "Assistant Manager";
+  return role === "Administrator" || role === "Shift Lead" || role === "Assistant Manager";
 }
 
 export function canAssignGoals(role: string): boolean {
@@ -347,7 +347,7 @@ export function canManageAssignments(role: string): boolean {
 }
 
 export function canViewAllScoopers(role: string): boolean {
-  return role === "Administrator" || role === "Shift Manager" || role === "Assistant Manager";
+  return role === "Administrator" || role === "Shift Lead" || role === "Assistant Manager";
 }
 
 export function canViewAssignedScoopers(role: string): boolean {

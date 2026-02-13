@@ -40,7 +40,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
 
   useEffect(() => {
     async function fetchRelationships() {
-      const isManager = ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '');
+      const isManager = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
       if (!isManager) return;
       try {
         const employee = employees.find(e => e.id === employeeId);
@@ -407,7 +407,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
           )}
 
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
-          {employee.role === 'Job Coach' && ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '') && (
+          {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
@@ -480,7 +480,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
           )}
 
           {/* Guardians Section - for Super Scoopers, visible to managers */}
-          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '') && (
+          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-2">
