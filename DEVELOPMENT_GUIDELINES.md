@@ -32,11 +32,24 @@ This application has real production data in use since September 2025. Every cha
 - For new relationship tables (e.g., coach_assignments), cascading deletes are fine
 - Never add cascade deletes to core data tables (step_progress, development_goals, assessment_sessions) without explicit approval
 
-### 5. Data Deletion
+### 5. Data Deletion & Updates
 - All DELETE endpoints must be protected by authentication and role-based access
 - Only the data creator or an Administrator should be able to delete records
 - Never implement bulk delete operations on core tables (employees, development_goals, step_progress, goal_templates, assessment_sessions)
 - Always use soft deletes (status flags) for core business data when possible
+- All UPDATE/DELETE queries on core tables must include explicit WHERE clauses - never update or delete without a filter
+- Log all destructive operations (deletes, bulk updates) with user ID and affected record IDs
+
+### 6. New Column Compatibility
+- All new columns MUST be nullable or have a safe default value
+- Code that reads new columns must handle NULL gracefully (use `??`, `||`, or explicit null checks)
+- When transitioning from a legacy field to new fields, keep the legacy field populated during the transition period
+- Test that existing production records (which will have NULL for new columns) display and function correctly
+
+### 7. Demo & Seed Data
+- Demo data endpoints (e.g., `/api/create-demo-users`) must NEVER be run in production
+- Demo/seed scripts should check for existing data before inserting to avoid duplicates
+- Never hard-code demo passwords or credentials that could be used in production
 
 ---
 
@@ -54,8 +67,7 @@ This application has real production data in use since September 2025. Every cha
 - Update `server/storage.ts` interface if adding CRUD operations
 
 ### 3. Frontend Patterns
-- Use `apiRequest` from `lib/auth` for all authenticated API calls
-- Use React state management (useState/useEffect) - not tanstack-query for the coach/guardian features
+- Use `@tanstack/react-query` for data fetching; use `apiRequest` from `lib/queryClient` for mutations
 - Follow existing component patterns: rounded-xl borders, blue-600 primary buttons, gray-100 backgrounds
 - Mobile responsive: test at 375px width minimum
 
