@@ -407,6 +407,39 @@ export const insertPromotionCertificationSchema = createInsertSchema(promotion_c
   created_at: true,
 });
 
+// Coach Check-Ins table
+export const coach_checkins = pgTable("coach_checkins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  checkin_date: timestamp("checkin_date", { withTimezone: true }).notNull().default(sql`now()`),
+  setting: text("setting").notNull(),
+  how_was_today: text("how_was_today").notNull(),
+  independence: text("independence").notNull(),
+  engagement: text("engagement").notNull(),
+  big_win: boolean("big_win").notNull(),
+  big_win_type: text("big_win_type"),
+  challenge: text("challenge").notNull(),
+  safety_concern: boolean("safety_concern").notNull().default(false),
+  safety_details: text("safety_details"),
+  compared_to_last: text("compared_to_last").notNull(),
+  support_helped: text("support_helped").notNull(),
+  notes: text("notes"),
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_checkins_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_checkins_coach_idx").on(table.coach_id),
+  dateIdx: index("coach_checkins_date_idx").on(table.checkin_date),
+}));
+
+export const insertCoachCheckinSchema = createInsertSchema(coach_checkins).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertCoachCheckin = z.infer<typeof insertCoachCheckinSchema>;
+export type CoachCheckin = typeof coach_checkins.$inferSelect;
+
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;
 export type PromotionCertification = typeof promotion_certifications.$inferSelect;
