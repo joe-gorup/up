@@ -440,6 +440,52 @@ export const insertCoachCheckinSchema = createInsertSchema(coach_checkins).omit(
 export type InsertCoachCheckin = z.infer<typeof insertCoachCheckinSchema>;
 export type CoachCheckin = typeof coach_checkins.$inferSelect;
 
+// Coach Files table - for uploaded PDFs and text files
+export const coach_files = pgTable("coach_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  file_name: text("file_name").notNull(),
+  file_type: text("file_type").notNull(),
+  file_size: integer("file_size").notNull(),
+  storage_path: text("storage_path").notNull(),
+  uploaded_at: timestamp("uploaded_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_files_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_files_coach_idx").on(table.coach_id),
+}));
+
+export const insertCoachFileSchema = createInsertSchema(coach_files).omit({
+  id: true,
+  uploaded_at: true,
+});
+
+export type InsertCoachFile = z.infer<typeof insertCoachFileSchema>;
+export type CoachFile = typeof coach_files.$inferSelect;
+
+// Coach Notes table - for rich text notes
+export const coach_notes = pgTable("coach_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updated_at: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_notes_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_notes_coach_idx").on(table.coach_id),
+}));
+
+export const insertCoachNoteSchema = createInsertSchema(coach_notes).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertCoachNote = z.infer<typeof insertCoachNoteSchema>;
+export type CoachNote = typeof coach_notes.$inferSelect;
+
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;
 export type PromotionCertification = typeof promotion_certifications.$inferSelect;
