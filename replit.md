@@ -6,6 +6,15 @@ Golden Scoop is an employee development and goal documentation application desig
 
 Preferred communication style: Simple, everyday language.
 
+# Development Guidelines
+
+**IMPORTANT: Read `DEVELOPMENT_GUIDELINES.md` before making any changes.** This file contains critical rules for data safety, schema changes, deployment, and coding standards that ALL developers and AI tools must follow. Key points:
+- All schema changes must be additive only (no dropping/renaming columns)
+- Production has real data since September 2025 that must be preserved
+- Always populate the legacy `employees.name` field when creating/updating employees
+- Run `npm run db:push` and verify no destructive warnings before publishing
+- Follow role-based access control patterns for all new endpoints
+
 # System Architecture
 
 ## Frontend Architecture
