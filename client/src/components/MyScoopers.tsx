@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Users, Target, CheckCircle, Clock, Search, ChevronRight } from 'lucide-react';
+import { Users, Target, CheckCircle, Clock, Search, ChevronRight, ClipboardCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
+import CoachCheckin from './CoachCheckin';
 
 export default function MyScoopers() {
   const { employees, developmentGoals, stepProgress } = useData();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedScooperId, setSelectedScooperId] = useState<string | null>(null);
+  const [checkinScooper, setCheckinScooper] = useState<{ id: string; name: string } | null>(null);
 
   const scoopers = employees.filter(emp =>
     emp.role === 'Super Scooper' && emp.isActive
@@ -33,6 +35,16 @@ export default function MyScoopers() {
       : 0;
     return { activeGoals: activeGoals.length, masteredGoals: masteredGoals.length, successRate };
   };
+
+  if (checkinScooper) {
+    return (
+      <CoachCheckin
+        employeeId={checkinScooper.id}
+        employeeName={checkinScooper.name}
+        onClose={() => setCheckinScooper(null)}
+      />
+    );
+  }
 
   if (selectedScooperId) {
     return (
@@ -92,7 +104,7 @@ export default function MyScoopers() {
                     <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2 mb-3">
                     <div className="bg-blue-50 rounded-lg p-2 text-center">
                       <div className="flex items-center justify-center mb-1">
                         <Target className="h-3.5 w-3.5 text-blue-600" />
@@ -114,6 +126,17 @@ export default function MyScoopers() {
                       <div className="text-lg font-bold text-purple-600">{stats.successRate}%</div>
                       <div className="text-xs text-gray-500">Success</div>
                     </div>
+                  </div>
+
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCheckinScooper({ id: scooper.id, name: `${scooper.first_name} ${scooper.last_name}` });
+                    }}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-amber-50 text-amber-700 rounded-lg text-sm font-medium hover:bg-amber-100 transition-colors border border-amber-200"
+                  >
+                    <ClipboardCheck className="h-4 w-4" />
+                    Check-In Notes
                   </div>
                 </button>
               );

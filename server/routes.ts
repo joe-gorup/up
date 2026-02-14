@@ -6,8 +6,8 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, coach_checkins,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertCoachCheckinSchema
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -2777,6 +2777,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete certification');
       res.status(500).json({ error: 'Failed to delete certification' });
+    }
+  });
+
+  // ========== Coach Check-In Endpoints ==========
+
+  app.get("/api/checkins/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const checkins = await db.select().from(coach_checkins)
+        .where(eq(coach_checkins.employee_id, employeeId))
+        .orderBy(desc(coach_checkins.checkin_date));
+
+      const coachIds = [...new Set(checkins.map(c => c.coach_id))];
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = checkins.map(c => ({ ...c, coach_name: coachMap[c.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch check-ins');
+      res.status(500).json({ error: 'Failed to fetch check-ins' });
+    }
+  });
+
+  app.post("/api/checkins", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can create check-ins' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const checkinData = { ...req.body, coach_id: user.id };
+      const parsed = insertCoachCheckinSchema.parse(checkinData);
+
+      const [checkin] = await db.insert(coach_checkins).values(parsed).returning();
+      logger.info({ checkinId: checkin.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach check-in created');
+      res.json(checkin);
+    } catch (error) {
+      logger.error({ error }, 'Failed to create check-in');
+      res.status(500).json({ error: 'Failed to create check-in' });
+    }
+  });
+
+  app.put("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_checkins).where(eq(coach_checkins.id, id));
+      if (!existing) return res.status(404).json({ error: 'Check-in not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original coach can edit this check-in' });
+      }
+
+      const { setting, how_was_today, independence, engagement, big_win, big_win_type, challenge, safety_concern, safety_details, compared_to_last, support_helped, notes } = req.body;
+      const updateData: any = {};
+      if (setting !== undefined) updateData.setting = setting;
+      if (how_was_today !== undefined) updateData.how_was_today = how_was_today;
+      if (independence !== undefined) updateData.independence = independence;
+      if (engagement !== undefined) updateData.engagement = engagement;
+      if (big_win !== undefined) updateData.big_win = big_win;
+      if (big_win_type !== undefined) updateData.big_win_type = big_win_type;
+      if (challenge !== undefined) updateData.challenge = challenge;
+      if (safety_concern !== undefined) updateData.safety_concern = safety_concern;
+      if (safety_details !== undefined) updateData.safety_details = safety_details;
+      if (compared_to_last !== undefined) updateData.compared_to_last = compared_to_last;
+      if (support_helped !== undefined) updateData.support_helped = support_helped;
+      if (notes !== undefined) updateData.notes = notes;
+      const [updated] = await db.update(coach_checkins).set(updateData).where(eq(coach_checkins.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update check-in');
+      res.status(500).json({ error: 'Failed to update check-in' });
+    }
+  });
+
+  app.delete("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_checkins).where(eq(coach_checkins.id, id));
+      if (!existing) return res.status(404).json({ error: 'Check-in not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original coach can delete this check-in' });
+      }
+
+      await db.delete(coach_checkins).where(eq(coach_checkins.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to delete check-in');
+      res.status(500).json({ error: 'Failed to delete check-in' });
     }
   });
 

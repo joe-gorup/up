@@ -8,6 +8,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+## Phase 8: Coach Check-In Notes (February 2026)
+- **New Database Table**: `coach_checkins` stores structured visit notes with 9 question fields covering setting, mood, independence, engagement, wins, challenges, safety, progress trends, and support effectiveness
+- **CRUD API Endpoints**: GET/POST/PUT/DELETE `/api/checkins` with role-based access (Job Coach scoped to assigned employees, Administrator has full access)
+- **Security**: Coach-to-employee assignment verification on all endpoints, field-level update restrictions preventing ownership manipulation
+- **Check-In Form UI**: Structured 9-question form with emoji-enhanced option buttons, conditional sub-questions (win type, safety details), optional notes
+- **History View**: Expandable check-in cards showing mood indicator, date, setting, coach name, trend badge, and full details on expand
+- **Integration Points**: "Check-In Notes" button on MyScoopers cards and EmployeeDetail action bar for quick access
+- **Access Control**: Only Job Coach and Administrator can create/edit; managers can view; Guardians excluded
+
 ## Phase 7: ROI Compliance Flow (February 2026)
 - **Full ROI Document**: OnboardingVerify.tsx rebuilt with complete legal text from The Golden Scoop Authorization For Exchange of Information document
 - **Consent Toggles**: Radio selection for "Release of all information" vs "I do NOT authorize the release of these records" with text area for specifics

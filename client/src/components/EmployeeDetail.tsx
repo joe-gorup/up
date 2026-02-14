@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Trash2, ClipboardCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import GoalAssignment from './GoalAssignment';
+import CoachCheckin from './CoachCheckin';
 import EmployeeAvatar from './EmployeeAvatar';
 
 interface EmployeeDetailProps {
@@ -37,6 +38,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [coachMentees, setCoachMentees] = useState<any[]>([]);
   const [selectedMenteeId, setSelectedMenteeId] = useState('');
   const [menteeError, setMenteeError] = useState('');
+  const [showCheckins, setShowCheckins] = useState(false);
 
   useEffect(() => {
     async function fetchRelationships() {
@@ -281,6 +283,16 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     );
   }
 
+  if (showCheckins && employee.role === 'Super Scooper') {
+    return (
+      <CoachCheckin
+        employeeId={employeeId}
+        employeeName={`${employee.first_name} ${employee.last_name}`}
+        onClose={() => setShowCheckins(false)}
+      />
+    );
+  }
+
   return (
     <div className="p-3 sm:p-6 max-w-6xl mx-auto">
       {/* Header */}
@@ -334,6 +346,18 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             >
               <Edit className="h-4 w-4" />
               <span className="hidden sm:inline">Edit</span>
+            </button>
+          )}
+
+          {employee.role === 'Super Scooper' && (user?.role === 'Administrator' || user?.role === 'Job Coach') && (
+            <button
+              onClick={() => setShowCheckins(true)}
+              className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm sm:text-base"
+              title="Check-In Notes"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Check-In Notes</span>
+              <span className="sm:hidden">Check-In</span>
             </button>
           )}
         </div>
