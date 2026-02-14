@@ -6,12 +6,18 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, coach_checkins,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertCoachCheckinSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, coach_checkins, coach_files, coach_notes,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertCoachCheckinSchema, insertCoachNoteSchema
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService, objectStorageClient } from "./objectStorage";
+
+function parseCoachFilePath(path: string): { bucketName: string; objectName: string } {
+  if (!path.startsWith("/")) path = `/${path}`;
+  const parts = path.split("/");
+  return { bucketName: parts[1], objectName: parts.slice(2).join("/") };
+}
 import multer from "multer";
 import csvParser from "csv-parser";
 import { 
@@ -2803,7 +2809,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(coach_checkins.employee_id, employeeId))
         .orderBy(desc(coach_checkins.checkin_date));
 
-      const coachIds = [...new Set(checkins.map(c => c.coach_id))];
+      const coachIds = Array.from(new Set(checkins.map(c => c.coach_id)));
       let coachMap: Record<string, string> = {};
       if (coachIds.length > 0) {
         const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
@@ -2895,6 +2901,324 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete check-in');
       res.status(500).json({ error: 'Failed to delete check-in' });
+    }
+  });
+
+  // ========== Coach Files Endpoints ==========
+
+  const fileUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = [
+        'application/pdf',
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'text/rtf',
+      ];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only PDF, TXT, DOC, DOCX, and RTF files are allowed'));
+      }
+    },
+  });
+
+  app.get("/api/coach-files/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const files = await db.select().from(coach_files)
+        .where(eq(coach_files.employee_id, employeeId))
+        .orderBy(desc(coach_files.uploaded_at));
+
+      const coachIds = Array.from(new Set(files.map(f => f.coach_id)));
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = files.map(f => ({ ...f, coach_name: coachMap[f.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach files');
+      res.status(500).json({ error: 'Failed to fetch files' });
+    }
+  });
+
+  app.post("/api/coach-files/:employeeId", authenticateToken, fileUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can upload files' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      let storagePath: string;
+
+      if (privateDir) {
+        const fileId = crypto.randomUUID();
+        const ext = file.originalname.split('.').pop() || '';
+        const objectPath = `${privateDir}/coach-files/${employeeId}/${fileId}.${ext}`;
+        const { bucketName, objectName } = parseCoachFilePath(objectPath);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectName);
+        await blob.save(file.buffer, { contentType: file.mimetype });
+        storagePath = objectPath;
+      } else {
+        const fs = await import('fs');
+        const path = await import('path');
+        const uploadDir = path.join('/tmp', 'coach-files', employeeId);
+        fs.mkdirSync(uploadDir, { recursive: true });
+        const fileId = crypto.randomUUID();
+        const ext = file.originalname.split('.').pop() || '';
+        const filePath = path.join(uploadDir, `${fileId}.${ext}`);
+        fs.writeFileSync(filePath, file.buffer);
+        storagePath = filePath;
+      }
+
+      const [saved] = await db.insert(coach_files).values({
+        employee_id: employeeId,
+        coach_id: user.id,
+        file_name: file.originalname,
+        file_type: file.mimetype,
+        file_size: file.size,
+        storage_path: storagePath,
+      }).returning();
+
+      logger.info({ fileId: saved.id, coachId: user.id, employeeId, fileName: file.originalname }, 'Coach file uploaded');
+      res.json(saved);
+    } catch (error) {
+      logger.error({ error }, 'Failed to upload coach file');
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  });
+
+  app.get("/api/coach-files/download/:fileId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { fileId } = req.params;
+
+      const [fileRecord] = await db.select().from(coach_files).where(eq(coach_files.id, fileId));
+      if (!fileRecord) return res.status(404).json({ error: 'File not found' });
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, fileRecord.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      if (privateDir && fileRecord.storage_path.startsWith(privateDir)) {
+        const { bucketName, objectName } = parseCoachFilePath(fileRecord.storage_path);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectName);
+        const [exists] = await blob.exists();
+        if (!exists) return res.status(404).json({ error: 'File not found in storage' });
+
+        res.setHeader('Content-Type', fileRecord.file_type);
+        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.file_name}"`);
+        blob.createReadStream().pipe(res);
+      } else {
+        const fs = await import('fs');
+        if (!fs.existsSync(fileRecord.storage_path)) {
+          return res.status(404).json({ error: 'File not found on disk' });
+        }
+        res.setHeader('Content-Type', fileRecord.file_type);
+        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.file_name}"`);
+        fs.createReadStream(fileRecord.storage_path).pipe(res);
+      }
+    } catch (error) {
+      logger.error({ error, fileId: req.params.fileId }, 'Failed to download coach file');
+      res.status(500).json({ error: 'Failed to download file' });
+    }
+  });
+
+  app.delete("/api/coach-files/:fileId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { fileId } = req.params;
+
+      const [fileRecord] = await db.select().from(coach_files).where(eq(coach_files.id, fileId));
+      if (!fileRecord) return res.status(404).json({ error: 'File not found' });
+      if (fileRecord.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the uploader can delete this file' });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      try {
+        if (privateDir && fileRecord.storage_path.startsWith(privateDir)) {
+          const { bucketName, objectName } = parseCoachFilePath(fileRecord.storage_path);
+          const bucket = objectStorageClient.bucket(bucketName);
+          await bucket.file(objectName).delete();
+        } else {
+          const fs = await import('fs');
+          if (fs.existsSync(fileRecord.storage_path)) {
+            fs.unlinkSync(fileRecord.storage_path);
+          }
+        }
+      } catch (storageErr) {
+        logger.warn({ error: storageErr, fileId }, 'Failed to delete storage file, removing record anyway');
+      }
+
+      await db.delete(coach_files).where(eq(coach_files.id, fileId));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, fileId: req.params.fileId }, 'Failed to delete coach file');
+      res.status(500).json({ error: 'Failed to delete file' });
+    }
+  });
+
+  // ========== Coach Notes Endpoints ==========
+
+  app.get("/api/coach-notes/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const notes = await db.select().from(coach_notes)
+        .where(eq(coach_notes.employee_id, employeeId))
+        .orderBy(desc(coach_notes.updated_at));
+
+      const coachIds = Array.from(new Set(notes.map(n => n.coach_id)));
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = notes.map(n => ({ ...n, coach_name: coachMap[n.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach notes');
+      res.status(500).json({ error: 'Failed to fetch notes' });
+    }
+  });
+
+  app.post("/api/coach-notes", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can create notes' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const noteData = { ...req.body, coach_id: user.id };
+      const parsed = insertCoachNoteSchema.parse(noteData);
+
+      const [note] = await db.insert(coach_notes).values(parsed).returning();
+      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach note created');
+      res.json(note);
+    } catch (error) {
+      logger.error({ error }, 'Failed to create coach note');
+      res.status(500).json({ error: 'Failed to create note' });
+    }
+  });
+
+  app.put("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
+      if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original author can edit this note' });
+      }
+
+      const { title, content } = req.body;
+      const updateData: any = { updated_at: new Date() };
+      if (title !== undefined) updateData.title = title;
+      if (content !== undefined) updateData.content = content;
+
+      const [updated] = await db.update(coach_notes).set(updateData).where(eq(coach_notes.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update coach note');
+      res.status(500).json({ error: 'Failed to update note' });
+    }
+  });
+
+  app.delete("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
+      if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original author can delete this note' });
+      }
+
+      await db.delete(coach_notes).where(eq(coach_notes.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to delete coach note');
+      res.status(500).json({ error: 'Failed to delete note' });
     }
   });
 
