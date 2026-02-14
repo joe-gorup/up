@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil, Award, Trash2 } from 'lucide-react';
+import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import GoalAssignment from './GoalAssignment';
@@ -14,7 +14,7 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee } = useData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification } = useData();
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
@@ -46,6 +46,168 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     challenges: [''],
     regulationStrategies: ['']
   });
+
+  // Certification states
+  const [showCertForm, setShowCertForm] = useState(false);
+  const [certType, setCertType] = useState<'mentor' | 'shift_manager'>('mentor');
+  const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
+  const [certNotes, setCertNotes] = useState('');
+  const [savingCert, setSavingCert] = useState(false);
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<number, boolean>>({});
+
+  // Certification checklist items
+  const mentorChecklistItems = [
+    "Does the employee consistently arrive on time for their scheduled shifts?",
+    "Does the employee follow call-out and time off request procedures correctly?",
+    "Can be relied on to independently communicate with guests?",
+    "Does the employee use correct portions when making product?",
+    "Does the employee arrive to work in clean hygiene and adheres to the dress code?",
+    "Explain to me what cross-contamination is and how is it avoided?",
+    "Does the employee use appropriate language and conversations at work?",
+    "Does the employee ask for clarity when they are unsure of a task?",
+    "Can the employee independently follow the instructions as written on a recipe?",
+    "Does the employee have a positive attitude at work?",
+    "Do they show patience when teaching others that learn slowly?",
+    "Do they correct mistakes calmly and respectfully?",
+    "Does the employee maintain composure when under pressure?",
+    "Does the employee take responsibility for their actions?",
+    "Do they support company standards even when no one is watching?",
+    "Does the person adhere to the daily shift checklists?",
+    "Does the employee maintain a steady pace during slow and busy times?",
+    "Does the employee lead by example with product quality and guest experience?",
+    "Can the employee redirect mistakes without embarrassment or putting someone down?",
+    "Can the employee explain their expectations clearly to another individual?",
+    "Does the employee accept feedback constructively?",
+    "Do they demonstrate willingness to improve?",
+    "What are the training resources and where to find them?",
+    "Can the employee explain TGS mission?",
+    "Can the employee name and explain the 10 core flavors?",
+    "Can the employee make a milkshake?",
+    "Can the employee make a hot drink?",
+    "Can the employee brew coffee?",
+    "Can the employee prepare a bag of coffee beans to go?",
+    "Can they operate the POS/Register independently?",
+    "How long should someone wash their hands for?",
+    "Can they explain the training steps to scooping?"
+  ];
+
+  const shiftManagerCategories = [
+    {
+      name: "Menu and Brand Knowledge",
+      items: [
+        "When was TGS started?",
+        "What is the TGS mission?",
+        "What local food partnerships does TGS have?",
+        "What are the different ways someone can order TGS?",
+        "Demonstrate the difference between a kids portion and a regular portion.",
+        "Demonstrate how to warm up a food item.",
+        "What are some quality cues for baked goods and dairy products?",
+        "Explain what FIFO stands for and how to apply it on your shift.",
+        "What ice cream flavors are GF?",
+        "What DF options are offered?",
+        "What is the employee discount and how is it different than a free treat?",
+        "What is the uniform policy?",
+        "How do you date product?"
+      ]
+    },
+    {
+      name: "Processes and Systems",
+      items: [
+        "Where to find all relevant tools and information?",
+        "What is the computer password?",
+        "What are the 3 daily checklists?",
+        "What items do we inventory daily?",
+        "How do you do an AE Dairy order?",
+        "When to do a customer refund? How do you refund same day?",
+        "What are the daily opening & closing cash procedures?",
+        "What is the safe code?",
+        "What are the steps of action when a SL discovers something not working or broken?",
+        "What do you do when a product is deemed not in quality?",
+        "What are some examples of theft and what are preventative measures?",
+        "What is the procedure for an extreme weather event?",
+        "Explain what the Ops Update is and where it is located."
+      ]
+    },
+    {
+      name: "Able to Operate, Clean and Troubleshoot Equipment",
+      items: [
+        "Toast POS",
+        "Drive through headsets",
+        "Menu Screens",
+        "Batch Freezer",
+        "Ice cream filler",
+        "Heat Sealer",
+        "Oven",
+        "Toaster Oven",
+        "Espresso Machine",
+        "Freezers",
+        "Dish Washer",
+        "Computer",
+        "3-compartment sink",
+        "Breaker box",
+        "Drains/plumbing",
+        "Internet/Router",
+        "Building Power"
+      ]
+    },
+    {
+      name: "People",
+      items: [
+        "Demonstrate how to coach a Scooper in the example verbally provided.",
+        "How do you help a Scooper who is having an emotional moment?",
+        "What are the steps to take when a Scooper is not responding or ignoring feedback?",
+        "How do you handle an upset customer appropriately? What is the LAST method?",
+        "What are some zero tolerance behavior examples and what actions does a SL need to take?",
+        "What are Scooper goals? Where do we find them?",
+        "What are the 4 steps to train someone on something new?",
+        "What do you do if employee falls ill during their shift?",
+        "What is the procedure if there is an injury to an employee?",
+        "What is the procedure if there is an injury to a customer?",
+        "Do they demonstrate the ability to delegate tasks appropriately?",
+        "Does the employee make sound decisions without waiting for direction in routine scenarios?",
+        "Does the employee maintain a team focus?"
+      ]
+    }
+  ];
+
+  const getChecklistItems = () => certType === 'mentor' ? mentorChecklistItems : shiftManagerCategories.flatMap(c => c.items);
+  const getPassingScore = () => certType === 'mentor' ? 84 : 90;
+  const calculateScore = () => {
+    const items = getChecklistItems();
+    const yesCount = Object.values(checklistAnswers).filter(v => v).length;
+    return Math.round((yesCount / items.length) * 100);
+  };
+
+  const employeeCerts = certifications.filter(c => c.employeeId === employeeId);
+
+  const handleSaveCertification = async () => {
+    setSavingCert(true);
+    const items = getChecklistItems();
+    const score = calculateScore();
+    const passingScore = getPassingScore();
+
+    const checklistResults = items.map((item, i) => ({
+      question: item,
+      answer: checklistAnswers[i] || false
+    }));
+
+    await addCertification({
+      employeeId,
+      certificationType: certType,
+      dateCompleted: certDate,
+      score,
+      passingScore,
+      passed: score >= passingScore,
+      checklistResults,
+      certifiedBy: user?.id,
+      notes: certNotes || undefined
+    });
+
+    setShowCertForm(false);
+    setChecklistAnswers({});
+    setCertNotes('');
+    setSavingCert(false);
+  };
 
   useEffect(() => {
     async function fetchRelationships() {
@@ -612,6 +774,190 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
                         {getPersonName(rel.guardian_id)}
                       </div>
                     ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Promotion Certifications - visible to Admins */}
+          {canEdit && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Award className="h-5 w-5 text-amber-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Promotion Certifications</h2>
+              </div>
+
+              {employeeCerts.length > 0 ? (
+                <div className="space-y-3 mb-4">
+                  {employeeCerts.map((cert) => (
+                    <div key={cert.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        {cert.certificationType === 'mentor' ? (
+                          <Star className="h-5 w-5 text-amber-500" />
+                        ) : (
+                          <Shield className="h-5 w-5 text-blue-500" />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Manager Certification'}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(cert.dateCompleted).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`text-sm font-medium ${cert.passed ? 'text-green-600' : 'text-red-600'}`}>
+                          {cert.score}%
+                          {cert.passed ? (
+                            <CheckCircle className="inline h-4 w-4 ml-1" />
+                          ) : (
+                            <X className="inline h-4 w-4 ml-1" />
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteCertification(cert.id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">No certifications recorded yet.</p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCertForm(!showCertForm);
+                  if (!showCertForm) {
+                    setChecklistAnswers({});
+                    setCertNotes('');
+                    setCertDate(new Date().toISOString().split('T')[0]);
+                    setCertType('mentor');
+                  }
+                }}
+                className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {showCertForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <span>{showCertForm ? 'Hide Form' : 'Record New Certification'}</span>
+              </button>
+
+              {showCertForm && (
+                <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => { setCertType('mentor'); setChecklistAnswers({}); }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'mentor' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    >
+                      Mentor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCertType('shift_manager'); setChecklistAnswers({}); }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_manager' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    >
+                      Shift Manager
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date Completed</label>
+                    <input
+                      type="date"
+                      value={certDate}
+                      onChange={(e) => setCertDate(e.target.value)}
+                      className={`w-full sm:w-auto ${INPUT_BASE_CLASSES}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
+                    <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-xl">
+                      {certType === 'mentor' ? (
+                        mentorChecklistItems.map((item, idx) => (
+                          <label
+                            key={idx}
+                            className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checklistAnswers[idx] || false}
+                              onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [idx]: e.target.checked }))}
+                              className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-800">{item}</span>
+                          </label>
+                        ))
+                      ) : (
+                        (() => {
+                          let globalIdx = 0;
+                          return shiftManagerCategories.map((category, catIdx) => (
+                            <div key={catIdx}>
+                              <div className="px-4 py-2 bg-gray-200 font-medium text-sm text-gray-700 sticky top-0">
+                                {category.name}
+                              </div>
+                              {category.items.map((item, itemIdx) => {
+                                const currentIdx = globalIdx++;
+                                return (
+                                  <label
+                                    key={currentIdx}
+                                    className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${currentIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checklistAnswers[currentIdx] || false}
+                                      onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: e.target.checked }))}
+                                      className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm text-gray-800">{item}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`text-sm font-medium ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-600'}`}>
+                    Score: {calculateScore()}% (Passing: {getPassingScore()}%)
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea
+                      value={certNotes}
+                      onChange={(e) => setCertNotes(e.target.value)}
+                      className={`w-full ${INPUT_BASE_CLASSES}`}
+                      rows={3}
+                      placeholder="Optional notes about this certification..."
+                    />
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={handleSaveCertification}
+                      disabled={savingCert}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingCert ? 'Saving...' : 'Save Certification'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
                   </div>
                 </div>
               )}
