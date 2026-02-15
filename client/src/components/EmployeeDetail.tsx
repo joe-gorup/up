@@ -708,13 +708,6 @@ const handleGenerateInvitation = async () => {
                       <span>{employee.allergies.length}</span>
                     </div>
                   )}
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
-                    employee.isActive 
-                      ? 'bg-green-100 text-green-800' 
-                      : 'bg-gray-100 text-gray-600'
-                  }`}>
-                    {employee.isActive ? 'Active' : 'Inactive'}
-                  </span>
                 </div>
                 <p className="text-gray-600 text-sm">{employee.role}</p>
                 <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
