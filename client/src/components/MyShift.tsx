@@ -354,8 +354,7 @@ export default function MyShift() {
       <div className="flex flex-col gap-4 mb-6">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xl font-bold text-gray-900">My Shift</h2>
-            <p className="text-sm text-gray-500 mt-1">
+            <p className="text-sm text-gray-500">
               {pinnedEmployees.length > 0
                 ? `${pinnedEmployees.length} employee${pinnedEmployees.length !== 1 ? 's' : ''} on your list today`
                 : 'Search and add employees to your shift list'}
