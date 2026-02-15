@@ -700,16 +700,19 @@ const handleGenerateInvitation = async () => {
                 size="lg"
               />
               <div className="min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{`${employee.first_name} ${employee.last_name}`}</h1>
-                  {employee.allergies.length > 0 && (
-                    <div className="flex items-center space-x-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs flex-shrink-0" title={`Allergies: ${employee.allergies.join(', ')}`}>
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span>{employee.allergies.length}</span>
-                    </div>
-                  )}
-                </div>
+                <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{`${employee.first_name} ${employee.last_name}`}</h1>
                 <p className="text-gray-600 text-sm">{employee.role}</p>
+                {employee.allergies.length > 0 && (
+                  <div className="flex items-center flex-wrap gap-2 mt-1.5">
+                    <span className="flex items-center text-red-600 text-sm font-medium">
+                      <AlertTriangle className="h-4 w-4 mr-1" />
+                      Allergies:
+                    </span>
+                    {employee.allergies.map((allergy, i) => (
+                      <span key={i} className="bg-red-50 text-red-700 px-3 py-0.5 rounded-full text-sm">{allergy}</span>
+                    ))}
+                  </div>
+                )}
                 <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
                   {employee.emergencyContacts.length > 0 && (
                     <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs" title={`${employee.emergencyContacts.length} emergency contact(s)`}>
@@ -1075,12 +1078,6 @@ const handleGenerateInvitation = async () => {
               </div>
 
               <div className="flex items-center flex-wrap gap-2 mb-3 pb-3 border-b border-gray-100">
-                {employee.allergies.length > 0 && (
-                  <div className="flex items-center space-x-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-full text-xs" title={`Allergies: ${employee.allergies.join(', ')}`}>
-                    <AlertTriangle className="h-3.5 w-3.5" />
-                    <span>{employee.allergies.length}</span>
-                  </div>
-                )}
                 {employee.emergencyContacts.length > 0 && (
                   <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-1 rounded-full text-xs" title={`${employee.emergencyContacts.length} emergency contact(s)`}>
                     <Phone className="h-3.5 w-3.5" />
@@ -1117,19 +1114,6 @@ const handleGenerateInvitation = async () => {
 
               {showSupportExpanded && (
                 <div className="mt-3 space-y-4 text-sm">
-                  {employee.allergies.length > 0 && (
-                    <div>
-                      <h4 className="font-medium text-amber-700 flex items-center mb-1.5">
-                        <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-                        Allergies
-                      </h4>
-                      <div className="flex flex-wrap gap-1.5">
-                        {employee.allergies.map((allergy, i) => (
-                          <span key={i} className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs">{allergy}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
                   {employee.interestsMotivators.length > 0 && (
                     <div>
                       <h4 className="font-medium text-green-700 flex items-center mb-1.5">
@@ -1807,15 +1791,6 @@ const handleGenerateInvitation = async () => {
                   {activeGoals.length}/2
                 </span>
               </div>
-              {user?.role === 'Administrator' && employee.role !== 'Job Coach' && (
-                <button
-                  onClick={() => setShowGoalAssignment(true)}
-                  className="flex items-center space-x-2 bg-blue-600 text-white px-2 sm:px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Assign Goal</span>
-                </button>
-              )}
             </div>
 
             {activeGoals.length > 0 ? (
@@ -2028,13 +2003,7 @@ const handleGenerateInvitation = async () => {
               <div className="text-center py-8">
                 <Target className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Goals</h3>
-                <p className="text-gray-600 mb-4">Assign development goals to start tracking progress</p>
-                <button
-                  onClick={() => setShowGoalAssignment(true)}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors"
-                >
-                  Assign First Goal
-                </button>
+                <p className="text-gray-600">No development goals have been assigned yet</p>
               </div>
             )}
           </div>
