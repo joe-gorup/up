@@ -1754,28 +1754,52 @@ const handleGenerateInvitation = async () => {
                     <ClipboardCheck className="h-5 w-5 text-blue-600" />
                     <h2 className="text-lg font-semibold text-gray-900">Goal Assessment</h2>
                   </div>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                      <select
-                        value={assessmentLocation}
-                        onChange={(e) => setAssessmentLocation(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+
+                  {activeAssessmentSession && activeAssessmentSession.employeeIds.includes(employeeId) ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 border border-amber-200 rounded-xl">
+                        <ClipboardCheck className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                        <div className="text-sm">
+                          <span className="font-medium text-amber-800">Assessment in progress</span>
+                          <span className="text-amber-600 ml-1">at {activeAssessmentSession.location}</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setProfileAssessmentSessionId(activeAssessmentSession.id);
+                          setAssessmentLocation(activeAssessmentSession.location || '9540 Nall Avenue');
+                          setAssessmentMode(true);
+                        }}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors"
                       >
-                        <option value="9540 Nall Avenue">9540 Nall Avenue</option>
-                        <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
-                        <option value="Remote">Remote</option>
-                      </select>
+                        <ClipboardCheck className="h-5 w-5" />
+                        Resume Assessment
+                      </button>
                     </div>
-                    <button
-                      onClick={handleStartAssessment}
-                      disabled={startingAssessment}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      <ClipboardCheck className="h-5 w-5" />
-                      {startingAssessment ? 'Starting...' : 'Start Assessment'}
-                    </button>
-                  </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                        <select
+                          value={assessmentLocation}
+                          onChange={(e) => setAssessmentLocation(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                        >
+                          <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                          <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                          <option value="Remote">Remote</option>
+                        </select>
+                      </div>
+                      <button
+                        onClick={handleStartAssessment}
+                        disabled={startingAssessment}
+                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                      >
+                        <ClipboardCheck className="h-5 w-5" />
+                        {startingAssessment ? 'Starting...' : 'Start Assessment'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
