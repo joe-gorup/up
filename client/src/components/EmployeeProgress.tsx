@@ -107,7 +107,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const [showHistory, setShowHistory] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showSupportDetails, setShowSupportDetails] = useState(false);
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -550,16 +549,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
             </div>
           </div>
 
-          <button
-            onClick={() => setShowSupportDetails(!showSupportDetails)}
-            className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-3 bg-white border border-blue-300 text-blue-600 rounded-xl hover:bg-blue-50 transition-colors text-sm font-medium w-full sm:w-auto"
-          >
-            <div className="h-5 w-5 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-xs font-bold">i</span>
-            </div>
-            <span>About Me</span>
-            {showSupportDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </button>
         </div>
 
         {/* Allergies - Prominent Safety Information */}
@@ -575,102 +564,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                 {allergy}
               </span>
             ))}
-          </div>
-        )}
-
-        {/* Expandable Support Details */}
-        {showSupportDetails && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Header */}
-              <div className="lg:col-span-3 flex items-center justify-between mb-2">
-                <div className="flex items-center space-x-2">
-                  <Heart className="h-5 w-5 text-pink-500" />
-                  <h2 className="text-xl font-semibold text-gray-900">About Me</h2>
-                </div>
-                {user?.role === 'Administrator' && onEditEmployee && (
-                  <button
-                    onClick={() => onEditEmployee(employee.id)}
-                    className="flex items-center space-x-2 bg-gray-600 text-white px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors"
-                    data-testid="button-edit-employee"
-                  >
-                    <Edit className="h-4 w-4" />
-                    <span>Edit</span>
-                  </button>
-                )}
-              </div>
-
-              {/* Interests & Motivators */}
-              {employee.interestsMotivators.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Interests & Motivators</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {employee.interestsMotivators.map((interest, index) => (
-                      <span
-                        key={index}
-                        className="px-4 py-2 bg-green-100 text-green-800 rounded-full text-sm font-medium"
-                      >
-                        {interest}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Challenges */}
-              {employee.challenges.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Challenges</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {employee.challenges.map((challenge, index) => (
-                      <span
-                        key={index}
-                        className="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium"
-                      >
-                        {challenge}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Support Strategies */}
-              {employee.regulationStrategies.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-3">Support Strategies</h3>
-                  <div className="flex flex-wrap gap-2">
-                    {employee.regulationStrategies.map((strategy, index) => (
-                      <span
-                        key={index}
-                        className="px-4 py-2 bg-blue-100 text-blue-800 rounded-full text-sm font-medium"
-                      >
-                        {strategy}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Emergency Contacts */}
-              {employee.emergencyContacts.length > 0 && (
-                <div className="lg:col-span-3">
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <Phone className="h-4 w-4 text-blue-500 mr-2" />
-                    Emergency Contacts
-                  </h3>
-                  <div className="space-y-3 ml-6">
-                    {employee.emergencyContacts.map((contact, index) => (
-                      <div key={index} className="text-sm bg-gray-50 p-3 rounded-lg">
-                        <p className="font-medium text-gray-900">{contact.name}</p>
-                        <p className="text-gray-600 ml-2">{contact.relationship}</p>
-                        <p className="text-blue-600 ml-2">{contact.phone}</p>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-            </div>
           </div>
         )}
       </div>
