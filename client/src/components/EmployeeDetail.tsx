@@ -20,6 +20,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [assessmentMode, setAssessmentMode] = useState(false);
+  const [showSupportExpanded, setShowSupportExpanded] = useState(false);
   const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
   const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState(false);
@@ -741,7 +742,123 @@ const handleGenerateInvitation = async () => {
 
       <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
         <div className={assessmentMode ? 'lg:col-span-1 space-y-6' : 'contents'}>
-          {/* Safety Information - Allergies */}
+
+          {assessmentMode && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+              <div className="flex items-center space-x-3 mb-3">
+                <EmployeeAvatar
+                  name={`${employee.first_name} ${employee.last_name}`}
+                  imageUrl={employee.profileImageUrl}
+                  size="md"
+                />
+                <div>
+                  <h3 className="font-semibold text-gray-900">{`${employee.first_name} ${employee.last_name}`}</h3>
+                  <p className="text-sm text-gray-500">{employee.role}</p>
+                </div>
+              </div>
+
+              <div className="flex items-center flex-wrap gap-2 mb-3 pb-3 border-b border-gray-100">
+                {employee.allergies.length > 0 && (
+                  <div className="flex items-center space-x-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-full text-xs" title={`Allergies: ${employee.allergies.join(', ')}`}>
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>{employee.allergies.length}</span>
+                  </div>
+                )}
+                {employee.emergencyContacts.length > 0 && (
+                  <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-1 rounded-full text-xs" title={`${employee.emergencyContacts.length} emergency contact(s)`}>
+                    <Phone className="h-3.5 w-3.5" />
+                    <span>{employee.emergencyContacts.length}</span>
+                  </div>
+                )}
+                {employee.interestsMotivators.length > 0 && (
+                  <div className="flex items-center space-x-1 text-green-600 bg-green-50 px-2 py-1 rounded-full text-xs" title={`Interests: ${employee.interestsMotivators.join(', ')}`}>
+                    <Heart className="h-3.5 w-3.5" />
+                    <span>{employee.interestsMotivators.length}</span>
+                  </div>
+                )}
+                {employee.challenges.length > 0 && (
+                  <div className="flex items-center space-x-1 text-orange-600 bg-orange-50 px-2 py-1 rounded-full text-xs" title={`Challenges: ${employee.challenges.join(', ')}`}>
+                    <Zap className="h-3.5 w-3.5" />
+                    <span>{employee.challenges.length}</span>
+                  </div>
+                )}
+                {employee.regulationStrategies.length > 0 && (
+                  <div className="flex items-center space-x-1 text-purple-600 bg-purple-50 px-2 py-1 rounded-full text-xs" title={`Strategies: ${employee.regulationStrategies.join(', ')}`}>
+                    <Brain className="h-3.5 w-3.5" />
+                    <span>{employee.regulationStrategies.length}</span>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowSupportExpanded(!showSupportExpanded)}
+                className="flex items-center justify-between w-full text-sm text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                <span className="font-medium">Support Details</span>
+                {showSupportExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </button>
+
+              {showSupportExpanded && (
+                <div className="mt-3 space-y-4 text-sm">
+                  {employee.allergies.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-amber-700 flex items-center mb-1.5">
+                        <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                        Allergies
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.allergies.map((allergy, i) => (
+                          <span key={i} className="bg-red-100 text-red-800 px-2 py-0.5 rounded-full text-xs">{allergy}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {employee.interestsMotivators.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-green-700 flex items-center mb-1.5">
+                        <Heart className="h-3.5 w-3.5 mr-1.5" />
+                        Interests & Motivators
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.interestsMotivators.map((item, i) => (
+                          <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {employee.challenges.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-orange-700 flex items-center mb-1.5">
+                        <Zap className="h-3.5 w-3.5 mr-1.5" />
+                        Challenges
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.challenges.map((item, i) => (
+                          <span key={i} className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {employee.regulationStrategies.length > 0 && (
+                    <div>
+                      <h4 className="font-medium text-purple-700 flex items-center mb-1.5">
+                        <Brain className="h-3.5 w-3.5 mr-1.5" />
+                        Support Strategies
+                      </h4>
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.regulationStrategies.map((item, i) => (
+                          <span key={i} className="bg-blue-100 text-blue-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Safety Information - Allergies - hidden during assessment (shown in compact card) */}
+          {!assessmentMode && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
@@ -827,8 +944,10 @@ const handleGenerateInvitation = async () => {
               </div>
             )}
           </div>
+          )}
 
-          {/* Support Information */}
+          {/* Support Information - hidden during assessment (shown in compact card) */}
+          {!assessmentMode && (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
@@ -1065,8 +1184,10 @@ const handleGenerateInvitation = async () => {
               </div>
             )}
           </div>
+          )}
 
-          {/* Emergency Contacts */}
+          {/* Emergency Contacts - hidden during assessment */}
+          {!assessmentMode && (<>
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center space-x-2">
@@ -1727,6 +1848,7 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
           )}
+          </>)}
 
         </div>
 
