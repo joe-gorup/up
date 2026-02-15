@@ -6,11 +6,9 @@ import { ToastProvider } from './components/ToastProvider';
 import LoginForm from './components/LoginForm';
 import Dashboard from './components/Dashboard';
 import EmployeeManagement from './components/EmployeeManagement';
-import GoalDocumentation from './components/GoalDocumentation';
 import GoalTemplates from './components/GoalTemplates';
 import EmployeeDashboard from './components/EmployeeDashboard';
 import BulkUpload from './components/BulkUpload';
-import AssignmentsManagement from './components/AssignmentsManagement';
 import MyScoopers from './components/MyScoopers';
 import MyShift from './components/MyShift';
 import MyLovedOnes from './components/MyLovedOnes';
@@ -64,8 +62,6 @@ function AppContent() {
     switch (activeSection) {
       case 'my-shift':
         return { title: 'My Shift', description: 'Search and pin employees to work with today, then click into their profiles for assessments' };
-      case 'active-shift':
-        return { title: 'Goal Documentation', description: 'Conduct comprehensive goal assessments with step-by-step evaluation, performance summaries, and integrated draft/submit workflow' };
       case 'dashboard':
         return { title: 'Dashboard', description: 'Overview of employee progress and goal documentation activity' };
       case 'employees':
@@ -74,8 +70,6 @@ function AppContent() {
         return { title: 'Goal Templates', description: 'Create and manage reusable goal templates for employee development' };
       case 'bulk-upload':
         return { title: 'Bulk Data Upload', description: 'Import assessment data, mastered goals, and goal templates from CSV files' };
-      case 'assignments':
-        return { title: 'Assignments & Relationships', description: 'Manage coach assignments and guardian relationships' };
       case 'employee-dashboard':
         return { title: 'My Dashboard', description: 'Track your development goals and progress' };
       case 'my-profile':
@@ -119,8 +113,6 @@ function AppContent() {
     switch (activeSection) {
       case 'my-shift':
         return <MyShift />;
-      case 'active-shift':
-        return <GoalDocumentation onNavigateToEmployee={() => setActiveSection('employees')} />;
       case 'dashboard':
         return <Dashboard />;
       case 'employees':
@@ -129,8 +121,6 @@ function AppContent() {
         return user?.role === 'Administrator' ? <GoalTemplates /> : <Dashboard />;
       case 'bulk-upload':
         return user?.role === 'Administrator' ? <BulkUpload /> : <Dashboard />;
-      case 'assignments':
-        return user?.role === 'Administrator' ? <AssignmentsManagement /> : <Dashboard />;
       case 'employee-dashboard':
         return <EmployeeDashboard />;
       case 'my-profile':

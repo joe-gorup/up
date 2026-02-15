@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Calendar, Target, Settings, LogOut, Menu, X, PanelLeft, ClipboardList, FolderOpen, Upload, Link, Heart } from 'lucide-react';
+import { LayoutDashboard, Users, Target, Settings, LogOut, Menu, X, PanelLeft, ClipboardList, FolderOpen, Upload, Heart } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -15,12 +15,10 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
   const menuItems = [
     // Administrator menu items
     { id: 'my-shift', label: 'My Shift', icon: ClipboardList, roles: ['administrator', 'shift lead', 'assistant manager'] },
-    { id: 'active-shift', label: 'Goal Documentation', icon: Calendar, roles: ['administrator', 'shift lead', 'assistant manager'] },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['administrator', 'shift lead', 'assistant manager', 'job coach'] },
     { id: 'employees', label: 'Employee Management', icon: Users, roles: ['administrator'] },
     { id: 'goal-templates', label: 'Goal Templates', icon: FolderOpen, roles: ['administrator'] },
     { id: 'bulk-upload', label: 'Bulk Upload', icon: Upload, roles: ['administrator'] },
-    { id: 'assignments', label: 'Assignments', icon: Link, roles: ['administrator'] },
     
     // Job Coach menu items
     { id: 'my-scoopers', label: 'My Scoopers', icon: Users, roles: ['job coach'] },
