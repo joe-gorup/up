@@ -893,7 +893,7 @@ const handleGenerateInvitation = async () => {
                         onClick={() => removeArrayItem(setSafetyForm, index)}
                         className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       >
-                        <X className="h-4 w-4" />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     )}
                   </div>
@@ -992,7 +992,7 @@ const handleGenerateInvitation = async () => {
                             onClick={() => removeSupportArrayItem('interestsMotivators', index)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            <X className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -1035,7 +1035,7 @@ const handleGenerateInvitation = async () => {
                             onClick={() => removeSupportArrayItem('challenges', index)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            <X className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -1078,7 +1078,7 @@ const handleGenerateInvitation = async () => {
                             onClick={() => removeSupportArrayItem('regulationStrategies', index)}
                             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            <X className="h-4 w-4" />
+                            <Trash2 className="h-4 w-4" />
                           </button>
                         )}
                       </div>
@@ -1217,7 +1217,7 @@ const handleGenerateInvitation = async () => {
                           onClick={() => removeEmergencyContact(index)}
                           className="p-1 text-red-600 hover:bg-red-50 rounded"
                         >
-                          <X className="h-4 w-4" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       )}
                     </div>
@@ -1518,7 +1518,7 @@ const handleGenerateInvitation = async () => {
                               }}
                               className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                             >
-                              <X className="h-4 w-4" />
+                              <Trash2 className="h-4 w-4" />
                             </button>
                           )}
                         </div>
