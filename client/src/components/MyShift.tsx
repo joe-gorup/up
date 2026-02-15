@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Target, CheckCircle, Clock, Search, ChevronRight, Pin, PinOff, X, ClipboardList } from 'lucide-react';
+import { Users, Target, CheckCircle, Clock, Search, ChevronRight, PinOff, X, ClipboardList, AlertTriangle, Phone, Heart, Brain } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -15,6 +15,7 @@ export default function MyShift() {
   });
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
   const [showSearch, setShowSearch] = useState(false);
+  const [pendingSelections, setPendingSelections] = useState<string[]>([]);
 
   const assessableEmployees = employees.filter(emp =>
     emp.isActive && ['Super Scooper', 'Assistant Manager'].includes(emp.role)
@@ -22,24 +23,22 @@ export default function MyShift() {
 
   const pinnedEmployees = assessableEmployees.filter(emp => pinnedIds.includes(emp.id));
 
-  const searchResults = searchQuery.trim()
-    ? assessableEmployees
-        .filter(emp => {
-          const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
-          return fullName.includes(searchQuery.toLowerCase()) && !pinnedIds.includes(emp.id);
-        })
-        .sort((a, b) => (a.first_name || '').localeCompare(b.first_name || ''))
-    : [];
+  const availableEmployees = assessableEmployees
+    .filter(emp => !pinnedIds.includes(emp.id))
+    .filter(emp => {
+      if (!searchQuery.trim()) return true;
+      const fullName = `${emp.first_name} ${emp.last_name}`.toLowerCase();
+      return fullName.includes(searchQuery.toLowerCase());
+    })
+    .sort((a, b) => {
+      const firstNameCompare = (a.first_name || '').localeCompare(b.first_name || '');
+      if (firstNameCompare !== 0) return firstNameCompare;
+      return (a.last_name || '').localeCompare(b.last_name || '');
+    });
 
   const savePinned = (ids: string[]) => {
     setPinnedIds(ids);
     sessionStorage.setItem(`myshift-pinned-${user?.id}`, JSON.stringify(ids));
-  };
-
-  const pinEmployee = (id: string) => {
-    const updated = [...pinnedIds, id];
-    savePinned(updated);
-    setSearchQuery('');
   };
 
   const unpinEmployee = (id: string) => {
@@ -49,6 +48,36 @@ export default function MyShift() {
 
   const clearAll = () => {
     savePinned([]);
+  };
+
+  const togglePendingSelection = (employeeId: string) => {
+    setPendingSelections(prev =>
+      prev.includes(employeeId)
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    );
+  };
+
+  const handleOpenSearch = () => {
+    setPendingSelections([]);
+    setSearchQuery('');
+    setShowSearch(true);
+  };
+
+  const handleAddSelected = () => {
+    if (pendingSelections.length > 0) {
+      const updated = [...pinnedIds, ...pendingSelections];
+      savePinned(updated);
+    }
+    setPendingSelections([]);
+    setSearchQuery('');
+    setShowSearch(false);
+  };
+
+  const getEmployeeGoals = (employeeId: string) => {
+    return developmentGoals.filter(goal =>
+      goal.employeeId === employeeId && goal.status === 'active'
+    );
   };
 
   const getEmployeeStats = (employeeId: string) => {
@@ -75,6 +104,251 @@ export default function MyShift() {
     );
   }
 
+  if (showSearch) {
+    return (
+      <div className="p-3 sm:p-6 max-w-6xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h2 className="text-xl font-bold text-gray-900">Add Employees to Shift</h2>
+            <p className="text-sm text-gray-500 mt-1">
+              Select employees to add to your working list
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => { setShowSearch(false); setPendingSelections([]); setSearchQuery(''); }}
+              className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleAddSelected}
+              disabled={pendingSelections.length === 0}
+              className={`flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-all ${
+                pendingSelections.length > 0
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {pendingSelections.length > 0
+                ? `Add ${pendingSelections.length} Employee${pendingSelections.length !== 1 ? 's' : ''}`
+                : 'Add to Shift'}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 mb-6">
+          <div className="flex-1">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search employees..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                autoFocus
+              />
+            </div>
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setPendingSelections([])}
+              className="px-4 py-3 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 transition-colors text-sm font-medium"
+            >
+              Clear All
+            </button>
+            <button
+              onClick={() => setPendingSelections(availableEmployees.map(emp => emp.id))}
+              className="px-4 py-3 bg-blue-100 text-blue-700 rounded-xl hover:bg-blue-200 transition-colors text-sm font-medium"
+            >
+              Select All
+            </button>
+          </div>
+        </div>
+
+        <div className="sm:hidden space-y-3">
+          {availableEmployees.map((employee) => {
+            const isSelected = pendingSelections.includes(employee.id);
+            const employeeGoals = getEmployeeGoals(employee.id);
+
+            return (
+              <button
+                key={employee.id}
+                onClick={() => togglePendingSelection(employee.id)}
+                className={`w-full text-left rounded-xl border p-4 transition-all ${
+                  isSelected
+                    ? 'bg-blue-50 border-blue-300 shadow-sm'
+                    : 'bg-white border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center space-x-3">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    readOnly
+                    className="h-5 w-5 text-blue-600 focus:ring-blue-500 border-gray-300 rounded flex-shrink-0 pointer-events-none"
+                  />
+                  <EmployeeAvatar
+                    name={`${employee.first_name} ${employee.last_name}`}
+                    imageUrl={employee.profileImageUrl}
+                    size="md"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate">{`${employee.first_name} ${employee.last_name}`}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      <span className="text-sm text-gray-500">{employee.role}</span>
+                      <span className="text-sm font-medium text-blue-600">
+                        {employeeGoals.length} goal{employeeGoals.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                  {employee.allergies.length > 0 && (
+                    <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0" />
+                  )}
+                </div>
+              </button>
+            );
+          })}
+
+          {availableEmployees.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No employees found</h3>
+              <p className="text-gray-600">
+                {searchQuery.trim()
+                  ? `No employees match "${searchQuery}"`
+                  : 'All employees are already on your shift list'
+                }
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="hidden sm:block bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="text-center py-4 px-4 font-medium text-gray-900 w-12">
+                  <input
+                    type="checkbox"
+                    checked={pendingSelections.length === availableEmployees.length && availableEmployees.length > 0}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setPendingSelections(availableEmployees.map(emp => emp.id));
+                      } else {
+                        setPendingSelections([]);
+                      }
+                    }}
+                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                  />
+                </th>
+                <th className="text-left py-4 px-4 font-medium text-gray-900">Employee</th>
+                <th className="text-left py-4 px-4 font-medium text-gray-900">Role</th>
+                <th className="text-left py-4 px-4 font-medium text-gray-900 hidden lg:table-cell">Support Info</th>
+                <th className="text-left py-4 px-4 font-medium text-gray-900">Active Goals</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {availableEmployees.map((employee) => {
+                const isSelected = pendingSelections.includes(employee.id);
+                const employeeGoals = getEmployeeGoals(employee.id);
+
+                return (
+                  <tr
+                    key={employee.id}
+                    className={`hover:bg-gray-50 cursor-pointer ${
+                      isSelected ? 'bg-blue-50' : ''
+                    }`}
+                    onClick={() => togglePendingSelection(employee.id)}
+                  >
+                    <td className="py-4 px-4 w-12 text-center">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => togglePendingSelection(employee.id)}
+                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-3">
+                        <EmployeeAvatar
+                          name={`${employee.first_name} ${employee.last_name}`}
+                          imageUrl={employee.profileImageUrl}
+                          size="md"
+                        />
+                        <p className="font-medium text-gray-900">{`${employee.first_name} ${employee.last_name}`}</p>
+                      </div>
+                    </td>
+
+                    <td className="py-4 px-4">
+                      <span className="text-sm text-gray-900">{employee.role}</span>
+                    </td>
+
+                    <td className="py-4 px-4 hidden lg:table-cell">
+                      <div className="flex items-center space-x-3">
+                        {employee.allergies.length > 0 && (
+                          <div className="flex items-center space-x-1 text-amber-600">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span className="text-xs">{employee.allergies.length}</span>
+                          </div>
+                        )}
+                        {employee.emergencyContacts.length > 0 && (
+                          <div className="flex items-center space-x-1 text-blue-600">
+                            <Phone className="h-4 w-4" />
+                            <span className="text-xs">{employee.emergencyContacts.length}</span>
+                          </div>
+                        )}
+                        {employee.interestsMotivators.length > 0 && (
+                          <div className="flex items-center space-x-1 text-green-600">
+                            <Heart className="h-4 w-4" />
+                            <span className="text-xs">{employee.interestsMotivators.length}</span>
+                          </div>
+                        )}
+                        {employee.regulationStrategies.length > 0 && (
+                          <div className="flex items-center space-x-1 text-purple-600">
+                            <Brain className="h-4 w-4" />
+                            <span className="text-xs">{employee.regulationStrategies.length}</span>
+                          </div>
+                        )}
+                      </div>
+                    </td>
+
+                    <td className="py-4 px-4">
+                      <div className="flex items-center space-x-2">
+                        <span className="text-sm font-medium text-blue-600">
+                          {employeeGoals.length}
+                        </span>
+                        <span className="text-sm text-gray-500">
+                          goal{employeeGoals.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {availableEmployees.length === 0 && (
+            <div className="text-center py-12">
+              <Users className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No employees found</h3>
+              <p className="text-gray-600">
+                {searchQuery.trim()
+                  ? `No employees match "${searchQuery}"`
+                  : 'All employees are already on your shift list'
+                }
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-3 sm:p-6 max-w-6xl mx-auto">
       <div className="flex flex-col gap-4 mb-6">
@@ -97,73 +371,14 @@ export default function MyShift() {
               </button>
             )}
             <button
-              onClick={() => setShowSearch(!showSearch)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all ${
-                showSearch
-                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+              onClick={handleOpenSearch}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
             >
-              {showSearch ? <X className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-              {showSearch ? 'Done' : 'Add Employees'}
+              <Search className="h-4 w-4" />
+              Add Employees
             </button>
           </div>
         </div>
-
-        {showSearch && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-            <div className="relative mb-3">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search by name..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
-                autoFocus
-              />
-            </div>
-
-            {searchQuery.trim() && searchResults.length > 0 && (
-              <div className="space-y-1 max-h-64 overflow-y-auto">
-                {searchResults.map(emp => (
-                  <button
-                    key={emp.id}
-                    onClick={() => pinEmployee(emp.id)}
-                    className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-blue-50 transition-colors text-left group"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <EmployeeAvatar
-                        name={`${emp.first_name} ${emp.last_name}`}
-                        imageUrl={emp.profileImageUrl}
-                        size="sm"
-                      />
-                      <div>
-                        <span className="font-medium text-gray-900">{emp.first_name} {emp.last_name}</span>
-                        <span className="text-xs text-gray-500 ml-2">{emp.role}</span>
-                      </div>
-                    </div>
-                    <Pin className="h-4 w-4 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {searchQuery.trim() && searchResults.length === 0 && (
-              <p className="text-sm text-gray-500 text-center py-3">
-                {assessableEmployees.filter(e => !pinnedIds.includes(e.id)).length === 0
-                  ? 'All employees are already on your list'
-                  : 'No employees match your search'}
-              </p>
-            )}
-
-            {!searchQuery.trim() && (
-              <p className="text-sm text-gray-500 text-center py-2">
-                Type a name to search ({assessableEmployees.filter(e => !pinnedIds.includes(e.id)).length} employees available)
-              </p>
-            )}
-          </div>
-        )}
       </div>
 
       {pinnedEmployees.length > 0 ? (
@@ -241,7 +456,7 @@ export default function MyShift() {
             Click "Add Employees" above to search and pin the employees you'll be working with today.
           </p>
           <button
-            onClick={() => setShowSearch(true)}
+            onClick={handleOpenSearch}
             className="inline-flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors"
           >
             <Search className="h-5 w-5" />
