@@ -12,6 +12,7 @@ import EmployeeDashboard from './components/EmployeeDashboard';
 import BulkUpload from './components/BulkUpload';
 import AssignmentsManagement from './components/AssignmentsManagement';
 import MyScoopers from './components/MyScoopers';
+import MyShift from './components/MyShift';
 import MyLovedOnes from './components/MyLovedOnes';
 import AccountSetup from './components/AccountSetup';
 import OnboardingVerify from './components/OnboardingVerify';
@@ -46,7 +47,7 @@ function AppContent() {
     } else if (user?.role === 'Guardian') {
       setActiveSection('my-scooper');
     } else {
-      setActiveSection('active-shift');
+      setActiveSection('my-shift');
     }
   }, [user?.role]);
 
@@ -61,6 +62,8 @@ function AppContent() {
 
   const getPageTitle = () => {
     switch (activeSection) {
+      case 'my-shift':
+        return { title: 'My Shift', description: 'Search and pin employees to work with today, then click into their profiles for assessments' };
       case 'active-shift':
         return { title: 'Goal Documentation', description: 'Conduct comprehensive goal assessments with step-by-step evaluation, performance summaries, and integrated draft/submit workflow' };
       case 'dashboard':
@@ -84,7 +87,7 @@ function AppContent() {
       default:
         return user?.role === 'employee' 
           ? { title: 'My Dashboard', description: 'Track your development goals and progress' }
-          : { title: 'Goal Documentation', description: 'Conduct comprehensive goal assessments with step-by-step evaluation, performance summaries, and integrated draft/submit workflow' };
+          : { title: 'My Shift', description: 'Search and pin employees to work with today, then click into their profiles for assessments' };
     }
   };
 
@@ -114,6 +117,8 @@ function AppContent() {
 
   const renderContent = () => {
     switch (activeSection) {
+      case 'my-shift':
+        return <MyShift />;
       case 'active-shift':
         return <GoalDocumentation onNavigateToEmployee={() => setActiveSection('employees')} />;
       case 'dashboard':
@@ -139,7 +144,7 @@ function AppContent() {
         if (role === 'employee' || role === 'super scooper') return <EmployeeDashboard />;
         if (role === 'job coach') return <Dashboard />;
         if (role === 'guardian') return <MyLovedOnes />;
-        return <GoalDocumentation />;
+        return <MyShift />;
     }
   };
 

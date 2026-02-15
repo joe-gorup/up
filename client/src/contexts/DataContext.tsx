@@ -145,7 +145,7 @@ interface DataContextType {
   loadUserDrafts: (userId: string) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
-  createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
+  createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
   endAssessmentSession: () => void;
   completeAssessmentSession: (sessionId: string) => Promise<void>;
   renewAssessmentSession: (sessionId: string) => Promise<void>;
@@ -606,7 +606,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   // NEW ASSESSMENT SESSION FUNCTIONS
-  const createAssessmentSession = async (employeeIds: string[], location?: string): Promise<{ success: boolean; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }> => {
+  const createAssessmentSession = async (employeeIds: string[], location?: string): Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }> => {
     try {
       console.log('Creating assessment session with employees:', employeeIds, 'location:', location);
       
@@ -650,7 +650,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         });
         
         console.log('Active assessment session updated successfully');
-        return { success: true };
+        return { success: true, sessionId: newSession.id };
       } else if (response.status === 409) {
         // Conflict - employees are locked
         const errorData = await response.json();

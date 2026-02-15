@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import GoalAssignment from './GoalAssignment';
 import CoachCheckin from './CoachCheckin';
+import EmployeeProgress from './EmployeeProgress';
 import EmployeeAvatar from './EmployeeAvatar';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
 
@@ -15,9 +16,13 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper } = useData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useData();
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
+  const [assessmentMode, setAssessmentMode] = useState(false);
+  const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
+  const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
+  const [startingAssessment, setStartingAssessment] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [editForm, setEditForm] = useState({
@@ -435,6 +440,33 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         : [{ name: '', type: '' }]
     });
     setEditingServiceProvider(false);
+  };
+
+  const canAssess = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
+  const isAssessable = ['Super Scooper', 'Assistant Manager'].includes(employees.find(e => e.id === employeeId)?.role || '');
+
+  const handleStartAssessment = async () => {
+    setStartingAssessment(true);
+    try {
+      const result = await createAssessmentSession([employeeId], assessmentLocation);
+      if (result.success) {
+        setProfileAssessmentSessionId(result.sessionId || null);
+        setAssessmentMode(true);
+      } else {
+        alert(result.error || 'Could not start assessment. The employee may be locked by another session.');
+      }
+    } catch (error) {
+      console.error('Error starting assessment:', error);
+      alert('Failed to start assessment session');
+    } finally {
+      setStartingAssessment(false);
+    }
+  };
+
+  const handleEndAssessment = async () => {
+    await endAssessmentSession();
+    setAssessmentMode(false);
+    setProfileAssessmentSessionId(null);
   };
   
   if (!employee) {
@@ -1712,6 +1744,66 @@ const handleGenerateInvitation = async () => {
         {/* Right Column - Goals */}
         {employee.role !== 'Job Coach' && (
         <div className="lg:col-span-2 space-y-6">
+
+          {/* Goal Assessment Section */}
+          {canAssess && isAssessable && activeGoals.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              {assessmentMode ? (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <ClipboardCheck className="h-5 w-5 text-green-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
+                    </div>
+                    <button
+                      onClick={handleEndAssessment}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                    >
+                      <X className="h-4 w-4" />
+                      <span>End Assessment</span>
+                    </button>
+                  </div>
+                  <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+                    <span>Location: {assessmentLocation}</span>
+                  </div>
+                  <EmployeeProgress
+                    employee={employee}
+                    assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <ClipboardCheck className="h-5 w-5 text-blue-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Goal Assessment</h2>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <select
+                        value={assessmentLocation}
+                        onChange={(e) => setAssessmentLocation(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      >
+                        <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                        <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                        <option value="Remote">Remote</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleStartAssessment}
+                      disabled={startingAssessment}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <ClipboardCheck className="h-5 w-5" />
+                      {startingAssessment ? 'Starting...' : 'Start Assessment'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Active Goals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-6">

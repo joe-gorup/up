@@ -43,7 +43,9 @@ Preferred communication style: Simple, everyday language.
 -   **Assessment Sessions**: User-specific locking mechanism prevents concurrent documentation conflicts, with automatic lock expiry and release.
 -   **User Management**: Role-based access, account invitation system, and a dedicated setup page for new users.
 -   **Employee Features**: Comprehensive employee profiles, promotion certifications (Mentor, Shift Lead), and ROI compliance flow with legal text, consent toggles, and signature capture.
--   **Coach & Guardian Experience**: Dedicated "My Scoopers" and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
+-   **My Shift Workflow**: Shift Leads and Admins use a "My Shift" page to search, pin, and build a working list of employees for the day (persisted in session). Assessments are conducted from individual employee profiles.
+-   **Coach & Guardian Experience**: Dedicated "My Scoopers" (fixed assigned list, no search) and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
+-   **Profile-Based Assessments**: Goal assessment (EmployeeProgress) is embedded directly in EmployeeDetail profiles with location selection. Old Goal Documentation page remains available during transition.
 -   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities with access control.
 
 # External Dependencies

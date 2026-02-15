@@ -14,7 +14,8 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
 
   const menuItems = [
     // Administrator menu items
-    { id: 'active-shift', label: 'Goal Documentation', icon: ClipboardList, roles: ['administrator', 'shift lead', 'assistant manager'] },
+    { id: 'my-shift', label: 'My Shift', icon: ClipboardList, roles: ['administrator', 'shift lead', 'assistant manager'] },
+    { id: 'active-shift', label: 'Goal Documentation', icon: Calendar, roles: ['administrator', 'shift lead', 'assistant manager'] },
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['administrator', 'shift lead', 'assistant manager', 'job coach'] },
     { id: 'employees', label: 'Employee Management', icon: Users, roles: ['administrator'] },
     { id: 'goal-templates', label: 'Goal Templates', icon: FolderOpen, roles: ['administrator'] },
