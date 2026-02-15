@@ -104,6 +104,15 @@ export interface PromotionCertification {
   createdAt: string;
 }
 
+export interface GuardianNote {
+  id: string;
+  guardianId: string;
+  scooperId: string;
+  note: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface GoalTemplate {
   id: string;
   name: string;
@@ -129,6 +138,7 @@ interface DataContextType {
   goalTemplates: GoalTemplate[];
   stepProgress: StepProgress[];
   certifications: PromotionCertification[];
+  guardianNotes: GuardianNote[];
   loadUserDrafts: (userId: string) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
@@ -151,6 +161,8 @@ interface DataContextType {
   addCertification: (cert: Omit<PromotionCertification, 'id' | 'createdAt'>) => Promise<PromotionCertification | null>;
   deleteCertification: (id: string) => Promise<void>;
   refreshCertifications: () => Promise<void>;
+  saveGuardianNote: (scooperId: string, note: string) => Promise<GuardianNote | null>;
+  loadGuardianNotesForScooper: (scooperId: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -164,6 +176,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [goalTemplates, setGoalTemplates] = useState<GoalTemplate[]>([]);
   const [stepProgress, setStepProgress] = useState<StepProgress[]>([]);
   const [certifications, setCertifications] = useState<PromotionCertification[]>([]);
+  const [guardianNotes, setGuardianNotes] = useState<GuardianNote[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -1316,6 +1329,76 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Guardian Notes functions
+  const loadGuardianNotesForScooper = async (scooperId: string) => {
+    try {
+      const response = await apiRequest(`/api/guardian-notes/scooper/${scooperId}`);
+      if (response.ok) {
+        const notesData = await response.json();
+        const mappedNotes = notesData.map((note: any) => ({
+          id: note.id,
+          guardianId: note.guardian_id,
+          scooperId: note.scooper_id,
+          note: note.note,
+          createdAt: note.created_at,
+          updatedAt: note.updated_at
+        }));
+        // Merge with existing notes, replacing any for this scooper
+        setGuardianNotes(prev => {
+          const otherNotes = prev.filter(n => n.scooperId !== scooperId);
+          return [...otherNotes, ...mappedNotes];
+        });
+      }
+    } catch (error) {
+      console.error('Error loading guardian notes:', error);
+    }
+  };
+
+  const saveGuardianNote = async (scooperId: string, note: string): Promise<GuardianNote | null> => {
+    if (!user) return null;
+    
+    try {
+      const response = await apiRequest('/api/guardian-notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guardian_id: user.id,
+          scooper_id: scooperId,
+          note: note
+        }),
+      });
+
+      if (response.ok) {
+        const savedNote = await response.json();
+        const mapped: GuardianNote = {
+          id: savedNote.id,
+          guardianId: savedNote.guardian_id,
+          scooperId: savedNote.scooper_id,
+          note: savedNote.note,
+          createdAt: savedNote.created_at,
+          updatedAt: savedNote.updated_at
+        };
+        // Update or add the note in state
+        setGuardianNotes(prev => {
+          const existingIndex = prev.findIndex(
+            n => n.guardianId === mapped.guardianId && n.scooperId === mapped.scooperId
+          );
+          if (existingIndex >= 0) {
+            const updated = [...prev];
+            updated[existingIndex] = mapped;
+            return updated;
+          }
+          return [...prev, mapped];
+        });
+        return mapped;
+      }
+      return null;
+    } catch (error) {
+      console.error('Error saving guardian note:', error);
+      return null;
+    }
+  };
+
   // Set loading to false after data is loaded
   useEffect(() => {
     if (employees.length > 0 || goalTemplates.length > 0) {
@@ -1375,7 +1458,10 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       certifications,
       addCertification,
       deleteCertification,
-      refreshCertifications
+      refreshCertifications,
+      guardianNotes,
+      saveGuardianNote,
+      loadGuardianNotesForScooper
     }}>
       {children}
     </DataContext.Provider>

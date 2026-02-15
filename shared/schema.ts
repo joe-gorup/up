@@ -212,6 +212,20 @@ export const guardian_relationships = pgTable("guardian_relationships", {
   uniqueGuardianScooper: unique("guardian_relationships_unique").on(table.guardian_id, table.scooper_id),
 }));
 
+// Guardian notes table - notes from guardians about their linked super scoopers
+export const guardian_notes = pgTable("guardian_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  guardian_id: varchar("guardian_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  scooper_id: varchar("scooper_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  note: text("note").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  guardianIdIdx: index("guardian_notes_guardian_id_idx").on(table.guardian_id),
+  scooperIdIdx: index("guardian_notes_scooper_id_idx").on(table.scooper_id),
+  uniqueGuardianScooperNote: unique("guardian_notes_unique").on(table.guardian_id, table.scooper_id),
+}));
+
 // Account invitations table - tokens for setting up new accounts via email
 export const account_invitations = pgTable("account_invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -269,6 +283,7 @@ export const insertAssessmentSummarySchema = createInsertSchema(assessment_summa
 export const insertCoachAssignmentSchema = createInsertSchema(coach_assignments).omit({ id: true, created_at: true });
 export const insertGuardianRelationshipSchema = createInsertSchema(guardian_relationships).omit({ id: true, created_at: true });
 export const insertAccountInvitationSchema = createInsertSchema(account_invitations).omit({ id: true, created_at: true, used_at: true });
+export const insertGuardianNoteSchema = createInsertSchema(guardian_notes).omit({ id: true, created_at: true, updated_at: true });
 
 // Utility function to calculate discrete date from relative duration
 export function calculateDateFromRelativeDuration(relativeDuration: string, fromDate: Date = new Date()): string {
@@ -421,3 +436,5 @@ export type InsertCoachAssignment = z.infer<typeof insertCoachAssignmentSchema>;
 export type CoachAssignment = typeof coach_assignments.$inferSelect;
 export type InsertGuardianRelationship = z.infer<typeof insertGuardianRelationshipSchema>;
 export type GuardianRelationship = typeof guardian_relationships.$inferSelect;
+export type InsertGuardianNote = z.infer<typeof insertGuardianNoteSchema>;
+export type GuardianNote = typeof guardian_notes.$inferSelect;

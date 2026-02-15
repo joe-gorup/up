@@ -6,8 +6,8 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -2655,6 +2655,191 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete certification');
       res.status(500).json({ error: 'Failed to delete certification' });
+    }
+  });
+
+  // Guardian Notes Routes
+  // Get all notes for a scooper (viewable by admins/managers/job coaches)
+  app.get("/api/guardian-notes/scooper/:scooperId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId } = req.params;
+      
+      // Guardians can only see their own notes for their linked scoopers
+      if (user.role === 'Guardian') {
+        const notes = await db.select().from(guardian_notes)
+          .where(and(
+            eq(guardian_notes.scooper_id, scooperId),
+            eq(guardian_notes.guardian_id, user.id)
+          ));
+        return res.json(notes);
+      }
+      
+      // Super Scoopers cannot view guardian notes
+      if (user.role === 'Super Scooper') {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      // Admins, managers, and job coaches can see all notes for a scooper
+      const notes = await db.select().from(guardian_notes)
+        .where(eq(guardian_notes.scooper_id, scooperId))
+        .orderBy(desc(guardian_notes.updated_at));
+      res.json(notes);
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch guardian notes for scooper');
+      res.status(500).json({ error: 'Failed to fetch guardian notes' });
+    }
+  });
+
+  // Get notes by guardian (for guardian's own notes)
+  app.get("/api/guardian-notes/guardian/:guardianId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { guardianId } = req.params;
+      
+      // Guardians can only view their own notes
+      if (user.role === 'Guardian' && user.id !== guardianId) {
+        return res.status(403).json({ error: 'You can only view your own notes' });
+      }
+      
+      // Super Scoopers cannot view guardian notes
+      if (user.role === 'Super Scooper') {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      
+      const notes = await db.select().from(guardian_notes)
+        .where(eq(guardian_notes.guardian_id, guardianId))
+        .orderBy(desc(guardian_notes.updated_at));
+      res.json(notes);
+    } catch (error) {
+      logger.error({ error, guardianId: req.params.guardianId }, 'Failed to fetch guardian notes by guardian');
+      res.status(500).json({ error: 'Failed to fetch guardian notes' });
+    }
+  });
+
+  // Create or update a guardian note (upsert - one note per guardian-scooper pair)
+  app.post("/api/guardian-notes", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      
+      // Only guardians can create notes
+      if (user.role !== 'Guardian') {
+        return res.status(403).json({ error: 'Only guardians can create notes' });
+      }
+      
+      const parsed = insertGuardianNoteSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request body', details: parsed.error.errors });
+      }
+      
+      const { guardian_id, scooper_id, note } = parsed.data;
+      
+      // Verify the guardian is creating a note for themselves
+      if (guardian_id !== user.id) {
+        return res.status(403).json({ error: 'You can only create notes as yourself' });
+      }
+      
+      // Verify guardian-scooper relationship exists
+      const [relationship] = await db.select().from(guardian_relationships)
+        .where(and(
+          eq(guardian_relationships.guardian_id, guardian_id),
+          eq(guardian_relationships.scooper_id, scooper_id)
+        ))
+        .limit(1);
+      
+      if (!relationship) {
+        return res.status(400).json({ error: 'You are not linked to this family member' });
+      }
+      
+      // Check if a note already exists for this pair
+      const [existingNote] = await db.select().from(guardian_notes)
+        .where(and(
+          eq(guardian_notes.guardian_id, guardian_id),
+          eq(guardian_notes.scooper_id, scooper_id)
+        ))
+        .limit(1);
+      
+      if (existingNote) {
+        // Update existing note
+        const [updatedNote] = await db.update(guardian_notes)
+          .set({ note, updated_at: new Date() })
+          .where(eq(guardian_notes.id, existingNote.id))
+          .returning();
+        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: updatedNote.id }, 'Guardian note updated');
+        return res.json(updatedNote);
+      } else {
+        // Create new note
+        const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
+        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: newNote.id }, 'Guardian note created');
+        return res.json(newNote);
+      }
+    } catch (error) {
+      logger.error({ error, body: req.body }, 'Failed to create/update guardian note');
+      res.status(500).json({ error: 'Failed to save guardian note' });
+    }
+  });
+
+  // Update a guardian note
+  app.put("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { id } = req.params;
+      const { note } = req.body;
+      
+      // Get the existing note
+      const [existingNote] = await db.select().from(guardian_notes)
+        .where(eq(guardian_notes.id, id))
+        .limit(1);
+      
+      if (!existingNote) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      
+      // Only the guardian who created the note can update it
+      if (existingNote.guardian_id !== user.id) {
+        return res.status(403).json({ error: 'You can only edit your own notes' });
+      }
+      
+      const [updatedNote] = await db.update(guardian_notes)
+        .set({ note, updated_at: new Date() })
+        .where(eq(guardian_notes.id, id))
+        .returning();
+      
+      logger.info({ noteId: id, guardianId: user.id }, 'Guardian note updated');
+      res.json(updatedNote);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update guardian note');
+      res.status(500).json({ error: 'Failed to update guardian note' });
+    }
+  });
+
+  // Delete a guardian note
+  app.delete("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { id } = req.params;
+      
+      // Get the existing note
+      const [existingNote] = await db.select().from(guardian_notes)
+        .where(eq(guardian_notes.id, id))
+        .limit(1);
+      
+      if (!existingNote) {
+        return res.status(404).json({ error: 'Note not found' });
+      }
+      
+      // Only the guardian who created the note can delete it
+      if (existingNote.guardian_id !== user.id) {
+        return res.status(403).json({ error: 'You can only delete your own notes' });
+      }
+      
+      await db.delete(guardian_notes).where(eq(guardian_notes.id, id));
+      
+      logger.info({ noteId: id, guardianId: user.id }, 'Guardian note deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to delete guardian note');
+      res.status(500).json({ error: 'Failed to delete guardian note' });
     }
   });
 

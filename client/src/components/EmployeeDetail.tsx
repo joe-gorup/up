@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Users, UserCheck, Pencil, Award, Trash2 } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Users, UserCheck, Pencil, Award, Trash2, FileText } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -14,7 +14,7 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification } = useData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper } = useData();
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
@@ -226,6 +226,14 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     }
     fetchRelationships();
   }, [employeeId, user?.role]);
+
+  // Load guardian notes for this employee
+  useEffect(() => {
+    const canViewNotes = ['Administrator', 'Shift Manager', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
+    if (canViewNotes && employee?.role === 'Super Scooper') {
+      loadGuardianNotesForScooper(employeeId);
+    }
+  }, [employeeId, user?.role, employee?.role]);
 
   const getPersonName = (id: string) => {
     const emp = employees.find(e => e.id === id);
@@ -728,6 +736,38 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Guardian Notes - visible to Admins, Managers, Job Coaches (read-only) */}
+          {['Administrator', 'Shift Manager', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') && 
+           employee.role === 'Super Scooper' && 
+           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <FileText className="h-5 w-5 text-rose-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
+              </div>
+              <div className="space-y-4">
+                {guardianNotes
+                  .filter(n => n.scooperId === employeeId)
+                  .map(note => {
+                    const guardian = employees.find(e => e.id === note.guardianId);
+                    return (
+                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-rose-800">
+                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Updated: {new Date(note.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
           )}
 
