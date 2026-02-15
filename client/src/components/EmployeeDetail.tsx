@@ -45,7 +45,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
-  const [certType, setCertType] = useState<'mentor' | 'shift_manager'>('mentor');
+const [certType, setCertType] = useState<'mentor' | 'shift_lead'>('mentor');
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
@@ -255,7 +255,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
 
   // Load guardian notes for this employee
   useEffect(() => {
-    const canViewNotes = ['Administrator', 'Shift Manager', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
+const canViewNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
     if (canViewNotes && employee?.role === 'Super Scooper') {
       loadGuardianNotesForScooper(employeeId);
     }
@@ -1098,7 +1098,7 @@ const handleGenerateInvitation = async () => {
           )}
 
           {/* Guardian Notes - visible to Admins, Managers, Job Coaches (read-only) */}
-          {['Administrator', 'Shift Manager', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') && 
+{['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
            employee.role === 'Super Scooper' && 
            guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
@@ -1149,7 +1149,7 @@ const handleGenerateInvitation = async () => {
                         )}
                         <div>
                           <p className="font-medium text-gray-900">
-                            {cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Manager Certification'}
+{cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Lead Certification'}
                           </p>
                           <p className="text-sm text-gray-500">
                             {new Date(cert.dateCompleted).toLocaleDateString()}
@@ -1209,10 +1209,10 @@ const handleGenerateInvitation = async () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setCertType('shift_manager'); setChecklistAnswers({}); }}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_manager' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                     >
-                      Shift Manager
+                      Shift Lead
                     </button>
                   </div>
 
