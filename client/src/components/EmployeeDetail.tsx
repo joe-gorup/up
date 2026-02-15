@@ -840,6 +840,244 @@ const handleGenerateInvitation = async () => {
             )}
           </div>
 
+          {/* Support Information */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Heart className="h-5 w-5 text-pink-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Support Information</h2>
+              </div>
+              {canEdit && !editingSupport && (
+                <button
+                  onClick={() => setEditingSupport(true)}
+                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                  title="Edit support information"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+
+            {editingSupport ? (
+              <div className="space-y-6">
+                {/* Interests & Motivators */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    <span className="flex items-center">
+                      <Heart className="h-4 w-4 text-green-600 mr-2" />
+                      Interests & Motivators
+                    </span>
+                    <span className="text-gray-500 text-xs ml-6">(What they enjoy and what motivates them)</span>
+                  </label>
+                  <div className="space-y-2">
+                    {supportForm.interestsMotivators.map((item, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={item}
+                          onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)}
+                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
+                          placeholder="e.g., Music, praise and recognition, colorful stickers"
+                        />
+                        {supportForm.interestsMotivators.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSupportArrayItem('interestsMotivators', index)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => addSupportArrayItem('interestsMotivators')}
+                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Interest/Motivator</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Challenges */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    <span className="flex items-center">
+                      <Zap className="h-4 w-4 text-orange-500 mr-2" />
+                      Challenges
+                    </span>
+                    <span className="text-gray-500 text-xs ml-6">(Areas where they may need extra support)</span>
+                  </label>
+                  <div className="space-y-2">
+                    {supportForm.challenges.map((challenge, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={challenge}
+                          onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)}
+                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
+                          placeholder="e.g., Loud noises, sudden changes in routine"
+                        />
+                        {supportForm.challenges.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSupportArrayItem('challenges', index)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => addSupportArrayItem('challenges')}
+                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Challenge</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Regulation Strategies */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    <span className="flex items-center">
+                      <Brain className="h-4 w-4 text-purple-600 mr-2" />
+                      Support & Regulation Strategies
+                    </span>
+                    <span className="text-gray-500 text-xs ml-6">(Specific approaches that help them succeed)</span>
+                  </label>
+                  <div className="space-y-2">
+                    {supportForm.regulationStrategies.map((strategy, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={strategy}
+                          onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)}
+                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
+                          placeholder="e.g., Offer 5-minute breaks, use visual schedules, speak in calm, quiet voice"
+                        />
+                        {supportForm.regulationStrategies.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => removeSupportArrayItem('regulationStrategies', index)}
+                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end mt-2">
+                    <button
+                      type="button"
+                      onClick={() => addSupportArrayItem('regulationStrategies')}
+                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Strategy</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Save/Cancel buttons */}
+                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200">
+                  <button
+                    onClick={handleCancelSupport}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSaveSupport}
+                    disabled={savingProfile}
+                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  >
+                    <Save className="h-4 w-4" />
+                    <span>{savingProfile ? 'Saving...' : 'Save Changes'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-6">
+                {/* Interests & Motivators - View Mode */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
+                    <Heart className="h-4 w-4 text-green-600 mr-2" />
+                    Interests & Motivators
+                  </h3>
+                  {employee.interestsMotivators.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 ml-6">
+                      {employee.interestsMotivators.map((interest, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-2 bg-green-100 text-green-800 rounded-full text-sm"
+                        >
+                          {interest}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm italic ml-6">No interests recorded</p>
+                  )}
+                </div>
+
+                {/* Challenges - View Mode */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
+                    <Zap className="h-4 w-4 text-orange-500 mr-2" />
+                    Challenges
+                  </h3>
+                  {employee.challenges.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 ml-6">
+                      {employee.challenges.map((challenge, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm"
+                        >
+                          {challenge}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm italic ml-6">No challenges recorded</p>
+                  )}
+                </div>
+
+                {/* Support Strategies - View Mode */}
+                <div>
+                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
+                    <Brain className="h-4 w-4 text-purple-600 mr-2" />
+                    Support Strategies
+                  </h3>
+                  {employee.regulationStrategies.length > 0 ? (
+                    <div className="flex flex-wrap gap-2 ml-6">
+                      {employee.regulationStrategies.map((strategy, index) => (
+                        <span
+                          key={index}
+                          className="px-3 py-2 bg-blue-100 text-blue-800 rounded-full text-sm"
+                        >
+                          {strategy}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-500 text-sm italic ml-6">No strategies recorded</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* Emergency Contacts */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1502,243 +1740,6 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Support Information */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Heart className="h-5 w-5 text-pink-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Support Information</h2>
-              </div>
-              {canEdit && !editingSupport && (
-                <button
-                  onClick={() => setEditingSupport(true)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Edit support information"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {editingSupport ? (
-              <div className="space-y-6">
-                {/* Interests & Motivators */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Heart className="h-4 w-4 text-green-600 mr-2" />
-                      Interests & Motivators
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(What they enjoy and what motivates them)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.interestsMotivators.map((item, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={item}
-                          onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Music, praise and recognition, colorful stickers"
-                        />
-                        {supportForm.interestsMotivators.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('interestsMotivators', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('interestsMotivators')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Interest/Motivator</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Challenges */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Zap className="h-4 w-4 text-orange-500 mr-2" />
-                      Challenges
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(Areas where they may need extra support)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.challenges.map((challenge, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={challenge}
-                          onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Loud noises, sudden changes in routine"
-                        />
-                        {supportForm.challenges.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('challenges', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('challenges')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Challenge</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Regulation Strategies */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Brain className="h-4 w-4 text-purple-600 mr-2" />
-                      Support & Regulation Strategies
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(Specific approaches that help them succeed)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.regulationStrategies.map((strategy, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={strategy}
-                          onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Offer 5-minute breaks, use visual schedules, speak in calm, quiet voice"
-                        />
-                        {supportForm.regulationStrategies.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('regulationStrategies', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('regulationStrategies')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Strategy</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Save/Cancel buttons */}
-                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleCancelSupport}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveSupport}
-                    disabled={savingProfile}
-                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-4 w-4" />
-                    <span>{savingProfile ? 'Saving...' : 'Save Changes'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Interests & Motivators - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Heart className="h-4 w-4 text-green-600 mr-2" />
-                    Interests & Motivators
-                  </h3>
-                  {employee.interestsMotivators.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.interestsMotivators.map((interest, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-green-100 text-green-800 rounded-full text-sm"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No interests recorded</p>
-                  )}
-                </div>
-
-                {/* Challenges - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Zap className="h-4 w-4 text-orange-500 mr-2" />
-                    Challenges
-                  </h3>
-                  {employee.challenges.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.challenges.map((challenge, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm"
-                        >
-                          {challenge}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No challenges recorded</p>
-                  )}
-                </div>
-
-                {/* Support Strategies - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Brain className="h-4 w-4 text-purple-600 mr-2" />
-                    Support Strategies
-                  </h3>
-                  {employee.regulationStrategies.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.regulationStrategies.map((strategy, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-blue-100 text-blue-800 rounded-full text-sm"
-                        >
-                          {strategy}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No strategies recorded</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
         </div>
 
         {/* Right Column - Goals */}
