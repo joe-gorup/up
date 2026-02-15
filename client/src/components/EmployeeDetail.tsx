@@ -1182,6 +1182,171 @@ const handleGenerateInvitation = async () => {
             )}
           </div>
 
+          {/* Guardians Section - for Super Scoopers, visible to managers */}
+          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Shield className="h-5 w-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Guardians</h2>
+                </div>
+                {user?.role === 'Administrator' && (
+                  <button
+                    onClick={() => setShowAddGuardian(!showAddGuardian)}
+                    className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
+                  >
+                    {showAddGuardian ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
+                  </button>
+                )}
+              </div>
+
+              {showAddGuardian && (
+                <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-4 mb-4 space-y-3">
+                  <h3 className="font-medium text-gray-900 text-sm">New Guardian</h3>
+                  {guardianError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.first_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.last_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={guardianForm.email}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        value={guardianForm.phone}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
+                      <select
+                        value={guardianForm.relationship_type}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="Parent/Guardian">Parent/Guardian</option>
+                        <option value="Legal Guardian">Legal Guardian</option>
+                        <option value="Case Manager">Case Manager</option>
+                        <option value="Family Member">Family Member</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={guardianSaving}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {guardianSaving ? 'Saving...' : 'Add Guardian'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {connectedGuardians.length > 0 ? (
+                <div className="space-y-3">
+                  {connectedGuardians.map((rel: any) => {
+                    const guardianName = rel.guardian_first_name && rel.guardian_last_name
+                      ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
+                      : getPersonName(rel.guardian_id);
+                    return (
+                      <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{guardianName}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                            {rel.guardian_email && (
+                              <p className="text-xs text-gray-500">{rel.guardian_email}</p>
+                            )}
+                            {rel.relationship_type && (
+                              <p className="text-xs text-purple-600">{rel.relationship_type}</p>
+                            )}
+                          </div>
+                        </div>
+                        {user?.role === 'Administrator' && (
+                          <button
+                            onClick={() => handleRemoveGuardian(rel.id)}
+                            className="text-red-400 hover:text-red-600 p-1"
+                            title="Remove guardian"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No guardians linked yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Guardian Notes - visible to Admins, Managers, Job Coaches (read-only) */}
+{['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+           employee.role === 'Super Scooper' && 
+           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <FileText className="h-5 w-5 text-rose-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
+              </div>
+              <div className="space-y-4">
+                {guardianNotes
+                  .filter(n => n.scooperId === employeeId)
+                  .map(note => {
+                    const guardian = employees.find(e => e.id === note.guardianId);
+                    return (
+                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-medium text-rose-800">
+                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            Updated: {new Date(note.updatedAt).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* Service Provider - Only show for Super Scoopers */}
           {employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
@@ -1388,171 +1553,6 @@ const handleGenerateInvitation = async () => {
               ) : (
                 <p className="text-sm text-gray-500 italic">No mentees assigned yet.</p>
               )}
-            </div>
-          )}
-
-          {/* Guardians Section - for Super Scoopers, visible to managers */}
-          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Shield className="h-5 w-5 text-purple-500" />
-                  <h2 className="text-lg font-semibold text-gray-900">Guardians</h2>
-                </div>
-                {user?.role === 'Administrator' && (
-                  <button
-                    onClick={() => setShowAddGuardian(!showAddGuardian)}
-                    className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
-                  >
-                    {showAddGuardian ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
-                  </button>
-                )}
-              </div>
-
-              {showAddGuardian && (
-                <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-4 mb-4 space-y-3">
-                  <h3 className="font-medium text-gray-900 text-sm">New Guardian</h3>
-                  {guardianError && (
-                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={guardianForm.first_name}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="First name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={guardianForm.last_name}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Last name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={guardianForm.email}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Email address"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-                      <input
-                        type="tel"
-                        value={guardianForm.phone}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Phone number"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
-                      <select
-                        value={guardianForm.relationship_type}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      >
-                        <option value="Parent/Guardian">Parent/Guardian</option>
-                        <option value="Legal Guardian">Legal Guardian</option>
-                        <option value="Case Manager">Case Manager</option>
-                        <option value="Family Member">Family Member</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={guardianSaving}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      {guardianSaving ? 'Saving...' : 'Add Guardian'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {connectedGuardians.length > 0 ? (
-                <div className="space-y-3">
-                  {connectedGuardians.map((rel: any) => {
-                    const guardianName = rel.guardian_first_name && rel.guardian_last_name
-                      ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
-                      : getPersonName(rel.guardian_id);
-                    return (
-                      <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{guardianName}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                            {rel.guardian_email && (
-                              <p className="text-xs text-gray-500">{rel.guardian_email}</p>
-                            )}
-                            {rel.relationship_type && (
-                              <p className="text-xs text-purple-600">{rel.relationship_type}</p>
-                            )}
-                          </div>
-                        </div>
-                        {user?.role === 'Administrator' && (
-                          <button
-                            onClick={() => handleRemoveGuardian(rel.id)}
-                            className="text-red-400 hover:text-red-600 p-1"
-                            title="Remove guardian"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">No guardians linked yet.</p>
-              )}
-            </div>
-          )}
-
-          {/* Guardian Notes - visible to Admins, Managers, Job Coaches (read-only) */}
-{['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && 
-           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <FileText className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-              </div>
-              <div className="space-y-4">
-                {guardianNotes
-                  .filter(n => n.scooperId === employeeId)
-                  .map(note => {
-                    const guardian = employees.find(e => e.id === note.guardianId);
-                    return (
-                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-rose-800">
-                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Updated: {new Date(note.updatedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                      </div>
-                    );
-                  })}
-              </div>
             </div>
           )}
 
