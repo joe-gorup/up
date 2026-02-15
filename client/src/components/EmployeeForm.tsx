@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { INPUT_BASE_CLASSES } from './ui/FormInput';
-import { ArrowLeft, X, Upload, Key, Mail, CheckCircle, Lock } from 'lucide-react';
+import { ArrowLeft, X, Upload, Key, Mail, CheckCircle, Lock, Link, Copy, Check, AlertTriangle } from 'lucide-react';
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { apiRequest } from '../lib/auth';
 import EmployeeAvatar from './EmployeeAvatar';
 
 interface EmployeeFormProps {
@@ -15,6 +16,13 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
+
+  // Invitation states for Job Coach and Guardian roles
+  const [invitationEmail, setInvitationEmail] = useState('');
+  const [invitationLink, setInvitationLink] = useState('');
+  const [invitationLoading, setInvitationLoading] = useState(false);
+  const [invitationCopied, setInvitationCopied] = useState(false);
+  const [invitationError, setInvitationError] = useState('');
   
   const [formData, setFormData] = useState({
     firstName: '',
@@ -55,6 +63,8 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         });
         // For existing employees, hide password fields by default
         setShowPasswordFields(false);
+        // Set invitation email to employee's email
+        setInvitationEmail(employee.email || '');
       }
     } else {
       // For new employees, show password fields if they have system access
@@ -64,6 +74,50 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
 
   // NOTE: User accounts are now managed through the unified employees table
   // System access is granted via has_system_access flag on employee records
+
+  const handleGenerateInvitation = async () => {
+    if (!invitationEmail.trim()) {
+      setInvitationError('Please enter an email address');
+      return;
+    }
+    setInvitationLoading(true);
+    setInvitationError('');
+    setInvitationLink('');
+    try {
+      const res = await apiRequest('/api/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: employeeId, email: invitationEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInvitationError(data.error || 'Failed to generate invitation');
+        return;
+      }
+      setInvitationLink(data.setupUrl);
+    } catch (err) {
+      setInvitationError('Failed to generate invitation link');
+    } finally {
+      setInvitationLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(invitationLink);
+      setInvitationCopied(true);
+      setTimeout(() => setInvitationCopied(false), 2000);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = invitationLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setInvitationCopied(true);
+      setTimeout(() => setInvitationCopied(false), 2000);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -400,6 +454,83 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
               )}
             </div>
             )}
+          </div>
+        )}
+
+        {/* Account Access / Invitation - for Job Coach and Guardian roles */}
+        {employeeId && ['Job Coach', 'Guardian'].includes(formData.role) && (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <Mail className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Account Access</h2>
+            </div>
+
+            {formData.hasSystemAccess && formData.username ? (
+              <div className="flex items-center space-x-2 text-sm text-green-700 bg-green-50 p-3 rounded-lg mb-3">
+                <CheckCircle className="h-4 w-4" />
+                <span>Account is set up - {formData.username}</span>
+              </div>
+            ) : (
+              <div className="flex items-center space-x-2 text-sm text-amber-700 bg-amber-50 p-3 rounded-lg mb-3">
+                <AlertTriangle className="h-4 w-4" />
+                <span>No account set up yet</span>
+              </div>
+            )}
+
+            <p className="text-sm text-gray-600 mb-3">
+              Generate an invitation link for this {formData.role.toLowerCase()} to create their login credentials.
+            </p>
+
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={invitationEmail}
+                onChange={(e) => setInvitationEmail(e.target.value)}
+                placeholder="Enter email or username"
+                className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none text-base"
+              />
+
+              <button
+                type="button"
+                onClick={handleGenerateInvitation}
+                disabled={invitationLoading}
+                className="w-full flex items-center justify-center space-x-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-50"
+              >
+                <Link className="h-4 w-4" />
+                <span>{invitationLoading ? 'Generating...' : 'Generate Invitation Link'}</span>
+              </button>
+
+              {invitationError && (
+                <p className="text-sm text-red-600">{invitationError}</p>
+              )}
+
+              {invitationLink && (
+                <div className="space-y-2">
+                  <p className="text-xs text-gray-500 font-medium">Invitation link (expires in 7 days):</p>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      readOnly
+                      value={invitationLink}
+                      className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs text-gray-700 font-mono"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className={`p-2 rounded-lg transition-colors ${
+                        invitationCopied
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                      }`}
+                      title="Copy link"
+                    >
+                      {invitationCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-400">Share this link with the {formData.role.toLowerCase()} to let them set up their account.</p>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
