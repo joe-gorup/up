@@ -683,61 +683,385 @@ const handleGenerateInvitation = async () => {
 
   return (
     <div className="p-3 sm:p-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 gap-4 sm:gap-0">
-        <div className="flex items-center space-x-4">
-          <button
-            onClick={onClose}
-            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5 text-gray-600" />
-          </button>
-          <div className="flex items-center space-x-4">
-            <EmployeeAvatar 
-              name={`${employee.first_name} ${employee.last_name}`}
-              imageUrl={employee.profileImageUrl}
-              size="lg"
-            />
-            <div>
-              <h1 className="text-xl sm:text-3xl font-bold text-gray-900">{`${employee.first_name} ${employee.last_name}`}</h1>
-              <p className="text-gray-600">{employee.role}</p>
-              <div className="flex items-center space-x-2 mt-2">
-                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                  employee.isActive 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-gray-100 text-gray-600'
-                }`}>
-                  {employee.isActive ? 'Active' : 'Inactive'}
-                </span>
+      {/* Demographic Bar */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 mb-6">
+        <div className="p-3 sm:p-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center space-x-3 sm:space-x-4 min-w-0">
+              <button
+                onClick={onClose}
+                className="p-2 rounded-xl hover:bg-gray-100 transition-colors flex-shrink-0"
+              >
+                <ArrowLeft className="h-5 w-5 text-gray-600" />
+              </button>
+              <EmployeeAvatar 
+                name={`${employee.first_name} ${employee.last_name}`}
+                imageUrl={employee.profileImageUrl}
+                size="lg"
+              />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">{`${employee.first_name} ${employee.last_name}`}</h1>
+                  {employee.allergies.length > 0 && (
+                    <div className="flex items-center space-x-1 text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full text-xs flex-shrink-0" title={`Allergies: ${employee.allergies.join(', ')}`}>
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      <span>{employee.allergies.length}</span>
+                    </div>
+                  )}
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${
+                    employee.isActive 
+                      ? 'bg-green-100 text-green-800' 
+                      : 'bg-gray-100 text-gray-600'
+                  }`}>
+                    {employee.isActive ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm">{employee.role}</p>
+                <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
+                  {employee.emergencyContacts.length > 0 && (
+                    <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs" title={`${employee.emergencyContacts.length} emergency contact(s)`}>
+                      <Phone className="h-3 w-3" />
+                      <span>{employee.emergencyContacts.length}</span>
+                    </div>
+                  )}
+                  {employee.interestsMotivators.length > 0 && (
+                    <div className="flex items-center space-x-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-full text-xs" title={`Interests: ${employee.interestsMotivators.join(', ')}`}>
+                      <Heart className="h-3 w-3" />
+                      <span>{employee.interestsMotivators.length}</span>
+                    </div>
+                  )}
+                  {employee.challenges.length > 0 && (
+                    <div className="flex items-center space-x-1 text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full text-xs" title={`Challenges: ${employee.challenges.join(', ')}`}>
+                      <Zap className="h-3 w-3" />
+                      <span>{employee.challenges.length}</span>
+                    </div>
+                  )}
+                  {employee.regulationStrategies.length > 0 && (
+                    <div className="flex items-center space-x-1 text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full text-xs" title={`Strategies: ${employee.regulationStrategies.join(', ')}`}>
+                      <Brain className="h-3 w-3" />
+                      <span>{employee.regulationStrategies.length}</span>
+                    </div>
+                  )}
+                </div>
               </div>
+            </div>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              {user?.role === 'Administrator' && (
+                <button
+                  onClick={() => onEdit(employeeId)}
+                  className="flex items-center space-x-2 bg-gray-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors text-sm"
+                  title="Edit employee"
+                >
+                  <Edit className="h-4 w-4" />
+                  <span className="hidden sm:inline">Edit</span>
+                </button>
+              )}
+              {employee.role === 'Super Scooper' && user?.role === 'Job Coach' && (
+                <button
+                  onClick={() => setShowCheckins(true)}
+                  className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm"
+                  title="Check-In Notes"
+                >
+                  <ClipboardCheck className="h-4 w-4" />
+                  <span className="hidden sm:inline">Check-In</span>
+                </button>
+              )}
             </div>
           </div>
         </div>
-        
-        <div className="flex flex-wrap gap-2 sm:space-x-3">
-          {user?.role === 'Administrator' && (
-            <button
-              onClick={() => onEdit(employeeId)}
-              className="flex items-center space-x-2 bg-gray-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors text-sm sm:text-base"
-              title="Edit employee"
-            >
-              <Edit className="h-4 w-4" />
-              <span className="hidden sm:inline">Edit</span>
-            </button>
-          )}
 
-          {employee.role === 'Super Scooper' && user?.role === 'Job Coach' && (
-            <button
-              onClick={() => setShowCheckins(true)}
-              className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm sm:text-base"
-              title="Check-In Notes"
-            >
-              <ClipboardCheck className="h-4 w-4" />
-              <span className="hidden sm:inline">Check-In Notes</span>
-              <span className="sm:hidden">Check-In</span>
-            </button>
-          )}
-        </div>
+        {!assessmentMode && (
+        <button
+          onClick={() => setShowSupportExpanded(!showSupportExpanded)}
+          className="w-full flex items-center justify-center gap-2 py-2 border-t border-gray-100 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors rounded-b-xl"
+        >
+          <span className="font-medium">{showSupportExpanded ? 'Hide Details' : 'View Details'}</span>
+          {showSupportExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+        </button>
+        )}
+
+        {showSupportExpanded && !assessmentMode && (
+          <div className="border-t border-gray-200 p-3 sm:p-5">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Column 1: Allergies & Safety */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
+                  </div>
+                  {canEdit && !editingSafety && (
+                    <button
+                      onClick={() => setEditingSafety(true)}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit allergies"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {editingSafety ? (
+                  <div className="space-y-2">
+                    {safetyForm.map((allergy, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <input
+                          type="text"
+                          value={allergy}
+                          onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)}
+                          className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
+                          placeholder="Allergy or restriction"
+                        />
+                        {safetyForm.length > 1 && (
+                          <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-1">
+                      <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add</span>
+                      </button>
+                      <div className="flex space-x-2">
+                        <button onClick={handleCancelSafety} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                        <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {employee.allergies.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.allergies.map((allergy, index) => (
+                          <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">No allergies recorded</p>
+                    )}
+                  </div>
+                )}
+
+                {/* Emergency Contacts within Column 1 */}
+                <div className="mt-5 pt-4 border-t border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Phone className="h-4 w-4 text-blue-500" />
+                      <h3 className="text-sm font-semibold text-gray-900">Emergency Contacts</h3>
+                    </div>
+                    {canEdit && !editingEmergency && (
+                      <button
+                        onClick={() => setEditingEmergency(true)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit emergency contacts"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {editingEmergency ? (
+                    <div className="space-y-3">
+                      {emergencyForm.map((contact, index) => (
+                        <div key={index} className="p-3 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-gray-700">Contact {index + 1}</span>
+                            {emergencyForm.length > 1 && (
+                              <button type="button" onClick={() => removeEmergencyContact(index)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <input type="text" value={contact.name} onChange={(e) => updateEmergencyContact(index, 'name', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Name" />
+                            <input type="text" value={contact.relationship} onChange={(e) => updateEmergencyContact(index, 'relationship', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Relationship" />
+                            <PhoneInput value={contact.phone} onChange={(e) => updateEmergencyContact(index, 'phone', e.target.value)} placeholder="Phone" mask="(999) 999-9999" />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-1">
+                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Contact</span>
+                        </button>
+                        <div className="flex space-x-2">
+                          <button onClick={handleCancelEmergency} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                            <Save className="h-3 w-3" />
+                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {employee.emergencyContacts.length > 0 ? (
+                        <div className="space-y-2">
+                          {employee.emergencyContacts.map((contact, index) => (
+                            <div key={index} className="text-xs bg-gray-50 p-2 rounded-lg">
+                              <p className="font-medium text-gray-900">{contact.name}</p>
+                              <p className="text-gray-500">{contact.relationship} &middot; <span className="text-blue-600">{contact.phone}</span></p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-xs italic">No emergency contacts</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Column 2: Interests & Challenges */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Heart className="h-4 w-4 text-pink-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Support Information</h3>
+                  </div>
+                  {canEdit && !editingSupport && (
+                    <button
+                      onClick={() => setEditingSupport(true)}
+                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Edit support info"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                {editingSupport ? (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
+                        <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
+                      </label>
+                      <div className="space-y-1.5">
+                        {supportForm.interestsMotivators.map((item, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input type="text" value={item} onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Interest or motivator" />
+                            {supportForm.interestsMotivators.length > 1 && (
+                              <button type="button" onClick={() => removeSupportArrayItem('interestsMotivators', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
+                        <Plus className="h-3 w-3" /><span>Add</span>
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
+                        <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
+                      </label>
+                      <div className="space-y-1.5">
+                        {supportForm.challenges.map((challenge, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input type="text" value={challenge} onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Challenge" />
+                            {supportForm.challenges.length > 1 && (
+                              <button type="button" onClick={() => removeSupportArrayItem('challenges', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
+                        <Plus className="h-3 w-3" /><span>Add</span>
+                      </button>
+                    </div>
+                    <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                      <button onClick={handleCancelSupport} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                      <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                        <Save className="h-3 w-3" />
+                        <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
+                        <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
+                      </h4>
+                      {employee.interestsMotivators.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {employee.interestsMotivators.map((item, i) => (
+                            <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-xs italic">None recorded</p>
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
+                        <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
+                      </h4>
+                      {employee.challenges.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {employee.challenges.map((item, i) => (
+                            <span key={i} className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-xs italic">None recorded</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Column 3: Strategies */}
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Brain className="h-4 w-4 text-purple-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Support Strategies</h3>
+                  </div>
+                </div>
+                {editingSupport ? (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
+                      <Brain className="h-3 w-3 text-purple-600 mr-1" /> Regulation Strategies
+                    </label>
+                    <div className="space-y-1.5">
+                      {supportForm.regulationStrategies.map((strategy, index) => (
+                        <div key={index} className="flex space-x-1.5">
+                          <input type="text" value={strategy} onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Strategy" />
+                          {supportForm.regulationStrategies.length > 1 && (
+                            <button type="button" onClick={() => removeSupportArrayItem('regulationStrategies', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => addSupportArrayItem('regulationStrategies')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
+                      <Plus className="h-3 w-3" /><span>Add</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    {employee.regulationStrategies.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.regulationStrategies.map((item, i) => (
+                          <span key={i} className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">None recorded</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
@@ -856,440 +1180,6 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
           )}
-
-          {/* Safety Information - Allergies - hidden during assessment (shown in compact card) */}
-          {!assessmentMode && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <AlertTriangle className="h-5 w-5 text-amber-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Allergies & Dietary Restrictions</h2>
-              </div>
-              {canEdit && !editingSafety && (
-                <button
-                  onClick={() => setEditingSafety(true)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Edit allergies"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {editingSafety ? (
-              <div className="space-y-3">
-                {safetyForm.map((allergy, index) => (
-                  <div key={index} className="flex space-x-2">
-                    <input
-                      type="text"
-                      value={allergy}
-                      onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)}
-                      className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                      placeholder="Enter allergy or dietary restriction"
-                    />
-                    {safetyForm.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => removeArrayItem(setSafetyForm, index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <div className="flex justify-between items-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => addArrayItem(setSafetyForm)}
-                    className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Allergy</span>
-                  </button>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleCancelSafety}
-                      className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveSafety}
-                      disabled={savingProfile}
-                      className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
-                    >
-                      <Save className="h-3 w-3" />
-                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                {employee.allergies.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {employee.allergies.map((allergy, index) => (
-                      <span
-                        key={index}
-                        className="inline-block bg-red-100 text-red-800 px-3 py-1.5 rounded-full text-sm"
-                      >
-                        {allergy}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm italic">No allergies recorded</p>
-                )}
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Support Information - hidden during assessment (shown in compact card) */}
-          {!assessmentMode && (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Heart className="h-5 w-5 text-pink-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Support Information</h2>
-              </div>
-              {canEdit && !editingSupport && (
-                <button
-                  onClick={() => setEditingSupport(true)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Edit support information"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {editingSupport ? (
-              <div className="space-y-6">
-                {/* Interests & Motivators */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Heart className="h-4 w-4 text-green-600 mr-2" />
-                      Interests & Motivators
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(What they enjoy and what motivates them)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.interestsMotivators.map((item, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={item}
-                          onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Music, praise and recognition, colorful stickers"
-                        />
-                        {supportForm.interestsMotivators.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('interestsMotivators', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('interestsMotivators')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Interest/Motivator</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Challenges */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Zap className="h-4 w-4 text-orange-500 mr-2" />
-                      Challenges
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(Areas where they may need extra support)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.challenges.map((challenge, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={challenge}
-                          onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Loud noises, sudden changes in routine"
-                        />
-                        {supportForm.challenges.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('challenges', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('challenges')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Challenge</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Regulation Strategies */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
-                    <span className="flex items-center">
-                      <Brain className="h-4 w-4 text-purple-600 mr-2" />
-                      Support & Regulation Strategies
-                    </span>
-                    <span className="text-gray-500 text-xs ml-6">(Specific approaches that help them succeed)</span>
-                  </label>
-                  <div className="space-y-2">
-                    {supportForm.regulationStrategies.map((strategy, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={strategy}
-                          onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)}
-                          className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                          placeholder="e.g., Offer 5-minute breaks, use visual schedules, speak in calm, quiet voice"
-                        />
-                        {supportForm.regulationStrategies.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeSupportArrayItem('regulationStrategies', index)}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex justify-end mt-2">
-                    <button
-                      type="button"
-                      onClick={() => addSupportArrayItem('regulationStrategies')}
-                      className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                    >
-                      <Plus className="h-4 w-4" />
-                      <span>Add Strategy</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Save/Cancel buttons */}
-                <div className="flex justify-end space-x-2 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleCancelSupport}
-                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveSupport}
-                    disabled={savingProfile}
-                    className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
-                  >
-                    <Save className="h-4 w-4" />
-                    <span>{savingProfile ? 'Saving...' : 'Save Changes'}</span>
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Interests & Motivators - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Heart className="h-4 w-4 text-green-600 mr-2" />
-                    Interests & Motivators
-                  </h3>
-                  {employee.interestsMotivators.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.interestsMotivators.map((interest, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-green-100 text-green-800 rounded-full text-sm"
-                        >
-                          {interest}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No interests recorded</p>
-                  )}
-                </div>
-
-                {/* Challenges - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Zap className="h-4 w-4 text-orange-500 mr-2" />
-                    Challenges
-                  </h3>
-                  {employee.challenges.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.challenges.map((challenge, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-yellow-100 text-yellow-800 rounded-full text-sm"
-                        >
-                          {challenge}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No challenges recorded</p>
-                  )}
-                </div>
-
-                {/* Support Strategies - View Mode */}
-                <div>
-                  <h3 className="text-base font-semibold text-gray-900 mb-3 flex items-center">
-                    <Brain className="h-4 w-4 text-purple-600 mr-2" />
-                    Support Strategies
-                  </h3>
-                  {employee.regulationStrategies.length > 0 ? (
-                    <div className="flex flex-wrap gap-2 ml-6">
-                      {employee.regulationStrategies.map((strategy, index) => (
-                        <span
-                          key={index}
-                          className="px-3 py-2 bg-blue-100 text-blue-800 rounded-full text-sm"
-                        >
-                          {strategy}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-500 text-sm italic ml-6">No strategies recorded</p>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-          )}
-
-          {/* Emergency Contacts - hidden during assessment */}
-          {!assessmentMode && (<>
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="flex items-center space-x-2">
-                <Phone className="h-5 w-5 text-blue-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Emergency Contacts</h2>
-              </div>
-              {canEdit && !editingEmergency && (
-                <button
-                  onClick={() => setEditingEmergency(true)}
-                  className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Edit emergency contacts"
-                >
-                  <Pencil className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            {editingEmergency ? (
-              <div className="space-y-4">
-                {emergencyForm.map((contact, index) => (
-                  <div key={index} className="p-4 border border-gray-200 rounded-xl">
-                    <div className="flex items-center justify-between mb-3">
-                      <h3 className="font-medium text-gray-900">Contact {index + 1}</h3>
-                      {emergencyForm.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeEmergencyContact(index)}
-                          className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <input
-                        type="text"
-                        value={contact.name}
-                        onChange={(e) => updateEmergencyContact(index, 'name', e.target.value)}
-                        className={INPUT_BASE_CLASSES}
-                        placeholder="Contact name"
-                      />
-                      <input
-                        type="text"
-                        value={contact.relationship}
-                        onChange={(e) => updateEmergencyContact(index, 'relationship', e.target.value)}
-                        className={INPUT_BASE_CLASSES}
-                        placeholder="Relationship (e.g., Mother)"
-                      />
-                      <PhoneInput
-                        value={contact.phone}
-                        onChange={(e) => updateEmergencyContact(index, 'phone', e.target.value)}
-                        placeholder="Phone number"
-                        mask="(999) 999-9999"
-                      />
-                    </div>
-                  </div>
-                ))}
-                <div className="flex justify-between items-center pt-2">
-                  <button
-                    type="button"
-                    onClick={addEmergencyContact}
-                    className="flex items-center space-x-2 text-blue-600 hover:text-blue-700"
-                  >
-                    <Plus className="h-4 w-4" />
-                    <span>Add Emergency Contact</span>
-                  </button>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={handleCancelEmergency}
-                      className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors text-sm"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveEmergency}
-                      disabled={savingProfile}
-                      className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50"
-                    >
-                      <Save className="h-3 w-3" />
-                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div>
-                {employee.emergencyContacts.length > 0 ? (
-                  <div className="space-y-3">
-                    {employee.emergencyContacts.map((contact, index) => (
-                      <div key={index} className="text-sm bg-gray-50 p-3 rounded-lg">
-                        <p className="font-medium text-gray-900">{contact.name}</p>
-                        <p className="text-gray-600 ml-2">{contact.relationship}</p>
-                        <p className="text-blue-600 ml-2">{contact.phone}</p>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-gray-500 text-sm italic">No emergency contacts recorded</p>
-                )}
-              </div>
-            )}
-          </div>
 
           {/* Guardians Section - for Super Scoopers, visible to managers */}
           {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
@@ -1848,7 +1738,6 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
           )}
-          </>)}
 
         </div>
 
