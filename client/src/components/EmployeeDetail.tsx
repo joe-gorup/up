@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil, Award, Trash2, FileText, ClipboardCheck } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil, Award, Trash2, FileText, ClipboardCheck, Building2 } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -31,6 +31,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   // Inline editing states
   const [editingSafety, setEditingSafety] = useState(false);
   const [editingEmergency, setEditingEmergency] = useState(false);
+  const [editingServiceProvider, setEditingServiceProvider] = useState(false);
   const [editingSupport, setEditingSupport] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   
@@ -42,10 +43,14 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     challenges: [''],
     regulationStrategies: ['']
   });
+  const [serviceProviderForm, setServiceProviderForm] = useState({
+    hasServiceProvider: false,
+    providers: [{ name: '', type: '' }]
+  });
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
-  const [certType, setCertType] = useState<'mentor' | 'shift_manager'>('mentor');
+  const [certType, setCertType] = useState<'mentor' | 'shift_lead'>('mentor');
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
@@ -280,6 +285,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
         regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
       });
+      setServiceProviderForm({
+        hasServiceProvider: employee.hasServiceProvider || false,
+        providers: employee.serviceProviders?.length > 0 
+          ? [...employee.serviceProviders] 
+          : [{ name: '', type: '' }]
+      });
     }
   }, [employee?.id]);
 
@@ -397,6 +408,33 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
       });
     }
     setEditingSupport(false);
+  };
+
+  const handleSaveServiceProvider = async () => {
+    setSavingProfile(true);
+    try {
+      await updateEmployee(employeeId, {
+        hasServiceProvider: serviceProviderForm.hasServiceProvider,
+        serviceProviders: serviceProviderForm.hasServiceProvider 
+          ? serviceProviderForm.providers.filter(p => p.name.trim() !== '')
+          : []
+      });
+      setEditingServiceProvider(false);
+    } catch (error) {
+      console.error('Error saving service provider:', error);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleCancelServiceProvider = () => {
+    setServiceProviderForm({
+      hasServiceProvider: employee?.hasServiceProvider || false,
+      providers: employee?.serviceProviders?.length > 0 
+        ? [...employee.serviceProviders] 
+        : [{ name: '', type: '' }]
+    });
+    setEditingServiceProvider(false);
   };
   
   if (!employee) {
@@ -873,6 +911,125 @@ const handleGenerateInvitation = async () => {
               </div>
             )}
           </div>
+
+          {/* Service Provider - Only show for Super Scoopers */}
+          {employee.role === 'Super Scooper' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Building2 className="h-5 w-5 text-indigo-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Service Provider</h2>
+                </div>
+                {canEdit && !editingServiceProvider && (
+                  <button
+                    onClick={() => setEditingServiceProvider(true)}
+                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit service provider"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+
+              {editingServiceProvider ? (
+                <div className="space-y-4">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={serviceProviderForm.hasServiceProvider}
+                      onChange={(e) => setServiceProviderForm(prev => ({ 
+                        ...prev, 
+                        hasServiceProvider: e.target.checked 
+                      }))}
+                      className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">
+                      Has a service provider
+                    </span>
+                  </label>
+
+                  {serviceProviderForm.hasServiceProvider && (
+                    <div className="space-y-3 pl-2 border-l-2 border-indigo-200">
+                      {serviceProviderForm.providers.map((provider, index) => (
+                        <div key={index} className="flex space-x-2">
+                          <input
+                            type="text"
+                            value={provider.name}
+                            onChange={(e) => {
+                              const updated = [...serviceProviderForm.providers];
+                              updated[index] = { ...updated[index], name: e.target.value };
+                              setServiceProviderForm(prev => ({ ...prev, providers: updated }));
+                            }}
+                            className={`flex-1 ${INPUT_BASE_CLASSES}`}
+                            placeholder="Agency or person name"
+                          />
+                          {serviceProviderForm.providers.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setServiceProviderForm(prev => ({
+                                  ...prev,
+                                  providers: prev.providers.filter((_, i) => i !== index)
+                                }));
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setServiceProviderForm(prev => ({
+                            ...prev,
+                            providers: [...prev.providers, { name: '', type: '' }]
+                          }));
+                        }}
+                        className="flex items-center space-x-2 text-indigo-600 hover:text-indigo-700"
+                      >
+                        <Plus className="h-4 w-4" />
+                        <span>Add Provider</span>
+                      </button>
+                    </div>
+                  )}
+
+                  <div className="flex space-x-3 pt-2">
+                    <button
+                      onClick={handleSaveServiceProvider}
+                      disabled={savingProfile}
+                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      <Save className="h-4 w-4" />
+                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                    </button>
+                    <button
+                      onClick={handleCancelServiceProvider}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {employee.hasServiceProvider && employee.serviceProviders?.length > 0 ? (
+                    <ul className="space-y-2">
+                      {employee.serviceProviders.map((provider, index) => (
+                        <li key={index} className="flex items-center space-x-2 text-gray-700">
+                          <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                          <span>{provider.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-gray-500 italic">No service provider</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Job Coaches */}
           {assignedCoaches.length > 0 && (
