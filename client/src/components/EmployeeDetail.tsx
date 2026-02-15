@@ -739,9 +739,8 @@ const handleGenerateInvitation = async () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Left Column - About Me Information */}
-        <div className="lg:col-span-1 space-y-6">
+      <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+        <div className={assessmentMode ? 'lg:col-span-1 space-y-6' : 'contents'}>
           {/* Safety Information - Allergies */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
             <div className="flex items-center justify-between mb-4">
@@ -1733,7 +1732,7 @@ const handleGenerateInvitation = async () => {
 
         {/* Right Column - Goals */}
         {employee.role !== 'Job Coach' && (
-        <div className="lg:col-span-2 space-y-6">
+        <div className={assessmentMode ? 'lg:col-span-2 space-y-6' : 'contents'}>
 
           {/* Goal Assessment Section */}
           {canAssess && isAssessable && activeGoals.length > 0 && (
