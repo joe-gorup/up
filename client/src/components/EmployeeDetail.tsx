@@ -714,17 +714,6 @@ const handleGenerateInvitation = async () => {
         </div>
         
         <div className="flex flex-wrap gap-2 sm:space-x-3">
-          {user?.role === 'Administrator' && employee.role !== 'Job Coach' && (
-            <button
-              onClick={() => setShowGoalAssignment(true)}
-              className="flex items-center space-x-2 bg-blue-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors text-sm sm:text-base"
-            >
-              <Plus className="h-4 w-4" />
-              <span className="hidden sm:inline">Assign Goal</span>
-              <span className="sm:hidden" title="Assign Goal">Goal</span>
-            </button>
-          )}
-          
           {user?.role === 'Administrator' && (
             <button
               onClick={() => onEdit(employeeId)}
@@ -1815,6 +1804,15 @@ const handleGenerateInvitation = async () => {
                   {activeGoals.length}/2
                 </span>
               </div>
+              {user?.role === 'Administrator' && employee.role !== 'Job Coach' && (
+                <button
+                  onClick={() => setShowGoalAssignment(true)}
+                  className="flex items-center space-x-2 bg-blue-600 text-white px-2 sm:px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  <span>Assign Goal</span>
+                </button>
+              )}
             </div>
 
             {activeGoals.length > 0 ? (
