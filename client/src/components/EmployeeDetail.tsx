@@ -736,7 +736,7 @@ const handleGenerateInvitation = async () => {
             </button>
           )}
 
-          {employee.role === 'Super Scooper' && (user?.role === 'Administrator' || user?.role === 'Job Coach') && (
+          {employee.role === 'Super Scooper' && user?.role === 'Job Coach' && (
             <button
               onClick={() => setShowCheckins(true)}
               className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm sm:text-base"
