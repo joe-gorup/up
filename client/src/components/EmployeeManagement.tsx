@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Plus, Search, Edit, UserMinus, Award, Star } from 'lucide-react';
+import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star, FileCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeForm from './EmployeeForm';
@@ -17,6 +17,7 @@ export default function EmployeeManagement() {
 
   const filteredEmployees = employees
     .filter(employee => {
+      if (employee.role === 'Guardian') return false;
       const matchesSearch = `${employee.first_name} ${employee.last_name}`.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || 
         (statusFilter === 'active' && employee.isActive) ||
@@ -154,7 +155,7 @@ export default function EmployeeManagement() {
             </thead>
             <tbody className="divide-y divide-gray-200">
               {filteredEmployees.map((employee) => {
-                const hasSystemAccess = ["Administrator", "Shift Manager", "Assistant Manager"].includes(employee.role);
+                const hasSystemAccess = ["Administrator", "Shift Lead", "Assistant Manager"].includes(employee.role);
                 const canDocumentOnOthers = hasSystemAccess;
                 
                 return (
@@ -179,9 +180,14 @@ export default function EmployeeManagement() {
                                 <Star className="h-3 w-3 text-amber-600" />
                               </span>
                             )}
-                            {certifications.some(c => c.employeeId === employee.id && c.certificationType === 'shift_manager' && c.passed) && (
-                              <span title="Shift Manager Certified" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100">
+                            {certifications.some(c => c.employeeId === employee.id && c.certificationType === 'shift_lead' && c.passed) && (
+                              <span title="Shift Lead Certified" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100">
                                 <Award className="h-3 w-3 text-blue-600" />
+                              </span>
+                            )}
+                            {employee.roi_status && (
+                              <span title="ROI Signed" className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100">
+                                <FileCheck className="h-3 w-3 text-green-600" />
                               </span>
                             )}
                           </div>
@@ -197,7 +203,7 @@ export default function EmployeeManagement() {
                       <span className={`px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-medium ${
                         employee.role === 'Administrator' 
                           ? 'bg-purple-100 text-purple-800' 
-                          : employee.role === 'Shift Manager' || employee.role === 'Assistant Manager'
+                          : employee.role === 'Shift Lead' || employee.role === 'Assistant Manager'
                           ? 'bg-blue-100 text-blue-800'
                           : 'bg-gray-100 text-gray-800'
                       }`}>
@@ -217,7 +223,7 @@ export default function EmployeeManagement() {
                       {new Date(employee.createdAt).toLocaleDateString()}
                     </td>
                     
-                    {user?.role === 'Administrator' && (
+{user?.role === 'Administrator' && (
                       <td className="py-4 px-3 sm:px-6 text-right" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-end space-x-2">
                           <button

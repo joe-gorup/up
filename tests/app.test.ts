@@ -165,7 +165,7 @@ describe('Authentication Logic', () => {
             id: 'demo-admin',
             email: 'admin@goldenscoop.com',
             name: 'Demo Admin',
-            role: 'admin',
+            role: 'Administrator',
             is_active: true
           }
         };
@@ -176,7 +176,7 @@ describe('Authentication Logic', () => {
             id: 'demo-manager',
             email: 'manager@goldenscoop.com',
             name: 'Demo Manager',
-            role: 'shift_manager',
+            role: 'Shift Lead',
             is_active: true
           }
         };
@@ -187,11 +187,11 @@ describe('Authentication Logic', () => {
 
     const adminResult = authenticateUser('admin@goldenscoop.com', 'password');
     assert.strictEqual(adminResult.success, true);
-    assert.strictEqual(adminResult.user?.role, 'admin');
+    assert.strictEqual(adminResult.user?.role, 'Administrator');
 
     const managerResult = authenticateUser('manager@goldenscoop.com', 'password');
     assert.strictEqual(managerResult.success, true);
-    assert.strictEqual(managerResult.user?.role, 'shift_manager');
+    assert.strictEqual(managerResult.user?.role, 'Shift Lead');
 
     const invalidResult = authenticateUser('invalid@email.com', 'wrong');
     assert.strictEqual(invalidResult.success, false);

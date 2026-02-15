@@ -26,6 +26,18 @@ export const employees = pgTable("employees", {
   date_of_birth: date("date_of_birth"),
   roi_status: boolean("roi_status").default(false),
   roi_signed_at: timestamp("roi_signed_at", { withTimezone: true }),
+  roi_signature: text("roi_signature"),
+  roi_consent_type: text("roi_consent_type"),
+  roi_no_release_details: text("roi_no_release_details"),
+  roi_guardian_name: text("roi_guardian_name"),
+  roi_guardian_address: text("roi_guardian_address"),
+  roi_guardian_city_state_zip: text("roi_guardian_city_state_zip"),
+  roi_guardian_phone: text("roi_guardian_phone"),
+  roi_guardian_relationship: text("roi_guardian_relationship"),
+  
+  // Service provider information
+  has_service_provider: boolean("has_service_provider").default(false),
+  service_providers: jsonb("service_providers").default(sql`'[]'::jsonb`),
   
   // Profile/safety information
   allergies: jsonb("allergies").default(sql`'[]'::jsonb`),
@@ -329,7 +341,7 @@ export const SYSTEM_ROLES = [
   "Super Scooper",
   "Job Coach", 
   "Guardian",
-  "Shift Manager",
+  "Shift Lead",
   "Assistant Manager",
   "Administrator"
 ] as const;
@@ -338,7 +350,7 @@ export type SystemRole = typeof SYSTEM_ROLES[number];
 
 // Role-based access control helpers  
 export function canDocumentOnOthers(role: string): boolean {
-  return role === "Administrator" || role === "Shift Manager" || role === "Assistant Manager";
+  return role === "Administrator" || role === "Shift Lead" || role === "Assistant Manager";
 }
 
 export function canAssignGoals(role: string): boolean {
@@ -354,7 +366,7 @@ export function canManageAssignments(role: string): boolean {
 }
 
 export function canViewAllScoopers(role: string): boolean {
-  return role === "Administrator" || role === "Shift Manager" || role === "Assistant Manager";
+  return role === "Administrator" || role === "Shift Lead" || role === "Assistant Manager";
 }
 
 export function canViewAssignedScoopers(role: string): boolean {
@@ -391,7 +403,7 @@ export function getEmployeeDisplayName(employee: Employee): string {
 export const promotion_certifications = pgTable("promotion_certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").notNull().references(() => employees.id),
-  certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_manager'
+  certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_lead'
   date_completed: text("date_completed").notNull(),
   score: integer("score").notNull(),
   passing_score: integer("passing_score").notNull(),
@@ -409,6 +421,85 @@ export const insertPromotionCertificationSchema = createInsertSchema(promotion_c
   id: true,
   created_at: true,
 });
+
+// Coach Check-Ins table
+export const coach_checkins = pgTable("coach_checkins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  checkin_date: timestamp("checkin_date", { withTimezone: true }).notNull().default(sql`now()`),
+  setting: text("setting").notNull(),
+  how_was_today: text("how_was_today").notNull(),
+  independence: text("independence").notNull(),
+  engagement: text("engagement").notNull(),
+  big_win: boolean("big_win").notNull(),
+  big_win_type: text("big_win_type"),
+  challenge: text("challenge").notNull(),
+  safety_concern: boolean("safety_concern").notNull().default(false),
+  safety_details: text("safety_details"),
+  compared_to_last: text("compared_to_last").notNull(),
+  support_helped: text("support_helped").notNull(),
+  notes: text("notes"),
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_checkins_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_checkins_coach_idx").on(table.coach_id),
+  dateIdx: index("coach_checkins_date_idx").on(table.checkin_date),
+}));
+
+export const insertCoachCheckinSchema = createInsertSchema(coach_checkins).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertCoachCheckin = z.infer<typeof insertCoachCheckinSchema>;
+export type CoachCheckin = typeof coach_checkins.$inferSelect;
+
+// Coach Files table - for uploaded PDFs and text files
+export const coach_files = pgTable("coach_files", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  file_name: text("file_name").notNull(),
+  file_type: text("file_type").notNull(),
+  file_size: integer("file_size").notNull(),
+  storage_path: text("storage_path").notNull(),
+  uploaded_at: timestamp("uploaded_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_files_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_files_coach_idx").on(table.coach_id),
+}));
+
+export const insertCoachFileSchema = createInsertSchema(coach_files).omit({
+  id: true,
+  uploaded_at: true,
+});
+
+export type InsertCoachFile = z.infer<typeof insertCoachFileSchema>;
+export type CoachFile = typeof coach_files.$inferSelect;
+
+// Coach Notes table - for rich text notes
+export const coach_notes = pgTable("coach_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").notNull(),
+  coach_id: varchar("coach_id").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  created_at: timestamp("created_at", { withTimezone: true }).default(sql`now()`),
+  updated_at: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+}, (table) => ({
+  employeeIdx: index("coach_notes_employee_idx").on(table.employee_id),
+  coachIdx: index("coach_notes_coach_idx").on(table.coach_id),
+}));
+
+export const insertCoachNoteSchema = createInsertSchema(coach_notes).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+
+export type InsertCoachNote = z.infer<typeof insertCoachNoteSchema>;
+export type CoachNote = typeof coach_notes.$inferSelect;
 
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;

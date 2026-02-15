@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Users, UserCheck, Pencil, Award, Trash2, FileText } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil, Award, Trash2, FileText, ClipboardCheck } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import GoalAssignment from './GoalAssignment';
+import CoachCheckin from './CoachCheckin';
 import EmployeeAvatar from './EmployeeAvatar';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
 
@@ -49,6 +50,21 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
   const [checklistAnswers, setChecklistAnswers] = useState<Record<number, boolean>>({});
+
+  // Invitation and relationship states (from remote)
+  const [invitationEmail, setInvitationEmail] = useState(employees.find(e => e.id === employeeId)?.email || '');
+  const [invitationLink, setInvitationLink] = useState('');
+  const [invitationLoading, setInvitationLoading] = useState(false);
+  const [invitationCopied, setInvitationCopied] = useState(false);
+  const [invitationError, setInvitationError] = useState('');
+  const [showAddGuardian, setShowAddGuardian] = useState(false);
+  const [guardianForm, setGuardianForm] = useState({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
+  const [guardianSaving, setGuardianSaving] = useState(false);
+  const [guardianError, setGuardianError] = useState('');
+  const [coachMentees, setCoachMentees] = useState<any[]>([]);
+  const [selectedMenteeId, setSelectedMenteeId] = useState('');
+  const [menteeError, setMenteeError] = useState('');
+  const [showCheckins, setShowCheckins] = useState(false);
 
   // Certification checklist items
   const mentorChecklistItems = [
@@ -206,20 +222,30 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
 
   useEffect(() => {
     async function fetchRelationships() {
-      const isManager = ['Administrator', 'Shift Manager', 'Assistant Manager'].includes(user?.role || '');
+      const isManager = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
       if (!isManager) return;
       try {
-        const [guardianRes, coachRes] = await Promise.all([
-          apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
-          apiRequest(`/api/coach-assignments/scooper/${employeeId}`)
-        ]);
-        if (guardianRes.ok) {
-          const data = await guardianRes.json();
-          setConnectedGuardians(data);
-        }
-        if (coachRes.ok) {
-          const data = await coachRes.json();
-          setAssignedCoaches(data);
+        const employee = employees.find(e => e.id === employeeId);
+
+        if (employee?.role === 'Job Coach') {
+          const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+          if (menteeRes.ok) {
+            const data = await menteeRes.json();
+            setCoachMentees(data);
+          }
+        } else {
+          const [guardianRes, coachRes] = await Promise.all([
+            apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
+            apiRequest(`/api/coach-assignments/scooper/${employeeId}`)
+          ]);
+          if (guardianRes.ok) {
+            const data = await guardianRes.json();
+            setConnectedGuardians(data);
+          }
+          if (coachRes.ok) {
+            const data = await coachRes.json();
+            setAssignedCoaches(data);
+          }
         }
       } catch (err) {
       }
@@ -426,6 +452,135 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     }
   };
 
+const handleGenerateInvitation = async () => {
+    if (!invitationEmail.trim()) {
+      setInvitationError('Please enter an email address');
+      return;
+    }
+    setInvitationLoading(true);
+    setInvitationError('');
+    setInvitationLink('');
+    try {
+      const res = await apiRequest('/api/invitations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ employee_id: employeeId, email: invitationEmail.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setInvitationError(data.error || 'Failed to generate invitation');
+        return;
+      }
+      setInvitationLink(data.setupUrl);
+    } catch (err) {
+      setInvitationError('Failed to generate invitation link');
+    } finally {
+      setInvitationLoading(false);
+    }
+  };
+
+  const handleCopyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(invitationLink);
+      setInvitationCopied(true);
+      setTimeout(() => setInvitationCopied(false), 2000);
+    } catch {
+      const textArea = document.createElement('textarea');
+      textArea.value = invitationLink;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setInvitationCopied(true);
+      setTimeout(() => setInvitationCopied(false), 2000);
+    }
+  };
+
+  const handleCreateGuardian = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setGuardianSaving(true);
+    setGuardianError('');
+    try {
+      const res = await apiRequest('/api/guardian-relationships/create-with-guardian', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scooper_id: employeeId,
+          first_name: guardianForm.first_name.trim(),
+          last_name: guardianForm.last_name.trim(),
+          email: guardianForm.email.trim(),
+          phone: guardianForm.phone.trim(),
+          relationship_type: guardianForm.relationship_type,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setGuardianError(data.error || 'Failed to create guardian');
+        return;
+      }
+      setGuardianForm({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
+      setShowAddGuardian(false);
+      const guardianRes = await apiRequest(`/api/guardian-relationships/scooper/${employeeId}`);
+      if (guardianRes.ok) {
+        const data = await guardianRes.json();
+        setConnectedGuardians(data);
+      }
+    } catch (err) {
+      setGuardianError('Failed to create guardian');
+    } finally {
+      setGuardianSaving(false);
+    }
+  };
+
+  const handleAssignMentee = async () => {
+    if (!selectedMenteeId) return;
+    setMenteeError('');
+    try {
+      const res = await apiRequest('/api/coach-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          coach_id: employeeId,
+          scooper_id: selectedMenteeId,
+          assigned_by: user?.id,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setMenteeError(data.error || 'Failed to assign mentee');
+        return;
+      }
+      setSelectedMenteeId('');
+      const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+      if (menteeRes.ok) {
+        const data = await menteeRes.json();
+        setCoachMentees(data);
+      }
+    } catch (err) {
+      setMenteeError('Failed to assign mentee');
+    }
+  };
+
+  const handleRemoveMentee = async (assignmentId: string) => {
+    if (!window.confirm('Are you sure you want to remove this mentee assignment?')) return;
+    try {
+      await apiRequest(`/api/coach-assignments/${assignmentId}`, { method: 'DELETE' });
+      setCoachMentees(prev => prev.filter(a => a.id !== assignmentId));
+    } catch (err) {
+      console.error('Failed to remove mentee:', err);
+    }
+  };
+
+  const handleRemoveGuardian = async (relationshipId: string) => {
+    if (!window.confirm('Are you sure you want to remove this guardian?')) return;
+    try {
+      await apiRequest(`/api/guardian-relationships/${relationshipId}`, { method: 'DELETE' });
+      setConnectedGuardians(prev => prev.filter(r => r.id !== relationshipId));
+    } catch (err) {
+      console.error('Failed to remove guardian:', err);
+    }
+  };
+
   const getGoalProgress = (goal: any) => {
     const requiredSteps = goal.steps.filter((step: any) => step.isRequired);
     return {
@@ -441,6 +596,16 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         employeeId={employeeId}
         onClose={() => setShowGoalAssignment(false)}
         onSuccess={() => setShowGoalAssignment(false)}
+      />
+    );
+  }
+
+  if (showCheckins && employee.role === 'Super Scooper') {
+    return (
+      <CoachCheckin
+        employeeId={employeeId}
+        employeeName={`${employee.first_name} ${employee.last_name}`}
+        onClose={() => setShowCheckins(false)}
       />
     );
   }
@@ -479,7 +644,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         </div>
         
         <div className="flex flex-wrap gap-2 sm:space-x-3">
-          {user?.role === 'Administrator' && (
+          {user?.role === 'Administrator' && employee.role !== 'Job Coach' && (
             <button
               onClick={() => setShowGoalAssignment(true)}
               className="flex items-center space-x-2 bg-blue-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors text-sm sm:text-base"
@@ -498,6 +663,18 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             >
               <Edit className="h-4 w-4" />
               <span className="hidden sm:inline">Edit</span>
+            </button>
+          )}
+
+          {employee.role === 'Super Scooper' && (user?.role === 'Administrator' || user?.role === 'Job Coach') && (
+            <button
+              onClick={() => setShowCheckins(true)}
+              className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm sm:text-base"
+              title="Check-In Notes"
+            >
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Check-In Notes</span>
+              <span className="sm:hidden">Check-In</span>
             </button>
           )}
         </div>
@@ -697,44 +874,225 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             )}
           </div>
 
-          {/* Connected People */}
-          {(connectedGuardians.length > 0 || assignedCoaches.length > 0) && (
+          {/* Job Coaches */}
+          {assignedCoaches.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center space-x-2 mb-4">
-                <Users className="h-5 w-5 text-purple-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Connected People</h2>
+                <UserCheck className="h-5 w-5 text-green-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h2>
+              </div>
+              <div className="space-y-2">
+                {assignedCoaches.map((assignment: any) => (
+                  <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg">
+                    {getPersonName(assignment.coach_id)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
+          {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-green-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Assigned Mentees</h2>
+                </div>
               </div>
 
-              {assignedCoaches.length > 0 && (
+              {user?.role === 'Administrator' && (
                 <div className="mb-4">
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <UserCheck className="h-4 w-4 text-green-500 mr-2" />
-                    Job Coach{assignedCoaches.length > 1 ? 'es' : ''}
-                  </h3>
-                  <div className="space-y-2 ml-6">
-                    {assignedCoaches.map((assignment: any) => (
-                      <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg">
-                        {getPersonName(assignment.coach_id)}
-                      </div>
-                    ))}
+                  {menteeError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg mb-3">{menteeError}</div>
+                  )}
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={selectedMenteeId}
+                      onChange={e => setSelectedMenteeId(e.target.value)}
+                      className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                    >
+                      <option value="">Select an employee to assign...</option>
+                      {employees
+                        .filter(e =>
+                          e.isActive &&
+                          e.role === 'Super Scooper' &&
+                          !coachMentees.some(m => m.scooper_id === e.id)
+                        )
+                        .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+                        .map(e => (
+                          <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                        ))
+                      }
+                    </select>
+                    <button
+                      onClick={handleAssignMentee}
+                      disabled={!selectedMenteeId}
+                      className="bg-green-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+                    >
+                      Assign
+                    </button>
                   </div>
                 </div>
               )}
 
-              {connectedGuardians.length > 0 && (
-                <div>
-                  <h3 className="font-medium text-gray-900 mb-2 flex items-center">
-                    <Shield className="h-4 w-4 text-purple-500 mr-2" />
-                    Guardian{connectedGuardians.length > 1 ? 's' : ''}
-                  </h3>
-                  <div className="space-y-2 ml-6">
-                    {connectedGuardians.map((rel: any) => (
-                      <div key={rel.id} className="text-sm bg-purple-50 text-purple-800 px-3 py-2 rounded-lg">
-                        {getPersonName(rel.guardian_id)}
+              {coachMentees.length > 0 ? (
+                <div className="space-y-3">
+                  {coachMentees.map((assignment: any) => (
+                    <div key={assignment.id} className="flex items-center justify-between bg-green-50 px-4 py-3 rounded-xl">
+                      <div>
+                        <p className="font-medium text-gray-900 text-sm">{getPersonName(assignment.scooper_id)}</p>
+                        <p className="text-xs text-gray-500">
+                          {employees.find(e => e.id === assignment.scooper_id)?.email || ''}
+                        </p>
                       </div>
-                    ))}
-                  </div>
+                      {user?.role === 'Administrator' && (
+                        <button
+                          onClick={() => handleRemoveMentee(assignment.id)}
+                          className="text-red-400 hover:text-red-600 p-1"
+                          title="Remove assignment"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No mentees assigned yet.</p>
+              )}
+            </div>
+          )}
+
+          {/* Guardians Section - for Super Scoopers, visible to managers */}
+          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center space-x-2">
+                  <Shield className="h-5 w-5 text-purple-500" />
+                  <h2 className="text-lg font-semibold text-gray-900">Guardians</h2>
+                </div>
+                {user?.role === 'Administrator' && (
+                  <button
+                    onClick={() => setShowAddGuardian(!showAddGuardian)}
+                    className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
+                  >
+                    {showAddGuardian ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                    <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
+                  </button>
+                )}
+              </div>
+
+              {showAddGuardian && (
+                <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-4 mb-4 space-y-3">
+                  <h3 className="font-medium text-gray-900 text-sm">New Guardian</h3>
+                  {guardianError && (
+                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.first_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="First name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={guardianForm.last_name}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Last name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={guardianForm.email}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                      <input
+                        type="tel"
+                        value={guardianForm.phone}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                        placeholder="Phone number"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
+                      <select
+                        value={guardianForm.relationship_type}
+                        onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))}
+                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+                      >
+                        <option value="Parent/Guardian">Parent/Guardian</option>
+                        <option value="Legal Guardian">Legal Guardian</option>
+                        <option value="Case Manager">Case Manager</option>
+                        <option value="Family Member">Family Member</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={guardianSaving}
+                      className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+                    >
+                      {guardianSaving ? 'Saving...' : 'Add Guardian'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {connectedGuardians.length > 0 ? (
+                <div className="space-y-3">
+                  {connectedGuardians.map((rel: any) => {
+                    const guardianName = rel.guardian_first_name && rel.guardian_last_name
+                      ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
+                      : getPersonName(rel.guardian_id);
+                    return (
+                      <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
+                        <div>
+                          <p className="font-medium text-gray-900 text-sm">{guardianName}</p>
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
+                            {rel.guardian_email && (
+                              <p className="text-xs text-gray-500">{rel.guardian_email}</p>
+                            )}
+                            {rel.relationship_type && (
+                              <p className="text-xs text-purple-600">{rel.relationship_type}</p>
+                            )}
+                          </div>
+                        </div>
+                        {user?.role === 'Administrator' && (
+                          <button
+                            onClick={() => handleRemoveGuardian(rel.id)}
+                            className="text-red-400 hover:text-red-600 p-1"
+                            title="Remove guardian"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 italic">No guardians linked yet.</p>
               )}
             </div>
           )}
@@ -1195,6 +1553,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         </div>
 
         {/* Right Column - Goals */}
+        {employee.role !== 'Job Coach' && (
         <div className="lg:col-span-2 space-y-6">
           {/* Active Goals */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
@@ -1493,6 +1852,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             </div>
           )}
         </div>
+        )}
       </div>
     </div>
   );

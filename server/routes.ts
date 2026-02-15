@@ -6,12 +6,18 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
-import { ObjectStorageService } from "./objectStorage";
+import { ObjectStorageService, objectStorageClient } from "./objectStorage";
+
+function parseCoachFilePath(path: string): { bucketName: string; objectName: string } {
+  if (!path.startsWith("/")) path = `/${path}`;
+  const parts = path.split("/");
+  return { bucketName: parts[1], objectName: parts.slice(2).join("/") };
+}
 import multer from "multer";
 import csvParser from "csv-parser";
 import { 
@@ -162,7 +168,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         logger.info({ guardianId: user.id, scooperId }, 'DOB verification successful for Guardian');
-        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+        return res.json({
+          verified: true,
+          message: 'Date of birth verified successfully',
+          employee: {
+            name: `${scooper.first_name || ''} ${scooper.last_name || ''}`.trim() || scooper.name,
+            date_of_birth: scooper.date_of_birth,
+            email: scooper.email || '',
+            has_service_provider: scooper.has_service_provider || false,
+            service_providers: scooper.service_providers || [],
+          }
+        });
       } else {
         // For Super Scoopers/Employees, verify against their own DOB
         const [employee] = await db.select().from(employees)
@@ -185,7 +201,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         logger.info({ employeeId: user.id }, 'DOB verification successful for Employee');
-        return res.json({ verified: true, message: 'Date of birth verified successfully' });
+        return res.json({
+          verified: true,
+          message: 'Date of birth verified successfully',
+          employee: {
+            name: `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || employee.name,
+            date_of_birth: employee.date_of_birth,
+            email: employee.email || '',
+            has_service_provider: employee.has_service_provider || false,
+            service_providers: employee.service_providers || [],
+          }
+        });
       }
     } catch (error) {
       logger.error({ error, userId: (req as any).user?.id }, 'DOB verification failed');
@@ -198,14 +224,44 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as AuthUser;
       const now = new Date();
+      const { 
+        signature, 
+        consent_type, 
+        no_release_details,
+        guardian_name,
+        guardian_address,
+        guardian_city_state_zip,
+        guardian_phone,
+        guardian_relationship,
+        service_providers
+      } = req.body;
+
+      const updateData: any = { 
+        roi_status: true, 
+        roi_signed_at: now,
+        updated_at: now,
+        roi_signature: signature || null,
+        roi_consent_type: consent_type || 'release_all',
+        roi_no_release_details: no_release_details || null,
+      };
+
+      if (user.role === 'Guardian') {
+        updateData.roi_guardian_name = guardian_name || null;
+        updateData.roi_guardian_address = guardian_address || null;
+        updateData.roi_guardian_city_state_zip = guardian_city_state_zip || null;
+        updateData.roi_guardian_phone = guardian_phone || null;
+        updateData.roi_guardian_relationship = guardian_relationship || null;
+      }
+
+      if (service_providers && Array.isArray(service_providers)) {
+        const cleanProviders = service_providers.filter((p: any) => p.name && p.name.trim() !== '');
+        updateData.has_service_provider = cleanProviders.length > 0;
+        updateData.service_providers = cleanProviders;
+      }
 
       // Update the current user's ROI status
       await db.update(employees)
-        .set({ 
-          roi_status: true, 
-          roi_signed_at: now,
-          updated_at: now
-        })
+        .set(updateData)
         .where(eq(employees.id, user.id));
 
       // For Guardians, also update their linked Super Scooper's ROI status
@@ -213,13 +269,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const relationships = await db.select().from(guardian_relationships)
           .where(eq(guardian_relationships.guardian_id, user.id));
 
+        const scooperUpdate: any = { 
+          roi_status: true, 
+          roi_signed_at: now,
+          updated_at: now
+        };
+        if (service_providers && Array.isArray(service_providers)) {
+          const cleanProviders = service_providers.filter((p: any) => p.name && p.name.trim() !== '');
+          scooperUpdate.has_service_provider = cleanProviders.length > 0;
+          scooperUpdate.service_providers = cleanProviders;
+        }
         for (const rel of relationships) {
           await db.update(employees)
-            .set({ 
-              roi_status: true, 
-              roi_signed_at: now,
-              updated_at: now
-            })
+            .set(scooperUpdate)
             .where(eq(employees.id, rel.scooper_id));
         }
 
@@ -252,7 +314,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Determine if onboarding is required based on role
-      const requiresOnboarding = (user.role === 'Super Scooper' || user.role === 'Guardian' || user.role === 'Job Coach') 
+      const requiresOnboarding = (user.role === 'Super Scooper' || user.role === 'Guardian') 
         && !employee.roi_status;
 
       res.json({
@@ -315,7 +377,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       // Check for existing employee with same email to prevent duplicates (only if email provided)
       if (req.body.email && req.body.email.trim() !== '') {
@@ -363,7 +425,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const updateData = { ...req.body, updated_at: new Date() };
@@ -693,7 +755,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mapped;
   };
 
-  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb(req.body);
       const [newProgress] = await db.insert(step_progress).values(mappedData).returning();
@@ -705,7 +767,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save step progress as draft
-  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb({ ...req.body, status: 'draft' });
       
@@ -763,7 +825,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Submit step progress (convert draft to submitted or create new submitted)
-  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { employee_id, assessment_session_id, date, documenter_user_id } = req.body;
       
@@ -911,7 +973,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { employee_ids, location, date } = req.body;
@@ -1036,7 +1098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1114,7 +1176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete/end an assessment session (releases lock)
-  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1160,7 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Renew session lock (extends expiry time)
-  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1330,7 +1392,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const [newSummary] = await db.insert(assessment_summaries).values(req.body).returning();
       res.json(newSummary);
@@ -1451,7 +1513,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'alex.johnson@goldenscoopice.org',
             password: 'password',
             name: 'Alex Johnson',
-            role: 'shift_manager',
+            role: 'Shift Lead',
             is_active: true
           },
           {
@@ -1459,7 +1521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'emma.davis@goldenscoopice.org',
             password: 'password',
             name: 'Emma Davis',
-            role: 'shift_manager',
+            role: 'Shift Lead',
             is_active: true
           },
           {
@@ -1467,7 +1529,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             email: 'jordan.smith@goldenscoopice.org',
             password: 'password',
             name: 'Jordan Smith',
-            role: 'shift_manager',
+            role: 'Shift Lead',
             is_active: true
           }
         ];
@@ -2262,7 +2324,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/objects/upload", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/objects/upload", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const objectStorageService = new ObjectStorageService();
       const uploadURL = await objectStorageService.getObjectEntityUploadURL();
@@ -2277,7 +2339,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
       if (!imageURL) {
@@ -2461,7 +2523,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/coach-assignments/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.get("/api/coach-assignments/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { scooperId } = req.params;
       const assignments = await db.select().from(coach_assignments).where(eq(coach_assignments.scooper_id, scooperId));
@@ -2548,11 +2610,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/guardian-relationships/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.get("/api/guardian-relationships/scooper/:scooperId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { scooperId } = req.params;
       const relationships = await db.select().from(guardian_relationships).where(eq(guardian_relationships.scooper_id, scooperId));
-      res.json(relationships);
+      const enriched = await Promise.all(relationships.map(async (rel) => {
+        const guardian = await db.select().from(employees).where(eq(employees.id, rel.guardian_id)).limit(1);
+        return {
+          ...rel,
+          guardian_first_name: guardian[0]?.first_name || null,
+          guardian_last_name: guardian[0]?.last_name || null,
+          guardian_email: guardian[0]?.email || null,
+        };
+      }));
+      res.json(enriched);
     } catch (error) {
       logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch guardian relationships by scooper');
       res.status(500).json({ error: 'Failed to fetch guardian relationships' });
@@ -2606,6 +2677,63 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Create guardian + link to scooper in one step
+  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { scooper_id, first_name, last_name, email, phone, relationship_type } = req.body;
+
+      if (!scooper_id || !first_name || !last_name) {
+        return res.status(400).json({ error: 'scooper_id, first_name, and last_name are required' });
+      }
+
+      const [scooper] = await db.select().from(employees).where(eq(employees.id, scooper_id)).limit(1);
+      if (!scooper) {
+        return res.status(404).json({ error: 'Super Scooper not found' });
+      }
+      if (scooper.role !== 'Super Scooper') {
+        return res.status(400).json({ error: 'Referenced employee is not a Super Scooper' });
+      }
+
+      if (email && email.trim() !== '') {
+        const existing = await db.select().from(employees).where(eq(employees.email, email)).limit(1);
+        if (existing.length > 0) {
+          return res.status(409).json({ error: 'An employee with this email already exists' });
+        }
+      }
+
+      const user = (req as any).user;
+      const guardianData: any = {
+        first_name,
+        last_name,
+        name: `${first_name} ${last_name}`,
+        email: email && email.trim() !== '' ? email.trim() : null,
+        phone: phone || null,
+        role: 'Guardian',
+        is_active: true,
+        has_system_access: false,
+      };
+
+      const [newGuardian] = await db.insert(employees).values(guardianData).returning();
+
+      const [newRelationship] = await db.insert(guardian_relationships).values({
+        guardian_id: newGuardian.id,
+        scooper_id,
+        relationship_type: relationship_type || 'guardian',
+        assigned_by: user?.id,
+      }).returning();
+
+      const { password: _, ...guardianWithoutPassword } = newGuardian;
+      logger.info({ guardianId: newGuardian.id, scooperId: scooper_id }, 'Guardian created and linked to scooper');
+      res.json({ guardian: guardianWithoutPassword, relationship: newRelationship });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'This guardian relationship already exists' });
+      }
+      logger.error({ error }, 'Failed to create guardian with relationship');
+      res.status(500).json({ error: 'Failed to create guardian' });
+    }
+  });
+
   // Promotion Certifications endpoints
   app.get("/api/certifications/:employeeId", authenticateToken, async (req: Request, res: Response) => {
     try {
@@ -2631,7 +2759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Manager', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const parsed = insertPromotionCertificationSchema.parse(req.body);
       const [cert] = await db.insert(promotion_certifications).values(parsed).returning();
@@ -2658,7 +2786,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Guardian Notes Routes
+// Guardian Notes Routes
   // Get all notes for a scooper (viewable by admins/managers/job coaches)
   app.get("/api/guardian-notes/scooper/:scooperId", authenticateToken, async (req: Request, res: Response) => {
     try {
@@ -2840,6 +2968,442 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete guardian note');
       res.status(500).json({ error: 'Failed to delete guardian note' });
+    }
+  });
+
+  // ========== Coach Check-In Endpoints ==========
+
+  app.get("/api/checkins/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const checkins = await db.select().from(coach_checkins)
+        .where(eq(coach_checkins.employee_id, employeeId))
+        .orderBy(desc(coach_checkins.checkin_date));
+
+      const coachIds = Array.from(new Set(checkins.map(c => c.coach_id)));
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = checkins.map(c => ({ ...c, coach_name: coachMap[c.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch check-ins');
+      res.status(500).json({ error: 'Failed to fetch check-ins' });
+    }
+  });
+
+  app.post("/api/checkins", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can create check-ins' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const checkinData = { ...req.body, coach_id: user.id };
+      const parsed = insertCoachCheckinSchema.parse(checkinData);
+
+      const [checkin] = await db.insert(coach_checkins).values(parsed).returning();
+      logger.info({ checkinId: checkin.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach check-in created');
+      res.json(checkin);
+    } catch (error) {
+      logger.error({ error }, 'Failed to create check-in');
+      res.status(500).json({ error: 'Failed to create check-in' });
+    }
+  });
+
+  app.put("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_checkins).where(eq(coach_checkins.id, id));
+      if (!existing) return res.status(404).json({ error: 'Check-in not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original coach can edit this check-in' });
+      }
+
+      const { setting, how_was_today, independence, engagement, big_win, big_win_type, challenge, safety_concern, safety_details, compared_to_last, support_helped, notes } = req.body;
+      const updateData: any = {};
+      if (setting !== undefined) updateData.setting = setting;
+      if (how_was_today !== undefined) updateData.how_was_today = how_was_today;
+      if (independence !== undefined) updateData.independence = independence;
+      if (engagement !== undefined) updateData.engagement = engagement;
+      if (big_win !== undefined) updateData.big_win = big_win;
+      if (big_win_type !== undefined) updateData.big_win_type = big_win_type;
+      if (challenge !== undefined) updateData.challenge = challenge;
+      if (safety_concern !== undefined) updateData.safety_concern = safety_concern;
+      if (safety_details !== undefined) updateData.safety_details = safety_details;
+      if (compared_to_last !== undefined) updateData.compared_to_last = compared_to_last;
+      if (support_helped !== undefined) updateData.support_helped = support_helped;
+      if (notes !== undefined) updateData.notes = notes;
+      const [updated] = await db.update(coach_checkins).set(updateData).where(eq(coach_checkins.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update check-in');
+      res.status(500).json({ error: 'Failed to update check-in' });
+    }
+  });
+
+  app.delete("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_checkins).where(eq(coach_checkins.id, id));
+      if (!existing) return res.status(404).json({ error: 'Check-in not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original coach can delete this check-in' });
+      }
+
+      await db.delete(coach_checkins).where(eq(coach_checkins.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to delete check-in');
+      res.status(500).json({ error: 'Failed to delete check-in' });
+    }
+  });
+
+  // ========== Coach Files Endpoints ==========
+
+  const fileUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const allowed = [
+        'application/pdf',
+        'text/plain',
+        'application/msword',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'application/rtf',
+        'text/rtf',
+      ];
+      if (allowed.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only PDF, TXT, DOC, DOCX, and RTF files are allowed'));
+      }
+    },
+  });
+
+  app.get("/api/coach-files/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const files = await db.select().from(coach_files)
+        .where(eq(coach_files.employee_id, employeeId))
+        .orderBy(desc(coach_files.uploaded_at));
+
+      const coachIds = Array.from(new Set(files.map(f => f.coach_id)));
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = files.map(f => ({ ...f, coach_name: coachMap[f.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach files');
+      res.status(500).json({ error: 'Failed to fetch files' });
+    }
+  });
+
+  app.post("/api/coach-files/:employeeId", authenticateToken, fileUpload.single('file'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can upload files' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      let storagePath: string;
+
+      if (privateDir) {
+        const fileId = crypto.randomUUID();
+        const ext = file.originalname.split('.').pop() || '';
+        const objectPath = `${privateDir}/coach-files/${employeeId}/${fileId}.${ext}`;
+        const { bucketName, objectName } = parseCoachFilePath(objectPath);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectName);
+        await blob.save(file.buffer, { contentType: file.mimetype });
+        storagePath = objectPath;
+      } else {
+        const fs = await import('fs');
+        const path = await import('path');
+        const uploadDir = path.join('/tmp', 'coach-files', employeeId);
+        fs.mkdirSync(uploadDir, { recursive: true });
+        const fileId = crypto.randomUUID();
+        const ext = file.originalname.split('.').pop() || '';
+        const filePath = path.join(uploadDir, `${fileId}.${ext}`);
+        fs.writeFileSync(filePath, file.buffer);
+        storagePath = filePath;
+      }
+
+      const [saved] = await db.insert(coach_files).values({
+        employee_id: employeeId,
+        coach_id: user.id,
+        file_name: file.originalname,
+        file_type: file.mimetype,
+        file_size: file.size,
+        storage_path: storagePath,
+      }).returning();
+
+      logger.info({ fileId: saved.id, coachId: user.id, employeeId, fileName: file.originalname }, 'Coach file uploaded');
+      res.json(saved);
+    } catch (error) {
+      logger.error({ error }, 'Failed to upload coach file');
+      res.status(500).json({ error: 'Failed to upload file' });
+    }
+  });
+
+  app.get("/api/coach-files/download/:fileId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { fileId } = req.params;
+
+      const [fileRecord] = await db.select().from(coach_files).where(eq(coach_files.id, fileId));
+      if (!fileRecord) return res.status(404).json({ error: 'File not found' });
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, fileRecord.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      if (privateDir && fileRecord.storage_path.startsWith(privateDir)) {
+        const { bucketName, objectName } = parseCoachFilePath(fileRecord.storage_path);
+        const bucket = objectStorageClient.bucket(bucketName);
+        const blob = bucket.file(objectName);
+        const [exists] = await blob.exists();
+        if (!exists) return res.status(404).json({ error: 'File not found in storage' });
+
+        res.setHeader('Content-Type', fileRecord.file_type);
+        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.file_name}"`);
+        blob.createReadStream().pipe(res);
+      } else {
+        const fs = await import('fs');
+        if (!fs.existsSync(fileRecord.storage_path)) {
+          return res.status(404).json({ error: 'File not found on disk' });
+        }
+        res.setHeader('Content-Type', fileRecord.file_type);
+        res.setHeader('Content-Disposition', `inline; filename="${fileRecord.file_name}"`);
+        fs.createReadStream(fileRecord.storage_path).pipe(res);
+      }
+    } catch (error) {
+      logger.error({ error, fileId: req.params.fileId }, 'Failed to download coach file');
+      res.status(500).json({ error: 'Failed to download file' });
+    }
+  });
+
+  app.delete("/api/coach-files/:fileId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { fileId } = req.params;
+
+      const [fileRecord] = await db.select().from(coach_files).where(eq(coach_files.id, fileId));
+      if (!fileRecord) return res.status(404).json({ error: 'File not found' });
+      if (fileRecord.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the uploader can delete this file' });
+      }
+
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+
+      try {
+        if (privateDir && fileRecord.storage_path.startsWith(privateDir)) {
+          const { bucketName, objectName } = parseCoachFilePath(fileRecord.storage_path);
+          const bucket = objectStorageClient.bucket(bucketName);
+          await bucket.file(objectName).delete();
+        } else {
+          const fs = await import('fs');
+          if (fs.existsSync(fileRecord.storage_path)) {
+            fs.unlinkSync(fileRecord.storage_path);
+          }
+        }
+      } catch (storageErr) {
+        logger.warn({ error: storageErr, fileId }, 'Failed to delete storage file, removing record anyway');
+      }
+
+      await db.delete(coach_files).where(eq(coach_files.id, fileId));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, fileId: req.params.fileId }, 'Failed to delete coach file');
+      res.status(500).json({ error: 'Failed to delete file' });
+    }
+  });
+
+  // ========== Coach Notes Endpoints ==========
+
+  app.get("/api/coach-notes/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { employeeId } = req.params;
+
+      if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const notes = await db.select().from(coach_notes)
+        .where(eq(coach_notes.employee_id, employeeId))
+        .orderBy(desc(coach_notes.updated_at));
+
+      const coachIds = Array.from(new Set(notes.map(n => n.coach_id)));
+      let coachMap: Record<string, string> = {};
+      if (coachIds.length > 0) {
+        const coaches = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds));
+        coachMap = Object.fromEntries(coaches.map(c => [c.id, `${c.first_name || ''} ${c.last_name || ''}`.trim()]));
+      }
+
+      const enriched = notes.map(n => ({ ...n, coach_name: coachMap[n.coach_id] || 'Unknown' }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach notes');
+      res.status(500).json({ error: 'Failed to fetch notes' });
+    }
+  });
+
+  app.post("/api/coach-notes", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Job Coaches and Administrators can create notes' });
+      }
+
+      if (user.role === 'Job Coach') {
+        const assignments = await db.select().from(coach_assignments)
+          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
+        if (assignments.length === 0) {
+          return res.status(403).json({ error: 'Not assigned to this employee' });
+        }
+      }
+
+      const noteData = { ...req.body, coach_id: user.id };
+      const parsed = insertCoachNoteSchema.parse(noteData);
+
+      const [note] = await db.insert(coach_notes).values(parsed).returning();
+      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach note created');
+      res.json(note);
+    } catch (error) {
+      logger.error({ error }, 'Failed to create coach note');
+      res.status(500).json({ error: 'Failed to create note' });
+    }
+  });
+
+  app.put("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
+      if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original author can edit this note' });
+      }
+
+      const { title, content } = req.body;
+      const updateData: any = { updated_at: new Date() };
+      if (title !== undefined) updateData.title = title;
+      if (content !== undefined) updateData.content = content;
+
+      const [updated] = await db.update(coach_notes).set(updateData).where(eq(coach_notes.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update coach note');
+      res.status(500).json({ error: 'Failed to update note' });
+    }
+  });
+
+  app.delete("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+
+      const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
+      if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (existing.coach_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original author can delete this note' });
+      }
+
+      await db.delete(coach_notes).where(eq(coach_notes.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to delete coach note');
+      res.status(500).json({ error: 'Failed to delete note' });
     }
   });
 
