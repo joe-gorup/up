@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star } from 'lucide-react';
+import { User, Plus, Search, Edit, UserMinus, Award, Star } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeForm from './EmployeeForm';
@@ -147,7 +147,9 @@ export default function EmployeeManagement() {
                 <th className="text-left py-4 px-3 sm:px-6 font-medium text-gray-900">Role</th>
                 <th className="text-left py-4 px-6 font-medium text-gray-900 hidden md:table-cell">Last Login</th>
                 <th className="text-left py-4 px-6 font-medium text-gray-900 hidden md:table-cell">Created</th>
-                <th className="text-right py-4 px-3 sm:px-6 font-medium text-gray-900">Actions</th>
+                {user?.role === 'Administrator' && (
+                  <th className="text-right py-4 px-3 sm:px-6 font-medium text-gray-900">Actions</th>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
@@ -156,7 +158,12 @@ export default function EmployeeManagement() {
                 const canDocumentOnOthers = hasSystemAccess;
                 
                 return (
-                  <tr key={employee.id} className="hover:bg-gray-50" data-testid={`row-employee-${employee.id}`}>
+                  <tr 
+                    key={employee.id} 
+                    className="hover:bg-gray-50 cursor-pointer transition-colors" 
+                    onClick={() => handleViewEmployee(employee.id)}
+                    data-testid={`row-employee-${employee.id}`}
+                  >
                     <td className="py-4 px-3 sm:px-6">
                       <div className="flex items-center space-x-3">
                         <EmployeeAvatar 
@@ -210,28 +217,30 @@ export default function EmployeeManagement() {
                       {new Date(employee.createdAt).toLocaleDateString()}
                     </td>
                     
-                    <td className="py-4 px-3 sm:px-6 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          onClick={() => handleEditEmployee(employee.id)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
-                          title="Edit employee"
-                          data-testid={`button-edit-${employee.id}`}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </button>
-                        {user?.role === 'Administrator' && employee.isActive && (
+                    {user?.role === 'Administrator' && (
+                      <td className="py-4 px-3 sm:px-6 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end space-x-2">
                           <button
-                            onClick={() => handleInactivateEmployee(employee.id)}
-                            className="p-2 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"
-                            title="Inactivate employee"
-                            data-testid={`button-inactivate-${employee.id}`}
+                            onClick={() => handleEditEmployee(employee.id)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-xl transition-colors"
+                            title="Edit employee"
+                            data-testid={`button-edit-${employee.id}`}
                           >
-                            <UserMinus className="h-4 w-4" />
+                            <Edit className="h-4 w-4" />
                           </button>
-                        )}
-                      </div>
-                    </td>
+                          {employee.isActive && (
+                            <button
+                              onClick={() => handleInactivateEmployee(employee.id)}
+                              className="p-2 text-orange-600 hover:bg-orange-50 rounded-xl transition-colors"
+                              title="Inactivate employee"
+                              data-testid={`button-inactivate-${employee.id}`}
+                            >
+                              <UserMinus className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
