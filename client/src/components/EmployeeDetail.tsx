@@ -1460,12 +1460,13 @@ const handleGenerateInvitation = async () => {
                       <Plus className="h-3.5 w-3.5" />
                       <span>Add</span>
                     </button>
-                    <button
-                      onClick={() => setEditingCerts(false)}
-                      className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors"
-                    >
-                      Done
-                    </button>
+                    <div className="flex space-x-2">
+                      <button onClick={() => setEditingCerts(false)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                      <button onClick={() => setEditingCerts(false)} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium transition-colors">
+                        <Save className="h-3 w-3" />
+                        <span>Save</span>
+                      </button>
+                    </div>
                   </div>
                 )}
 
