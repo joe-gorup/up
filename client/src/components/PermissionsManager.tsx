@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Shield, Lock, Search, Save, RefreshCw, Eye, Pencil, Trash2, AlertTriangle, Info } from 'lucide-react';
+import { Shield, Search, Save, RefreshCw, Eye, Pencil, Trash2, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import { PERMISSION_FEATURES, PERMISSION_FEATURE_LABELS, CONFIGURABLE_ROLES, type PermissionFeature } from '@shared/schema';
@@ -49,7 +49,7 @@ export default function PermissionsManager() {
   const [roleFilter, setRoleFilter] = useState<string>('all');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
-  const allRoles = ['Administrator', ...CONFIGURABLE_ROLES] as const;
+  const allRoles = [...CONFIGURABLE_ROLES] as const;
 
   useEffect(() => {
     loadPermissions();
@@ -281,7 +281,6 @@ export default function PermissionsManager() {
                 {visibleRoles.map(role => (
                   <th key={role} className="px-3 py-3 text-center min-w-[140px]">
                     <div className="flex items-center justify-center gap-1.5">
-                      {role === 'Administrator' && <Lock className="h-3.5 w-3.5 text-gray-400" />}
                       <span className="text-sm font-semibold text-gray-700">{role}</span>
                     </div>
                     <div className="flex justify-center gap-3 mt-1.5">
@@ -308,21 +307,14 @@ export default function PermissionsManager() {
                     </div>
                   </td>
                   {visibleRoles.map(role => {
-                    const isAdmin = role === 'Administrator';
                     const isNA = FEATURE_ROLE_NA[feature]?.includes(role);
-                    const perm = isAdmin ? null : permissions[role]?.[feature];
-                    const origPerm = isAdmin ? null : originalPermissions[role]?.[feature];
+                    const perm = permissions[role]?.[feature];
+                    const origPerm = originalPermissions[role]?.[feature];
 
                     return (
                       <td key={role} className="px-3 py-3">
                         <div className="flex justify-center gap-3">
-                          {isAdmin ? (
-                            <>
-                              <LockedToggle />
-                              <LockedToggle />
-                              <LockedToggle />
-                            </>
-                          ) : isNA ? (
+                          {isNA ? (
                             <span className="text-xs text-gray-400 font-medium py-1.5">N/A</span>
                           ) : (
                             <>
@@ -364,10 +356,6 @@ export default function PermissionsManager() {
 
       <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <div className="flex items-center gap-1.5">
-          <Lock className="h-3 w-3" />
-          <span>Administrator permissions are locked to full access</span>
-        </div>
-        <div className="flex items-center gap-1.5">
           <AlertTriangle className="h-3 w-3" />
           <span>Edit and Delete require View to be enabled</span>
         </div>
@@ -380,14 +368,6 @@ export default function PermissionsManager() {
           <span>Hover the info icon for feature descriptions</span>
         </div>
       </div>
-    </div>
-  );
-}
-
-function LockedToggle() {
-  return (
-    <div className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 border border-gray-200 cursor-not-allowed" title="Administrator — always enabled">
-      <Lock className="h-3 w-3 text-gray-400" />
     </div>
   );
 }
