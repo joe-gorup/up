@@ -814,8 +814,8 @@ const handleGenerateInvitation = async () => {
                         </div>
                       ))}
                     </div>
-                    <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
-                      <Plus className="h-3 w-3" /><span>Add</span>
+                    <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
                     </button>
                   </div>
                   <div>
@@ -834,8 +834,8 @@ const handleGenerateInvitation = async () => {
                         </div>
                       ))}
                     </div>
-                    <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
-                      <Plus className="h-3 w-3" /><span>Add</span>
+                    <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
                     </button>
                   </div>
                   <div>
@@ -854,8 +854,8 @@ const handleGenerateInvitation = async () => {
                         </div>
                       ))}
                     </div>
-                    <button type="button" onClick={() => addSupportArrayItem('regulationStrategies')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
-                      <Plus className="h-3 w-3" /><span>Add</span>
+                    <button type="button" onClick={() => addSupportArrayItem('regulationStrategies')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
                     </button>
                   </div>
                   <div className="lg:col-span-3 flex justify-end space-x-2 pt-3 border-t border-gray-100">
@@ -1124,9 +1124,9 @@ const handleGenerateInvitation = async () => {
                               )}
                             </div>
                           ))}
-                          <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: [...prev.providers, { name: '', type: '' }] })); }} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs">
+                          <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: [...prev.providers, { name: '', type: '' }] })); }} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs font-medium mt-2 pt-1">
                             <Plus className="h-3.5 w-3.5" />
-                            <span>Add Provider</span>
+                            <span>Add</span>
                           </button>
                         </div>
                       )}
