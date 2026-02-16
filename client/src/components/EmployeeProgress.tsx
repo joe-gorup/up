@@ -533,41 +533,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
 
   return (
     <div className="space-y-6">
-      {/* Employee Header */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-          <div className="flex items-center space-x-3 sm:space-x-4">
-            <div className="h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-              <span className="text-lg sm:text-xl font-semibold text-gray-600">
-                {`${employee.first_name[0] || ''}${employee.last_name[0] || ''}`.toUpperCase()}
-              </span>
-            </div>
-            
-            <div>
-              <h1 className="text-lg sm:text-2xl font-bold text-gray-900">{`${employee.first_name} ${employee.last_name}`}</h1>
-              <p className="text-gray-500 text-sm sm:text-base">{employee.role}</p>
-            </div>
-          </div>
-
-        </div>
-
-        {/* Allergies - Prominent Safety Information */}
-        {employee.allergies.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-            <span className="text-sm font-semibold text-red-800">Allergies:</span>
-            {employee.allergies.map((allergy, index) => (
-              <span
-                key={index}
-                className="px-3 py-1.5 bg-red-100 text-red-800 rounded-full text-sm"
-              >
-                {allergy}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* Development Goals */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="border-b border-gray-200 px-3 sm:px-6 py-4">
