@@ -311,18 +311,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
 
-      // Load assessment sessions to check for active session
       const assessmentSessionsResponse = await apiRequest('/api/assessment-sessions');
       if (assessmentSessionsResponse.ok) {
         const sessionsData = await assessmentSessionsResponse.json();
-        // For now, consider the most recent session as "active" for the current day
-        // Only load sessions that are draft or in_progress (not completed or abandoned)
         const today = new Date().toISOString().split('T')[0];
-        const todaySessions = sessionsData.filter((session: any) => 
+        const myActiveSessions = sessionsData.filter((session: any) => 
           session.date === today && 
-          (session.status === 'draft' || session.status === 'in_progress')
+          (session.status === 'draft' || session.status === 'in_progress') &&
+          session.locked_by === user?.id
         );
-        const activeSession = todaySessions.length > 0 ? todaySessions[0] : null;
+        const activeSession = myActiveSessions.length > 0 ? myActiveSessions[0] : null;
         
         if (activeSession) {
           setActiveAssessmentSession({

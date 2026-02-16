@@ -1107,39 +1107,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
 
           if (activeSessions.length > 0) {
-            // Find which employees are locked
-            const lockedEmployees: string[] = [];
-            const lockedByManagers: any[] = [];
+            const ownSessions = activeSessions.filter(s => s.locked_by === user.id);
+            const otherSessions = activeSessions.filter(s => s.locked_by !== user.id);
 
-            for (const session of activeSessions) {
-              const sessionEmployeeIds = session.employee_ids as string[];
-              const conflictingIds = employee_ids.filter((id: string) => sessionEmployeeIds.includes(id));
-              lockedEmployees.push(...conflictingIds);
-              
-              if (session.locked_by && !lockedByManagers.find(m => m.id === session.locked_by)) {
-                const manager = await tx.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
-                if (manager.length > 0) {
-                  lockedByManagers.push(manager[0]);
-                }
+            if (ownSessions.length > 0) {
+              logger.info({
+                managerId: user.id,
+                ownSessionIds: ownSessions.map(s => s.id),
+                count: ownSessions.length
+              }, 'Auto-completing own prior sessions before creating new one');
+
+              for (const session of ownSessions) {
+                await tx.update(assessment_sessions)
+                  .set({
+                    status: 'completed',
+                    locked_by: null,
+                    locked_at: null,
+                    updated_at: new Date()
+                  })
+                  .where(eq(assessment_sessions.id, session.id));
               }
             }
 
-            const uniqueLockedEmployees = Array.from(new Set(lockedEmployees));
-            
-            logger.warn({ 
-              managerId: user.id,
-              requestedEmployees: employee_ids,
-              lockedEmployees: uniqueLockedEmployees,
-              lockingManagers: lockedByManagers.map(m => ({ id: m.id, name: `${m.first_name} ${m.last_name}` })),
-              conflictingSessions: activeSessions.map(s => s.id)
-            }, 'Session creation blocked - employees locked by other managers');
+            if (otherSessions.length > 0) {
+              const lockedEmployees: string[] = [];
+              const lockedByManagers: any[] = [];
 
-            // Throw error with conflict details - Drizzle automatically rolls back transaction on error
-            const error: any = new Error('Some employees are currently being assessed by another manager');
-            error.statusCode = 409;
-            error.lockedEmployees = uniqueLockedEmployees;
-            error.lockedByManagers = lockedByManagers;
-            throw error;
+              for (const session of otherSessions) {
+                const sessionEmployeeIds = session.employee_ids as string[];
+                const conflictingIds = employee_ids.filter((id: string) => sessionEmployeeIds.includes(id));
+                lockedEmployees.push(...conflictingIds);
+                
+                if (session.locked_by && !lockedByManagers.find(m => m.id === session.locked_by)) {
+                  const manager = await tx.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
+                  if (manager.length > 0) {
+                    lockedByManagers.push(manager[0]);
+                  }
+                }
+              }
+
+              const uniqueLockedEmployees = Array.from(new Set(lockedEmployees));
+              
+              logger.warn({ 
+                managerId: user.id,
+                requestedEmployees: employee_ids,
+                lockedEmployees: uniqueLockedEmployees,
+                lockingManagers: lockedByManagers.map(m => ({ id: m.id, name: `${m.first_name} ${m.last_name}` })),
+                conflictingSessions: otherSessions.map(s => s.id)
+              }, 'Session creation blocked - employees locked by other managers');
+
+              const error: any = new Error('Some employees are currently being assessed by another manager');
+              error.statusCode = 409;
+              error.lockedEmployees = uniqueLockedEmployees;
+              error.lockedByManagers = lockedByManagers;
+              throw error;
+            }
           }
         }
 
