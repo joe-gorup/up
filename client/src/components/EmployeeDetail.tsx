@@ -83,6 +83,9 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     managerFirstName: string | null; managerLastName: string | null;
   }>>([]);
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
+  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
+  const [sessionDetails, setSessionDetails] = useState<Record<string, { goals: Array<{ goalId: string; goalTitle: string; steps: Array<{ stepId: string; stepOrder: number; stepDescription: string; outcome: string; notes: string | null; completionTimeSeconds: number | null; timerManuallyEntered: boolean | null }>}>; summary: string | null; totalSteps: number }>>({});
+  const [loadingSessionDetail, setLoadingSessionDetail] = useState(false);
 
   // Certification checklist items
   const mentorChecklistItems = [
@@ -302,6 +305,59 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     }
     fetchPastAssessments();
   }, [employeeId]);
+
+  async function toggleSessionDetails(sessionId: string) {
+    if (expandedSessionId === sessionId) {
+      setExpandedSessionId(null);
+      return;
+    }
+    setExpandedSessionId(sessionId);
+    if (sessionDetails[sessionId]) return;
+    setLoadingSessionDetail(true);
+    try {
+      const res = await apiRequest(`/api/assessment-sessions/${sessionId}/details?employeeId=${employeeId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSessionDetails(prev => ({ ...prev, [sessionId]: data }));
+      }
+    } catch (err) {}
+    setLoadingSessionDetail(false);
+  }
+
+  function formatTime(seconds: number | null): string {
+    if (!seconds) return '';
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    if (mins > 0) return `${mins}m ${secs}s`;
+    return `${secs}s`;
+  }
+
+  function getOutcomeColor(outcome: string) {
+    switch (outcome) {
+      case 'correct': return 'bg-green-100 text-green-800 border-green-200';
+      case 'incorrect': return 'bg-red-100 text-red-800 border-red-200';
+      case 'prompted': case 'verbal_prompt': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+      case 'not_piped': return 'bg-purple-100 text-purple-800 border-purple-200';
+      case 'gestural_prompt': return 'bg-orange-100 text-orange-800 border-orange-200';
+      case 'modeling': return 'bg-blue-100 text-blue-800 border-blue-200';
+      case 'physical_prompt': return 'bg-pink-100 text-pink-800 border-pink-200';
+      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  }
+
+  function getOutcomeLabel(outcome: string) {
+    switch (outcome) {
+      case 'correct': return 'Correct';
+      case 'incorrect': return 'Incorrect';
+      case 'prompted': return 'Prompted';
+      case 'verbal_prompt': return 'Verbal Prompt';
+      case 'gestural_prompt': return 'Gestural Prompt';
+      case 'modeling': return 'Modeling';
+      case 'physical_prompt': return 'Physical Prompt';
+      case 'not_piped': return 'Not Piped';
+      default: return outcome;
+    }
+  }
 
   // Initialize form data when employee changes
   useEffect(() => {
@@ -1629,8 +1685,216 @@ const handleGenerateInvitation = async () => {
                       </button>
                     </div>
                   )}
+
+                  {/* Past Assessments within Goal Assessment card */}
+                  <div className="mt-6 pt-4 border-t border-gray-200">
+                    <div className="flex items-center space-x-2 mb-3">
+                      <FileText className="h-4 w-4 text-indigo-500" />
+                      <h3 className="text-sm font-semibold text-gray-700">Past Assessments</h3>
+                      {pastAssessments.length > 0 && (
+                        <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
+                          {pastAssessments.length}
+                        </span>
+                      )}
+                    </div>
+                    {loadingPastAssessments ? (
+                      <div className="flex items-center justify-center py-4">
+                        <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                        <span className="ml-2 text-xs text-gray-500">Loading...</span>
+                      </div>
+                    ) : pastAssessments.length === 0 ? (
+                      <p className="text-xs text-gray-500 italic">No completed assessments yet.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {pastAssessments.map((session) => (
+                          <div key={session.id}>
+                            <button
+                              onClick={() => toggleSessionDetails(session.id)}
+                              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                            >
+                              <div className="flex items-center space-x-3">
+                                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">
+                                    {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </p>
+                                  <p className="text-xs text-gray-500">
+                                    {session.managerFirstName && session.managerLastName
+                                      ? `${session.managerFirstName} ${session.managerLastName}`
+                                      : 'Unknown'} &middot; {session.location}
+                                  </p>
+                                </div>
+                              </div>
+                              {expandedSessionId === session.id ? (
+                                <ChevronUp className="h-4 w-4 text-gray-400" />
+                              ) : (
+                                <ChevronDown className="h-4 w-4 text-gray-400" />
+                              )}
+                            </button>
+
+                            {expandedSessionId === session.id && (
+                              <div className="mt-2 ml-2 mr-2 mb-2 p-3 bg-white border border-gray-200 rounded-xl">
+                                {loadingSessionDetail && !sessionDetails[session.id] ? (
+                                  <div className="flex items-center justify-center py-4">
+                                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                                    <span className="ml-2 text-xs text-gray-500">Loading details...</span>
+                                  </div>
+                                ) : sessionDetails[session.id] ? (
+                                  <div className="space-y-4">
+                                    {sessionDetails[session.id].goals.map((goal) => (
+                                      <div key={goal.goalId} className="space-y-2">
+                                        <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                          <Target className="h-3.5 w-3.5 text-blue-500" />
+                                          {goal.goalTitle}
+                                        </h4>
+                                        <div className="space-y-1.5">
+                                          {goal.steps.map((step, idx) => (
+                                            <div key={step.stepId || idx} className="flex items-start gap-2 pl-2">
+                                              <span className="text-xs text-gray-400 font-mono mt-0.5 w-4 flex-shrink-0">{step.stepOrder}.</span>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2 flex-wrap">
+                                                  <span className="text-xs text-gray-700">{step.stepDescription}</span>
+                                                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                                    {getOutcomeLabel(step.outcome)}
+                                                  </span>
+                                                  {step.completionTimeSeconds ? (
+                                                    <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                                                      <Clock className="h-3 w-3" />
+                                                      {formatTime(step.completionTimeSeconds)}
+                                                    </span>
+                                                  ) : null}
+                                                </div>
+                                                {step.notes && (
+                                                  <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>
+                                                )}
+                                              </div>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                    {sessionDetails[session.id].summary && (
+                                      <div className="pt-2 border-t border-gray-100">
+                                        <p className="text-xs text-gray-600">
+                                          <span className="font-medium">Summary:</span> {sessionDetails[session.id].summary}
+                                        </p>
+                                      </div>
+                                    )}
+                                    {sessionDetails[session.id].goals.length === 0 && (
+                                      <p className="text-xs text-gray-400 italic">No step details recorded for this session.</p>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <p className="text-xs text-gray-400 italic">Failed to load details.</p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible */}
+          {!(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-3">
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
+              </div>
+              <div className="space-y-2">
+                {pastAssessments.map((session) => (
+                  <div key={session.id}>
+                    <button
+                      onClick={() => toggleSessionDetails(session.id)}
+                      className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors text-left"
+                    >
+                      <div className="flex items-center space-x-3">
+                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {session.managerFirstName && session.managerLastName
+                              ? `${session.managerFirstName} ${session.managerLastName}`
+                              : 'Unknown'} &middot; {session.location}
+                          </p>
+                        </div>
+                      </div>
+                      {expandedSessionId === session.id ? (
+                        <ChevronUp className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-gray-400" />
+                      )}
+                    </button>
+                    {expandedSessionId === session.id && (
+                      <div className="mt-2 ml-2 mr-2 mb-2 p-3 bg-white border border-gray-200 rounded-xl">
+                        {loadingSessionDetail && !sessionDetails[session.id] ? (
+                          <div className="flex items-center justify-center py-4">
+                            <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                            <span className="ml-2 text-xs text-gray-500">Loading details...</span>
+                          </div>
+                        ) : sessionDetails[session.id] ? (
+                          <div className="space-y-4">
+                            {sessionDetails[session.id].goals.map((goal) => (
+                              <div key={goal.goalId} className="space-y-2">
+                                <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                  <Target className="h-3.5 w-3.5 text-blue-500" />
+                                  {goal.goalTitle}
+                                </h4>
+                                <div className="space-y-1.5">
+                                  {goal.steps.map((step, idx) => (
+                                    <div key={step.stepId || idx} className="flex items-start gap-2 pl-2">
+                                      <span className="text-xs text-gray-400 font-mono mt-0.5 w-4 flex-shrink-0">{step.stepOrder}.</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs text-gray-700">{step.stepDescription}</span>
+                                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                            {getOutcomeLabel(step.outcome)}
+                                          </span>
+                                          {step.completionTimeSeconds ? (
+                                            <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                                              <Clock className="h-3 w-3" />
+                                              {formatTime(step.completionTimeSeconds)}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {step.notes && (
+                                          <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                            {sessionDetails[session.id].summary && (
+                              <div className="pt-2 border-t border-gray-100">
+                                <p className="text-xs text-gray-600">
+                                  <span className="font-medium">Summary:</span> {sessionDetails[session.id].summary}
+                                </p>
+                              </div>
+                            )}
+                            {sessionDetails[session.id].goals.length === 0 && (
+                              <p className="text-xs text-gray-400 italic">No step details recorded for this session.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400 italic">Failed to load details.</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 
@@ -1924,48 +2188,6 @@ const handleGenerateInvitation = async () => {
               </div>
             </div>
           )}
-
-          {/* Past Assessments */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-            <div className="flex items-center space-x-2 mb-4">
-              <FileText className="h-5 w-5 text-indigo-500" />
-              <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
-              {pastAssessments.length > 0 && (
-                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {pastAssessments.length}
-                </span>
-              )}
-            </div>
-
-            {loadingPastAssessments ? (
-              <div className="flex items-center justify-center py-6">
-                <div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                <span className="ml-2 text-sm text-gray-500">Loading...</span>
-              </div>
-            ) : pastAssessments.length > 0 ? (
-              <div className="space-y-2">
-                {pastAssessments.map((session) => (
-                  <div key={session.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
-                    <div className="flex items-center space-x-3">
-                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {session.managerFirstName && session.managerLastName
-                            ? `${session.managerFirstName} ${session.managerLastName}`
-                            : 'Unknown'} &middot; {session.location}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500 italic">No completed assessments yet.</p>
-            )}
-          </div>
 
         </div>
         )}
