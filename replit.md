@@ -36,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 -   **ORM**: Drizzle ORM for type-safe database queries and schema management.
 -   **Database**: PostgreSQL, specifically configured for Neon Database for serverless hosting and connection pooling.
 -   **Schema**: Normalized relational design for users, employees, goal templates, development goals, progress tracking, and assessment sessions.
--   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files` for storing check-in notes, certification details, rich-text coach notes, and file attachments respectively.
+-   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `employee_contacts` for storing check-in notes, certification details, rich-text coach notes, file attachments, and unified contact management respectively.
 
 ## Key Features & Implementations
 -   **Goal Management**: Creation of goal templates, employee-specific goal instances, and step-by-step progress tracking with mastery criteria.
