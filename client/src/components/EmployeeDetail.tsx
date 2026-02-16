@@ -778,73 +778,8 @@ const handleGenerateInvitation = async () => {
 
         {showSupportExpanded && !assessmentMode && (
           <div className="border-t border-gray-200 p-3 sm:p-5">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Column 1: Allergies & Safety */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
-                  </div>
-                  {canEdit && !editingSafety && (
-                    <button
-                      onClick={() => setEditingSafety(true)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit allergies"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </div>
-                {editingSafety ? (
-                  <div className="space-y-2">
-                    {safetyForm.map((allergy, index) => (
-                      <div key={index} className="flex space-x-2">
-                        <input
-                          type="text"
-                          value={allergy}
-                          onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)}
-                          className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
-                          placeholder="Allergy or restriction"
-                        />
-                        {safetyForm.length > 1 && (
-                          <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                    <div className="flex justify-between items-center pt-1">
-                      <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
-                        <Plus className="h-3.5 w-3.5" />
-                        <span>Add</span>
-                      </button>
-                      <div className="flex space-x-2">
-                        <button onClick={handleCancelSafety} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                        <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
-                          <Save className="h-3 w-3" />
-                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    {employee.allergies.length > 0 ? (
-                      <div className="flex flex-wrap gap-1.5">
-                        {employee.allergies.map((allergy, index) => (
-                          <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-400 text-xs italic">No allergies recorded</p>
-                    )}
-                  </div>
-                )}
-
-              </div>
-
-              {/* Column 2: Interests & Challenges */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Column 1: Interests & Challenges */}
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
@@ -1257,6 +1192,64 @@ const handleGenerateInvitation = async () => {
                 </div>
                 )}
               </div>
+
+            {/* Health & Safety Row */}
+            <div className="mt-6 pt-5 border-t border-gray-200">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                  <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
+                </div>
+                {canEdit && !editingSafety && (
+                  <button
+                    onClick={() => setEditingSafety(true)}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit allergies"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {editingSafety ? (
+                <div className="space-y-2">
+                  {safetyForm.map((allergy, index) => (
+                    <div key={index} className="flex space-x-2">
+                      <input type="text" value={allergy} onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Allergy or restriction" />
+                      {safetyForm.length > 1 && (
+                        <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center pt-1">
+                    <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                      <Plus className="h-3.5 w-3.5" />
+                      <span>Add</span>
+                    </button>
+                    <div className="flex space-x-2">
+                      <button onClick={handleCancelSafety} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                      <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                        <Save className="h-3 w-3" />
+                        <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  {employee.allergies.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {employee.allergies.map((allergy, index) => (
+                        <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-xs italic">No allergies recorded</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
