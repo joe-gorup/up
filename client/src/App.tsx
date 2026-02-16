@@ -16,6 +16,7 @@ import AccountSetup from './components/AccountSetup';
 import OnboardingVerify from './components/OnboardingVerify';
 import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
+import PermissionsManager from './components/PermissionsManager';
 
 function AppContent() {
   const { user, isAuthenticated, showSessionWarning, timeUntilExpiry, extendSession, logout } = useAuth();
@@ -70,6 +71,8 @@ function AppContent() {
         return { title: 'Goal Templates', description: 'Create and manage reusable goal templates for employee development' };
       case 'bulk-upload':
         return { title: 'Bulk Data Upload', description: 'Import assessment data, mastered goals, and goal templates from CSV files' };
+      case 'permissions':
+        return { title: 'Permission Settings', description: 'Configure role-based access permissions for all features' };
       case 'employee-dashboard':
         return { title: 'My Dashboard', description: 'Track your development goals and progress' };
       case 'my-profile':
@@ -121,6 +124,8 @@ function AppContent() {
         return user?.role === 'Administrator' ? <GoalTemplates /> : <Dashboard />;
       case 'bulk-upload':
         return user?.role === 'Administrator' ? <BulkUpload /> : <Dashboard />;
+      case 'permissions':
+        return user?.role === 'Administrator' ? <PermissionsManager /> : <Dashboard />;
       case 'employee-dashboard':
         return <EmployeeDashboard />;
       case 'my-profile':

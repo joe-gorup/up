@@ -6,8 +6,9 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
+  PERMISSION_FEATURES, CONFIGURABLE_ROLES
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -3710,6 +3711,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete coach note');
       res.status(500).json({ error: 'Failed to delete note' });
+    }
+  });
+
+  // ===== Permission Management Routes =====
+
+  // GET /api/permissions - fetch all role permissions (admin only)
+  app.get("/api/permissions", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const allPerms = await db.select().from(role_permissions);
+      res.json(allPerms);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch permissions');
+      res.status(500).json({ error: 'Failed to fetch permissions' });
+    }
+  });
+
+  // GET /api/permissions/me - fetch permissions for current user's role
+  app.get("/api/permissions/me", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      if (user.role === 'Administrator') {
+        const allFeaturePerms = PERMISSION_FEATURES.map(f => ({ role: 'Administrator', feature: f, can_view: true, can_modify: true, can_delete: true }));
+        return res.json(allFeaturePerms);
+      }
+      const myPerms = await db.select().from(role_permissions).where(eq(role_permissions.role, user.role));
+      res.json(myPerms);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch user permissions');
+      res.status(500).json({ error: 'Failed to fetch permissions' });
+    }
+  });
+
+  // PUT /api/permissions - bulk save permissions (admin only)
+  app.put("/api/permissions", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { permissions } = req.body;
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'permissions must be an array' });
+      }
+
+      for (const perm of permissions) {
+        if (!perm.role || !perm.feature) continue;
+        if (perm.role === 'Administrator') continue;
+        if (!CONFIGURABLE_ROLES.includes(perm.role as any)) continue;
+        if (!PERMISSION_FEATURES.includes(perm.feature as any)) continue;
+
+        const canView = perm.can_view ?? false;
+        const canModify = canView ? (perm.can_modify ?? false) : false;
+        const canDelete = canView ? (perm.can_delete ?? false) : false;
+
+        const [existing] = await db.select().from(role_permissions)
+          .where(and(eq(role_permissions.role, perm.role), eq(role_permissions.feature, perm.feature)));
+
+        if (existing) {
+          await db.update(role_permissions)
+            .set({ can_view: canView, can_modify: canModify, can_delete: canDelete, updated_at: new Date(), updated_by: user.id })
+            .where(eq(role_permissions.id, existing.id));
+        } else {
+          await db.insert(role_permissions).values({
+            role: perm.role,
+            feature: perm.feature,
+            can_view: canView,
+            can_modify: canModify,
+            can_delete: canDelete,
+            updated_by: user.id,
+          });
+        }
+      }
+
+      const allPerms = await db.select().from(role_permissions);
+      res.json({ success: true, permissions: allPerms });
+    } catch (error) {
+      logger.error({ error }, 'Failed to save permissions');
+      res.status(500).json({ error: 'Failed to save permissions' });
+    }
+  });
+
+  // POST /api/permissions/seed - seed default permissions (admin only)
+  app.post("/api/permissions/seed", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const existing = await db.select().from(role_permissions);
+      if (existing.length > 0) {
+        return res.json({ message: 'Permissions already seeded', count: existing.length });
+      }
+
+      const defaults: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
+
+      for (const feature of PERMISSION_FEATURES) {
+        // Shift Lead - broad access
+        defaults.push({ role: 'Shift Lead', feature, can_view: true,
+          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
+          can_delete: false });
+        // Assistant Manager - similar to Shift Lead
+        defaults.push({ role: 'Assistant Manager', feature, can_view: true,
+          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
+          can_delete: false });
+        // Job Coach - limited access
+        defaults.push({ role: 'Job Coach', feature,
+          can_view: ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature),
+          can_modify: ['coach_notes', 'coach_files'].includes(feature),
+          can_delete: ['coach_notes', 'coach_files'].includes(feature) });
+        // Guardian - most restricted
+        defaults.push({ role: 'Guardian', feature,
+          can_view: ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature),
+          can_modify: ['guardian_notes'].includes(feature),
+          can_delete: false });
+      }
+
+      for (const d of defaults) {
+        await db.insert(role_permissions).values({ ...d, updated_by: user.id });
+      }
+
+      const allPerms = await db.select().from(role_permissions);
+      res.json({ success: true, count: allPerms.length, permissions: allPerms });
+    } catch (error) {
+      logger.error({ error }, 'Failed to seed permissions');
+      res.status(500).json({ error: 'Failed to seed permissions' });
     }
   });
 

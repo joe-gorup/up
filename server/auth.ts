@@ -2,6 +2,9 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from './logger';
+import { db } from './db';
+import { role_permissions } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Salt rounds for bcrypt (12 is secure and reasonable performance)
 const SALT_ROUNDS = 12;
@@ -123,5 +126,32 @@ export function requireRole(...roles: string[]) {
     }
 
     next();
+  };
+}
+
+export function requirePermission(feature: string, level: 'can_view' | 'can_modify' | 'can_delete') {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user as AuthUser;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (user.role === 'Administrator') {
+      return next();
+    }
+
+    try {
+      const [perm] = await db.select().from(role_permissions)
+        .where(and(eq(role_permissions.role, user.role), eq(role_permissions.feature, feature)));
+
+      if (!perm || !perm[level]) {
+        return res.status(403).json({ error: 'Insufficient permissions for this feature' });
+      }
+
+      next();
+    } catch (error) {
+      logger.error({ error, feature, level, role: user.role }, 'Permission check failed');
+      return res.status(500).json({ error: 'Permission check failed' });
+    }
   };
 }

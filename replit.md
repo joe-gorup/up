@@ -36,7 +36,7 @@ Preferred communication style: Simple, everyday language.
 -   **ORM**: Drizzle ORM for type-safe database queries and schema management.
 -   **Database**: PostgreSQL, specifically configured for Neon Database for serverless hosting and connection pooling.
 -   **Schema**: Normalized relational design for users, employees, goal templates, development goals, progress tracking, and assessment sessions.
--   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `employee_contacts` for storing check-in notes, certification details, rich-text coach notes, file attachments, and unified contact management respectively.
+-   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `employee_contacts`, `role_permissions` for storing check-in notes, certification details, rich-text coach notes, file attachments, unified contact management, and configurable role-based permissions respectively.
 
 ## Key Features & Implementations
 -   **Goal Management**: Creation of goal templates, employee-specific goal instances, and step-by-step progress tracking with mastery criteria.
@@ -47,6 +47,7 @@ Preferred communication style: Simple, everyday language.
 -   **Coach & Guardian Experience**: Dedicated "My Scoopers" (fixed assigned list, no search) and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
 -   **Profile-Based Assessments**: Goal assessment (EmployeeProgress) is embedded directly in EmployeeDetail profiles with location selection. Old Goal Documentation page remains available during transition.
 -   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities with access control.
+-   **Configurable Permissions**: Admin-only Permission Settings page with matrix grid (features × roles). Toggle View/Modify/Delete per feature per role (Shift Lead, Assistant Manager, Job Coach, Guardian). Administrator always has full access (locked). Explicit Save with validation (Modify/Delete require View). Backend `requirePermission` middleware and frontend `usePermissions` hook available for enforcement. Search/filter features supported.
 
 # External Dependencies
 
