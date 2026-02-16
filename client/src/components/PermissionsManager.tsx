@@ -46,6 +46,7 @@ export default function PermissionsManager() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('all');
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
   const allRoles = ['Administrator', ...CONFIGURABLE_ROLES] as const;
@@ -185,6 +186,11 @@ export default function PermissionsManager() {
     );
   }, [searchQuery]);
 
+  const visibleRoles = useMemo(() => {
+    if (roleFilter === 'all') return [...allRoles];
+    return allRoles.filter(r => r === roleFilter);
+  }, [roleFilter]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -234,8 +240,8 @@ export default function PermissionsManager() {
         </div>
       </div>
 
-      <div className="mb-4">
-        <div className="relative">
+      <div className="mb-4 flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1 sm:flex-none">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
           <input
             type="text"
@@ -245,6 +251,16 @@ export default function PermissionsManager() {
             className="w-full sm:w-80 pl-10 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white"
           />
         </div>
+        <select
+          value={roleFilter}
+          onChange={e => setRoleFilter(e.target.value)}
+          className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white text-gray-700"
+        >
+          <option value="all">All Roles</option>
+          {allRoles.map(role => (
+            <option key={role} value={role}>{role}</option>
+          ))}
+        </select>
       </div>
 
       {hasChanges && (
@@ -262,7 +278,7 @@ export default function PermissionsManager() {
                 <th className="text-left px-4 py-3 text-sm font-semibold text-gray-700 sticky left-0 bg-gray-50 z-10 min-w-[200px]">
                   Feature
                 </th>
-                {allRoles.map(role => (
+                {visibleRoles.map(role => (
                   <th key={role} className="px-3 py-3 text-center min-w-[140px]">
                     <div className="flex items-center justify-center gap-1.5">
                       {role === 'Administrator' && <Lock className="h-3.5 w-3.5 text-gray-400" />}
@@ -291,7 +307,7 @@ export default function PermissionsManager() {
                       </div>
                     </div>
                   </td>
-                  {allRoles.map(role => {
+                  {visibleRoles.map(role => {
                     const isAdmin = role === 'Administrator';
                     const isNA = FEATURE_ROLE_NA[feature]?.includes(role);
                     const perm = isAdmin ? null : permissions[role]?.[feature];
