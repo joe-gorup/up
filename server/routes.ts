@@ -999,6 +999,78 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/assessment-sessions/:sessionId/details", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const employeeId = req.query.employeeId as string;
+      if (!employeeId) {
+        return res.status(400).json({ error: 'employeeId query parameter is required' });
+      }
+
+      const [progressRows, summaryRows] = await Promise.all([
+        db.select({
+          id: step_progress.id,
+          developmentGoalId: step_progress.development_goal_id,
+          goalStepId: step_progress.goal_step_id,
+          outcome: step_progress.outcome,
+          notes: step_progress.notes,
+          completionTimeSeconds: step_progress.completion_time_seconds,
+          timerManuallyEntered: step_progress.timer_manually_entered,
+          date: step_progress.date,
+          goalTitle: development_goals.title,
+          stepOrder: goal_steps.step_order,
+          stepDescription: goal_steps.step_description,
+        })
+          .from(step_progress)
+          .leftJoin(development_goals, eq(step_progress.development_goal_id, development_goals.id))
+          .leftJoin(goal_steps, eq(step_progress.goal_step_id, goal_steps.id))
+          .where(
+            and(
+              eq(step_progress.assessment_session_id, sessionId),
+              eq(step_progress.employee_id, employeeId),
+              eq(step_progress.status, 'submitted')
+            )
+          )
+          .orderBy(development_goals.title, goal_steps.step_order),
+        db.select()
+          .from(assessment_summaries)
+          .where(
+            and(
+              eq(assessment_summaries.assessment_session_id, sessionId),
+              eq(assessment_summaries.employee_id, employeeId)
+            )
+          )
+          .limit(1)
+      ]);
+
+      const goalMap: Record<string, { goalId: string; goalTitle: string; steps: any[] }> = {};
+      for (const row of progressRows) {
+        const gid = row.developmentGoalId || '';
+        if (!goalMap[gid]) {
+          goalMap[gid] = { goalId: gid, goalTitle: row.goalTitle || 'Unknown Goal', steps: [] };
+        }
+        goalMap[gid].steps.push({
+          stepId: row.goalStepId,
+          stepOrder: row.stepOrder,
+          stepDescription: row.stepDescription,
+          outcome: row.outcome,
+          notes: row.notes,
+          completionTimeSeconds: row.completionTimeSeconds,
+          timerManuallyEntered: row.timerManuallyEntered,
+        });
+      }
+
+      res.json({
+        goals: Object.values(goalMap),
+        summary: summaryRows[0]?.summary || null,
+        totalSteps: progressRows.length,
+      });
+    } catch (error) {
+      logger.error({ error, sessionId: req.params.sessionId }, 'Failed to fetch session details');
+      res.status(500).json({ error: 'Failed to fetch session details' });
+    }
+  });
+
   app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
