@@ -1526,10 +1526,38 @@ const handleGenerateInvitation = async () => {
         )}
       </div>
 
-      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+      {/* Full-width Assessment in Progress card - shown above the grid during assessment mode for Super Scoopers */}
+      {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && assessmentMode && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6 mb-6">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <ClipboardCheck className="h-5 w-5 text-green-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
+              </div>
+              <button
+                onClick={handleEndAssessment}
+                className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                title="End Assessment"
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden sm:inline">End Assessment</span>
+              </button>
+            </div>
+            <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+              <span>Location: {assessmentLocation}</span>
+            </div>
+            <EmployeeProgress
+              employee={employee}
+              assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+            />
+          </div>
+        </div>
+      )}
+
+      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? (assessmentMode ? 'lg:grid-cols-2' : 'lg:grid-cols-3') : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
         {/* Left Column for Super Scoopers: Assessment card (when not in assessment mode) + Guardian/Coach Notes */}
-        {/* On mobile during assessment mode, this renders AFTER the right column via order classes */}
-        <div className={employee.role === 'Super Scooper' ? `lg:col-span-1 space-y-6 ${assessmentMode ? 'order-2 lg:order-1' : ''}` : 'contents'}>
+        <div className={employee.role === 'Super Scooper' ? 'lg:col-span-1 space-y-6' : 'contents'}>
 
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
           {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
@@ -1792,8 +1820,8 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible in left column (Super Scooper) */}
-          {employee.role === 'Super Scooper' && (!(canAssess && isAssessable && activeGoals.length > 0) || assessmentMode) && pastAssessments.length > 0 && (
+          {/* Past Assessments standalone card - shown in left column when Goal Assessment card is not visible and NOT in assessment mode (Super Scooper) */}
+          {employee.role === 'Super Scooper' && !assessmentMode && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
@@ -1987,36 +2015,109 @@ const handleGenerateInvitation = async () => {
 
         </div>
 
-        {/* Right Column - Goals (and Assessment when in assessment mode for Super Scoopers) */}
+        {/* Right Column - Goals */}
         {employee.role !== 'Job Coach' && (
-        <div className={employee.role === 'Super Scooper' ? `lg:col-span-2 space-y-6 ${assessmentMode ? 'order-1 lg:order-2' : ''}` : 'contents'}>
+        <div className={employee.role === 'Super Scooper' ? `${assessmentMode ? 'lg:col-span-1' : 'lg:col-span-2'} space-y-6` : 'contents'}>
 
-          {/* Assessment in Progress - shown in right column for Super Scoopers during assessment mode */}
-          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && assessmentMode && (
+          {/* Past Assessments - shown in right column during assessment mode for Super Scoopers */}
+          {employee.role === 'Super Scooper' && assessmentMode && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div>
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center space-x-2">
-                    <ClipboardCheck className="h-5 w-5 text-green-600" />
-                    <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
-                  </div>
-                  <button
-                    onClick={handleEndAssessment}
-                    className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
-                    title="End Assessment"
-                  >
-                    <X className="h-4 w-4" />
-                    <span className="hidden sm:inline">End Assessment</span>
-                  </button>
+              <button
+                onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
+                className="w-full flex items-center justify-between py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+              >
+                <div className="flex items-center space-x-2">
+                  <FileText className="h-4 w-4 text-indigo-500" />
+                  <span className="text-sm font-semibold text-gray-900">Past Assessments</span>
+                  <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
+                    {pastAssessments.length}
+                  </span>
                 </div>
-                <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
-                  <span>Location: {assessmentLocation}</span>
+                {pastAssessmentsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+              </button>
+              {pastAssessmentsExpanded && (
+                <div className="mt-3 space-y-2">
+                  {pastAssessments.slice(0, pastAssessmentsVisible).map((session) => {
+                    const sessionDate = new Date(session.date + 'T00:00:00');
+                    const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                    const details = sessionDetails[session.id];
+                    const isExpanded = expandedSessionId === session.id;
+                    return (
+                    <div key={session.id} className="border border-gray-200 rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 min-w-0">
+                          <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                          {sessionTime && <span className="text-gray-400">{sessionTime}</span>}
+                          <span className="text-gray-500 truncate">
+                            {session.managerFirstName && session.managerLastName
+                              ? `${session.managerFirstName} ${session.managerLastName}`
+                              : ''}
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => toggleSessionDetails(session.id)}
+                          className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-xs text-gray-600 flex-shrink-0"
+                        >
+                          <Eye className="h-3 w-3" />
+                          {isExpanded ? 'Hide' : 'View'}
+                        </button>
+                      </div>
+                      {details && isExpanded ? (
+                        <div className="mt-2 pt-2 border-t border-gray-100">
+                          <div className="flex flex-wrap gap-1 mb-2">
+                            {details.goals.map((goal) => (
+                              <span key={goal.goalId} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
+                                {goal.goalTitle}
+                              </span>
+                            ))}
+                          </div>
+                          {details.summary && <p className="text-xs text-gray-600 mb-2">{details.summary}</p>}
+                          {details.goals.length > 0 && (
+                            <div className="space-y-3">
+                              {details.goals.map((goal) => (
+                                <div key={goal.goalId} className="space-y-1">
+                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
+                                    <Target className="h-3 w-3 text-blue-500" />
+                                    {goal.goalTitle}
+                                  </h4>
+                                  <div className="space-y-1">
+                                    {goal.steps.map((step, idx) => (
+                                      <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
+                                        <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-1.5 flex-wrap">
+                                            <span className="text-xs text-gray-700">{step.stepDescription}</span>
+                                            <span className={`inline-flex items-center px-1 py-0 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                              {getOutcomeLabel(step.outcome)}
+                                            </span>
+                                          </div>
+                                          {step.notes && <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          {details.goals.length === 0 && !details.summary && (
+                            <p className="text-xs text-gray-400 italic">No details recorded.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                    );
+                  })}
+                  {pastAssessmentsVisible < pastAssessments.length && (
+                    <button
+                      onClick={() => setPastAssessmentsVisible(prev => prev + 3)}
+                      className="w-full text-center py-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
+                    >
+                      Load more ({pastAssessments.length - pastAssessmentsVisible} remaining)
+                    </button>
+                  )}
                 </div>
-                <EmployeeProgress
-                  employee={employee}
-                  assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
-                />
-              </div>
+              )}
             </div>
           )}
 
