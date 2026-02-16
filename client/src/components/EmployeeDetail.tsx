@@ -65,6 +65,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
+  const [editingCerts, setEditingCerts] = useState(false);
   const [certType, setCertType] = useState<'mentor' | 'shift_lead'>('mentor');
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
@@ -1285,130 +1286,153 @@ const handleGenerateInvitation = async () => {
                 )}
               </div>
 
-            {/* Health & Safety Row */}
-            <div className="mt-6 pt-5 border-t border-gray-200">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
+            {/* Health & Safety Row + Promotion Certifications */}
+            <div className="mt-6 pt-5 border-t border-gray-200 grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
+                  </div>
+                  {canEdit && !editingSafety && (
+                    <button
+                      onClick={() => setEditingSafety(true)}
+                      className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                      title="Edit allergies"
+                    >
+                      <SquarePen className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
-                {canEdit && !editingSafety && (
-                  <button
-                    onClick={() => setEditingSafety(true)}
-                    className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                    title="Edit allergies"
-                  >
-                    <SquarePen className="h-3.5 w-3.5" />
-                  </button>
+                {editingSafety ? (
+                  <div className="space-y-2">
+                    {safetyForm.map((allergy, index) => (
+                      <div key={index} className="flex space-x-2">
+                        <input type="text" value={allergy} onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Allergy or restriction" />
+                        {safetyForm.length > 1 && (
+                          <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <div className="flex justify-between items-center pt-2">
+                      <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-amber-600 hover:text-amber-700 text-xs font-medium">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add</span>
+                      </button>
+                      <div className="flex space-x-2">
+                        <button onClick={handleCancelSafety} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    {employee.allergies.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.allergies.map((allergy, index) => (
+                          <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">No allergies recorded</p>
+                    )}
+                  </div>
                 )}
               </div>
-              {editingSafety ? (
-                <div className="space-y-2">
-                  {safetyForm.map((allergy, index) => (
-                    <div key={index} className="flex space-x-2">
-                      <input type="text" value={allergy} onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Allergy or restriction" />
-                      {safetyForm.length > 1 && (
-                        <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <div className="flex justify-between items-center pt-2">
-                    <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-amber-600 hover:text-amber-700 text-xs font-medium">
+
+              {canEdit && (
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Award className="h-4 w-4 text-amber-600" />
+                    <h3 className="text-sm font-semibold text-gray-900">Promotion Certifications</h3>
+                  </div>
+                  {!editingCerts && (
+                    <button
+                      onClick={() => setEditingCerts(true)}
+                      className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
+                      title="Edit certifications"
+                    >
+                      <SquarePen className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+
+                {employeeCerts.length > 0 ? (
+                  <div className="space-y-2 mb-3">
+                    {employeeCerts.map((cert) => (
+                      <div key={cert.id} className="flex items-center justify-between p-2.5 border border-gray-200 rounded-xl bg-gray-50">
+                        <div className="flex items-center space-x-2">
+                          {cert.certificationType === 'mentor' ? (
+                            <Star className="h-4 w-4 text-amber-500" />
+                          ) : (
+                            <Shield className="h-4 w-4 text-blue-500" />
+                          )}
+                          <div>
+                            <p className="font-medium text-gray-900 text-xs">
+                              {cert.certificationType === 'mentor' ? 'Mentor' : 'Shift Lead'}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(cert.dateCompleted).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span className={`text-xs font-medium ${cert.passed ? 'text-green-600' : 'text-red-600'}`}>
+                            {cert.score}%
+                            {cert.passed ? (
+                              <CheckCircle className="inline h-3.5 w-3.5 ml-0.5" />
+                            ) : (
+                              <X className="inline h-3.5 w-3.5 ml-0.5" />
+                            )}
+                          </span>
+                          {editingCerts && (
+                            <button
+                              type="button"
+                              onClick={() => deleteCertification(cert.id)}
+                              className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-400 italic mb-3">No certifications recorded yet.</p>
+                )}
+
+                {editingCerts && (
+                  <div className="flex justify-between items-center pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChecklistAnswers({});
+                        setCertNotes('');
+                        setCertDate(new Date().toISOString().split('T')[0]);
+                        setCertType('mentor');
+                        setShowCertForm(true);
+                      }}
+                      className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium"
+                      title="Add Certification"
+                    >
                       <Plus className="h-3.5 w-3.5" />
                       <span>Add</span>
                     </button>
-                    <div className="flex space-x-2">
-                      <button onClick={handleCancelSafety} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
-                      <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium disabled:opacity-50 transition-colors">
-                        <Save className="h-3 w-3" />
-                        <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => setEditingCerts(false)}
+                      className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors"
+                    >
+                      Done
+                    </button>
                   </div>
-                </div>
-              ) : (
-                <div>
-                  {employee.allergies.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5">
-                      {employee.allergies.map((allergy, index) => (
-                        <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-gray-400 text-xs italic">No allergies recorded</p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Promotion Certifications - visible to Admins */}
-            {canEdit && (
-            <div className="mt-6 pt-5 border-t border-gray-200">
-              <div className="flex items-center space-x-2 mb-3">
-                <Award className="h-4 w-4 text-amber-600" />
-                <h3 className="text-sm font-semibold text-gray-900">Promotion Certifications</h3>
-              </div>
-
-              {employeeCerts.length > 0 ? (
-                <div className="space-y-2 mb-3">
-                  {employeeCerts.map((cert) => (
-                    <div key={cert.id} className="flex items-center justify-between p-2.5 border border-gray-200 rounded-xl bg-gray-50">
-                      <div className="flex items-center space-x-2">
-                        {cert.certificationType === 'mentor' ? (
-                          <Star className="h-4 w-4 text-amber-500" />
-                        ) : (
-                          <Shield className="h-4 w-4 text-blue-500" />
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900 text-xs">
-                            {cert.certificationType === 'mentor' ? 'Mentor' : 'Shift Lead'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {new Date(cert.dateCompleted).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <span className={`text-xs font-medium ${cert.passed ? 'text-green-600' : 'text-red-600'}`}>
-                          {cert.score}%
-                          {cert.passed ? (
-                            <CheckCircle className="inline h-3.5 w-3.5 ml-0.5" />
-                          ) : (
-                            <X className="inline h-3.5 w-3.5 ml-0.5" />
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => deleteCertification(cert.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-xs text-gray-400 italic mb-3">No certifications recorded yet.</p>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setChecklistAnswers({});
-                  setCertNotes('');
-                  setCertDate(new Date().toISOString().split('T')[0]);
-                  setCertType('mentor');
-                  setShowCertForm(true);
-                }}
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-xl hover:bg-amber-100 transition-colors text-xs font-medium"
-                title="Add Certification"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                <span>Add</span>
-              </button>
+                )}
 
               <Modal
                 isOpen={showCertForm}
@@ -1529,8 +1553,9 @@ const handleGenerateInvitation = async () => {
                   </div>
                 </div>
               </Modal>
+              </div>
+              )}
             </div>
-            )}
 
           </div>
         )}
