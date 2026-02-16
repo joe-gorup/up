@@ -1798,12 +1798,12 @@ const handleGenerateInvitation = async () => {
                     const details = sessionDetails[session.id];
                     const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className="border border-gray-200 rounded-lg p-3">
+                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          {sessionTime && <span className="text-gray-400">{sessionTime}</span>}
-                          <span className="text-gray-500 truncate">
+                          {sessionTime && <span className="text-gray-400 text-xs">{sessionTime}</span>}
+                          <span className="text-gray-500 text-xs truncate">
                             {session.managerFirstName && session.managerLastName
                               ? `${session.managerFirstName} ${session.managerLastName}`
                               : ''}
@@ -1811,38 +1811,43 @@ const handleGenerateInvitation = async () => {
                         </div>
                         <button
                           onClick={() => toggleSessionDetails(session.id)}
-                          className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-xs text-gray-600 flex-shrink-0"
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
-                          <Eye className="h-3 w-3" />
+                          <Eye className="h-3.5 w-3.5" />
                           {isExpanded ? 'Hide' : 'View'}
                         </button>
                       </div>
+                      {isExpanded && loadingSessionDetail && !details && (
+                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
+                        </div>
+                      )}
                       {details && isExpanded ? (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <div className="flex flex-wrap gap-1 mb-2">
+                        <div className="mt-3 pt-3 border-t border-indigo-100">
+                          <div className="flex flex-wrap gap-1.5 mb-3">
                             {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
+                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
                                 {goal.goalTitle}
                               </span>
                             ))}
                           </div>
-                          {details.summary && <p className="text-xs text-gray-600 mb-2">{details.summary}</p>}
+                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
                           {details.goals.length > 0 && (
                             <div className="space-y-3">
                               {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="space-y-1">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-                                    <Target className="h-3 w-3 text-blue-500" />
+                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
+                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
+                                    <Target className="h-3.5 w-3.5 text-blue-500" />
                                     {goal.goalTitle}
                                   </h4>
-                                  <div className="space-y-1">
+                                  <div className="space-y-1.5">
                                     {goal.steps.map((step, idx) => (
                                       <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
                                         <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1 py-0 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
                                               {getOutcomeLabel(step.outcome)}
                                             </span>
                                           </div>
@@ -1927,21 +1932,23 @@ const handleGenerateInvitation = async () => {
           {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
            employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
+              <button
+                onClick={() => setCoachNotesExpanded(!coachNotesExpanded)}
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+              >
+                {coachNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                 <FileText className="h-5 w-5 text-indigo-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
-                {coachNotes.length > 0 && (
-                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
-                    {coachNotes.length}
-                  </span>
-                )}
-              </div>
-              {loadingCoachNotes ? (
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {coachNotes.length}
+                </span>
+              </button>
+              {coachNotesExpanded && (loadingCoachNotes ? (
                 <div className="flex items-center justify-center py-6">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
                 </div>
               ) : coachNotes.length > 0 ? (
-                <div className="space-y-3">
+                <div className="space-y-3 mt-4">
                   {coachNotes.map(note => (
                       <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
                         <div className="flex items-center justify-between mb-2">
@@ -1965,7 +1972,7 @@ const handleGenerateInvitation = async () => {
                   <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500">No coach notes yet</p>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
@@ -1997,12 +2004,12 @@ const handleGenerateInvitation = async () => {
                     const details = sessionDetails[session.id];
                     const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className="border border-gray-200 rounded-lg p-3">
+                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          {sessionTime && <span className="text-gray-400">{sessionTime}</span>}
-                          <span className="text-gray-500 truncate">
+                          {sessionTime && <span className="text-gray-400 text-xs">{sessionTime}</span>}
+                          <span className="text-gray-500 text-xs truncate">
                             {session.managerFirstName && session.managerLastName
                               ? `${session.managerFirstName} ${session.managerLastName}`
                               : ''}
@@ -2010,38 +2017,43 @@ const handleGenerateInvitation = async () => {
                         </div>
                         <button
                           onClick={() => toggleSessionDetails(session.id)}
-                          className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-xs text-gray-600 flex-shrink-0"
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
-                          <Eye className="h-3 w-3" />
+                          <Eye className="h-3.5 w-3.5" />
                           {isExpanded ? 'Hide' : 'View'}
                         </button>
                       </div>
+                      {isExpanded && loadingSessionDetail && !details && (
+                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
+                        </div>
+                      )}
                       {details && isExpanded ? (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <div className="flex flex-wrap gap-1 mb-2">
+                        <div className="mt-3 pt-3 border-t border-indigo-100">
+                          <div className="flex flex-wrap gap-1.5 mb-3">
                             {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
+                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
                                 {goal.goalTitle}
                               </span>
                             ))}
                           </div>
-                          {details.summary && <p className="text-xs text-gray-600 mb-2">{details.summary}</p>}
+                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
                           {details.goals.length > 0 && (
                             <div className="space-y-3">
                               {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="space-y-1">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-                                    <Target className="h-3 w-3 text-blue-500" />
+                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
+                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
+                                    <Target className="h-3.5 w-3.5 text-blue-500" />
                                     {goal.goalTitle}
                                   </h4>
-                                  <div className="space-y-1">
+                                  <div className="space-y-1.5">
                                     {goal.steps.map((step, idx) => (
                                       <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
                                         <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1 py-0 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
                                               {getOutcomeLabel(step.outcome)}
                                             </span>
                                           </div>
@@ -2158,12 +2170,12 @@ const handleGenerateInvitation = async () => {
                     const details = sessionDetails[session.id];
                     const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className="border border-gray-200 rounded-lg p-3">
+                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                          {sessionTime && <span className="text-gray-400">{sessionTime}</span>}
-                          <span className="text-gray-500 truncate">
+                          {sessionTime && <span className="text-gray-400 text-xs">{sessionTime}</span>}
+                          <span className="text-gray-500 text-xs truncate">
                             {session.managerFirstName && session.managerLastName
                               ? `${session.managerFirstName} ${session.managerLastName}`
                               : ''}
@@ -2171,38 +2183,43 @@ const handleGenerateInvitation = async () => {
                         </div>
                         <button
                           onClick={() => toggleSessionDetails(session.id)}
-                          className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-xs text-gray-600 flex-shrink-0"
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
                         >
-                          <Eye className="h-3 w-3" />
+                          <Eye className="h-3.5 w-3.5" />
                           {isExpanded ? 'Hide' : 'View'}
                         </button>
                       </div>
+                      {isExpanded && loadingSessionDetail && !details && (
+                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
+                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
+                        </div>
+                      )}
                       {details && isExpanded ? (
-                        <div className="mt-2 pt-2 border-t border-gray-100">
-                          <div className="flex flex-wrap gap-1 mb-2">
+                        <div className="mt-3 pt-3 border-t border-indigo-100">
+                          <div className="flex flex-wrap gap-1.5 mb-3">
                             {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
+                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
                                 {goal.goalTitle}
                               </span>
                             ))}
                           </div>
-                          {details.summary && <p className="text-xs text-gray-600 mb-2">{details.summary}</p>}
+                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
                           {details.goals.length > 0 && (
                             <div className="space-y-3">
                               {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="space-y-1">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-                                    <Target className="h-3 w-3 text-blue-500" />
+                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
+                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
+                                    <Target className="h-3.5 w-3.5 text-blue-500" />
                                     {goal.goalTitle}
                                   </h4>
-                                  <div className="space-y-1">
+                                  <div className="space-y-1.5">
                                     {goal.steps.map((step, idx) => (
                                       <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
                                         <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center gap-1.5 flex-wrap">
                                             <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1 py-0 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
                                               {getOutcomeLabel(step.outcome)}
                                             </span>
                                           </div>
@@ -2480,15 +2497,20 @@ const handleGenerateInvitation = async () => {
           {/* Maintenance Goals */}
           {maintenanceGoals.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-6">
+              <button
+                onClick={() => setMaintenanceGoalsExpanded(!maintenanceGoalsExpanded)}
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+              >
+                {maintenanceGoalsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                 <CheckCircle className="h-5 w-5 text-green-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Maintenance Goals</h2>
                 <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
                   {maintenanceGoals.length}
                 </span>
-              </div>
+              </button>
 
-              <div className="space-y-4">
+              {maintenanceGoalsExpanded && (
+              <div className="space-y-4 mt-4">
                 {maintenanceGoals.map(goal => (
                   <div key={goal.id} className="border border-green-200 rounded-xl p-4 bg-green-50">
                     <div className="flex items-center justify-between">
@@ -2514,21 +2536,27 @@ const handleGenerateInvitation = async () => {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
 
           {/* Archived Goals */}
           {archivedGoals.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-6">
+              <button
+                onClick={() => setArchivedGoalsExpanded(!archivedGoalsExpanded)}
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+              >
+                {archivedGoalsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                 <Clock className="h-5 w-5 text-gray-400" />
                 <h2 className="text-lg font-semibold text-gray-900">Archived Goals</h2>
                 <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
                   {archivedGoals.length}
                 </span>
-              </div>
+              </button>
 
-              <div className="space-y-4">
+              {archivedGoalsExpanded && (
+              <div className="space-y-4 mt-4">
                 {archivedGoals.map(goal => (
                   <div key={goal.id} className="border border-gray-200 rounded-xl p-4">
                     <h3 className="font-semibold text-gray-900">{goal.title}</h3>
@@ -2538,6 +2566,7 @@ const handleGenerateInvitation = async () => {
                   </div>
                 ))}
               </div>
+              )}
             </div>
           )}
 

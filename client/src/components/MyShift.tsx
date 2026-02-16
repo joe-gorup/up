@@ -417,7 +417,6 @@ export default function MyShift() {
                       </h3>
                       <p className="text-sm text-gray-500">{emp.role}</p>
                     </div>
-                    <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-500 transition-colors" />
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
