@@ -77,6 +77,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [selectedMenteeId, setSelectedMenteeId] = useState('');
   const [menteeError, setMenteeError] = useState('');
   const [showCheckins, setShowCheckins] = useState(false);
+  const [pastAssessments, setPastAssessments] = useState<Array<{
+    id: string; manager_id: string; date: string; location: string;
+    status: string; created_at: string; updated_at: string;
+    managerFirstName: string | null; managerLastName: string | null;
+  }>>([]);
+  const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
 
   // Certification checklist items
   const mentorChecklistItems = [
@@ -281,6 +287,21 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
       loadGuardianNotesForScooper(employeeId);
     }
   }, [employeeId, user?.role, employee?.role]);
+
+  useEffect(() => {
+    async function fetchPastAssessments() {
+      setLoadingPastAssessments(true);
+      try {
+        const res = await apiRequest(`/api/employees/${employeeId}/assessment-history`);
+        if (res.ok) {
+          setPastAssessments(await res.json());
+        }
+      } catch (err) {
+      }
+      setLoadingPastAssessments(false);
+    }
+    fetchPastAssessments();
+  }, [employeeId]);
 
   // Initialize form data when employee changes
   useEffect(() => {
@@ -1339,190 +1360,6 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Promotion Certifications - visible to Admins */}
-          {canEdit && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Award className="h-5 w-5 text-amber-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Promotion Certifications</h2>
-              </div>
-
-              {employeeCerts.length > 0 ? (
-                <div className="space-y-3 mb-4">
-                  {employeeCerts.map((cert) => (
-                    <div key={cert.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
-                      <div className="flex items-center space-x-3">
-                        {cert.certificationType === 'mentor' ? (
-                          <Star className="h-5 w-5 text-amber-500" />
-                        ) : (
-                          <Shield className="h-5 w-5 text-blue-500" />
-                        )}
-                        <div>
-                          <p className="font-medium text-gray-900">
-{cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Lead Certification'}
-                          </p>
-                          <p className="text-sm text-gray-500">
-                            {new Date(cert.dateCompleted).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center space-x-3">
-                        <span className={`text-sm font-medium ${cert.passed ? 'text-green-600' : 'text-red-600'}`}>
-                          {cert.score}%
-                          {cert.passed ? (
-                            <CheckCircle className="inline h-4 w-4 ml-1" />
-                          ) : (
-                            <X className="inline h-4 w-4 ml-1" />
-                          )}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => deleteCertification(cert.id)}
-                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 mb-4">No certifications recorded yet.</p>
-              )}
-
-              <button
-                type="button"
-                onClick={() => {
-                  setShowCertForm(!showCertForm);
-                  if (!showCertForm) {
-                    setChecklistAnswers({});
-                    setCertNotes('');
-                    setCertDate(new Date().toISOString().split('T')[0]);
-                    setCertType('mentor');
-                  }
-                }}
-                className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {showCertForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                <span>{showCertForm ? 'Hide Form' : 'Record New Certification'}</span>
-              </button>
-
-              {showCertForm && (
-                <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
-                  <div className="flex space-x-2">
-                    <button
-                      type="button"
-                      onClick={() => { setCertType('mentor'); setChecklistAnswers({}); }}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'mentor' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
-                    >
-                      Mentor
-                    </button>
-                    <button
-                      type="button"
-                    onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
-                    >
-                      Shift Lead
-                    </button>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Date Completed</label>
-                    <input
-                      type="date"
-                      value={certDate}
-                      onChange={(e) => setCertDate(e.target.value)}
-                      className={`w-full sm:w-auto ${INPUT_BASE_CLASSES}`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
-                    <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-xl">
-                      {certType === 'mentor' ? (
-                        mentorChecklistItems.map((item, idx) => (
-                          <label
-                            key={idx}
-                            className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checklistAnswers[idx] || false}
-                              onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [idx]: e.target.checked }))}
-                              className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-800">{item}</span>
-                          </label>
-                        ))
-                      ) : (
-                        (() => {
-                          let globalIdx = 0;
-                          return shiftManagerCategories.map((category, catIdx) => (
-                            <div key={catIdx}>
-                              <div className="px-4 py-2 bg-gray-200 font-medium text-sm text-gray-700 sticky top-0">
-                                {category.name}
-                              </div>
-                              {category.items.map((item, itemIdx) => {
-                                const currentIdx = globalIdx++;
-                                return (
-                                  <label
-                                    key={currentIdx}
-                                    className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${currentIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={checklistAnswers[currentIdx] || false}
-                                      onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: e.target.checked }))}
-                                      className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-gray-800">{item}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ));
-                        })()
-                      )}
-                    </div>
-                  </div>
-
-                  <div className={`text-sm font-medium ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-600'}`}>
-                    Score: {calculateScore()}% (Passing: {getPassingScore()}%)
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
-                    <textarea
-                      value={certNotes}
-                      onChange={(e) => setCertNotes(e.target.value)}
-                      className={`w-full ${INPUT_BASE_CLASSES}`}
-                      rows={3}
-                      placeholder="Optional notes about this certification..."
-                    />
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <button
-                      type="button"
-                      onClick={handleSaveCertification}
-                      disabled={savingCert}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {savingCert ? 'Saving...' : 'Save Certification'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
-                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
         </div>
 
         {/* Right Column - Goals */}
@@ -1900,6 +1737,232 @@ const handleGenerateInvitation = async () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Past Assessments */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+            <div className="flex items-center space-x-2 mb-4">
+              <FileText className="h-5 w-5 text-indigo-500" />
+              <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+              {pastAssessments.length > 0 && (
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
+              )}
+            </div>
+
+            {loadingPastAssessments ? (
+              <div className="flex items-center justify-center py-6">
+                <div className="animate-spin h-5 w-5 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                <span className="ml-2 text-sm text-gray-500">Loading...</span>
+              </div>
+            ) : pastAssessments.length > 0 ? (
+              <div className="space-y-2">
+                {pastAssessments.map((session) => (
+                  <div key={session.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
+                    <div className="flex items-center space-x-3">
+                      <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {session.managerFirstName && session.managerLastName
+                            ? `${session.managerFirstName} ${session.managerLastName}`
+                            : 'Unknown'} &middot; {session.location}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 italic">No completed assessments yet.</p>
+            )}
+          </div>
+
+          {/* Promotion Certifications - visible to Admins */}
+          {canEdit && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Award className="h-5 w-5 text-amber-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Promotion Certifications</h2>
+              </div>
+
+              {employeeCerts.length > 0 ? (
+                <div className="space-y-3 mb-4">
+                  {employeeCerts.map((cert) => (
+                    <div key={cert.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
+                      <div className="flex items-center space-x-3">
+                        {cert.certificationType === 'mentor' ? (
+                          <Star className="h-5 w-5 text-amber-500" />
+                        ) : (
+                          <Shield className="h-5 w-5 text-blue-500" />
+                        )}
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {cert.certificationType === 'mentor' ? 'Mentor Certification' : 'Shift Lead Certification'}
+                          </p>
+                          <p className="text-sm text-gray-500">
+                            {new Date(cert.dateCompleted).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <span className={`text-sm font-medium ${cert.passed ? 'text-green-600' : 'text-red-600'}`}>
+                          {cert.score}%
+                          {cert.passed ? (
+                            <CheckCircle className="inline h-4 w-4 ml-1" />
+                          ) : (
+                            <X className="inline h-4 w-4 ml-1" />
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => deleteCertification(cert.id)}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-500 mb-4">No certifications recorded yet.</p>
+              )}
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCertForm(!showCertForm);
+                  if (!showCertForm) {
+                    setChecklistAnswers({});
+                    setCertNotes('');
+                    setCertDate(new Date().toISOString().split('T')[0]);
+                    setCertType('mentor');
+                  }
+                }}
+                className="flex items-center space-x-2 text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {showCertForm ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                <span>{showCertForm ? 'Hide Form' : 'Record New Certification'}</span>
+              </button>
+
+              {showCertForm && (
+                <div className="mt-4 space-y-4 border-t border-gray-200 pt-4">
+                  <div className="flex space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => { setCertType('mentor'); setChecklistAnswers({}); }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'mentor' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    >
+                      Mentor
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
+                    >
+                      Shift Lead
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Date Completed</label>
+                    <input
+                      type="date"
+                      value={certDate}
+                      onChange={(e) => setCertDate(e.target.value)}
+                      className={`w-full sm:w-auto ${INPUT_BASE_CLASSES}`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
+                    <div className="max-h-96 overflow-y-auto border border-gray-200 rounded-xl">
+                      {certType === 'mentor' ? (
+                        mentorChecklistItems.map((item, idx) => (
+                          <label
+                            key={idx}
+                            className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={checklistAnswers[idx] || false}
+                              onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [idx]: e.target.checked }))}
+                              className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm text-gray-800">{item}</span>
+                          </label>
+                        ))
+                      ) : (
+                        (() => {
+                          let globalIdx = 0;
+                          return shiftManagerCategories.map((category, catIdx) => (
+                            <div key={catIdx}>
+                              <div className="px-4 py-2 bg-gray-200 font-medium text-sm text-gray-700 sticky top-0">
+                                {category.name}
+                              </div>
+                              {category.items.map((item, itemIdx) => {
+                                const currentIdx = globalIdx++;
+                                return (
+                                  <label
+                                    key={currentIdx}
+                                    className={`flex items-start space-x-3 px-4 py-3 cursor-pointer hover:bg-gray-100 transition-colors ${currentIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      checked={checklistAnswers[currentIdx] || false}
+                                      onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: e.target.checked }))}
+                                      className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                                    />
+                                    <span className="text-sm text-gray-800">{item}</span>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                          ));
+                        })()
+                      )}
+                    </div>
+                  </div>
+
+                  <div className={`text-sm font-medium ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-600'}`}>
+                    Score: {calculateScore()}% (Passing: {getPassingScore()}%)
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notes</label>
+                    <textarea
+                      value={certNotes}
+                      onChange={(e) => setCertNotes(e.target.value)}
+                      className={`w-full ${INPUT_BASE_CLASSES}`}
+                      rows={3}
+                      placeholder="Optional notes about this certification..."
+                    />
+                  </div>
+
+                  <div className="flex space-x-3">
+                    <button
+                      type="button"
+                      onClick={handleSaveCertification}
+                      disabled={savingCert}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingCert ? 'Saving...' : 'Save Certification'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                      className="px-6 py-2 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
