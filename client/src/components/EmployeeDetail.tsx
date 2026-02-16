@@ -494,7 +494,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const startEditingServiceProvider = () => {
     const providers = employee?.serviceProviders && employee.serviceProviders.length > 0
       ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
-      : [];
+      : [{ name: '', type: '' }];
     setServiceProviderForm(providers);
     setEditingServiceProvider(true);
   };
@@ -647,11 +647,15 @@ const handleGenerateInvitation = async () => {
   };
 
   const startEditingContacts = () => {
-    setContactsEditForm(employeeContacts.map(c => ({
+    const existing = employeeContacts.map(c => ({
       id: c.id, first_name: c.first_name, last_name: c.last_name,
       relationship_type: c.relationship_type, phone: c.phone || '', email: c.email || '',
       is_emergency_contact: c.is_emergency_contact, has_app_access: c.has_app_access,
-    })));
+    }));
+    setContactsEditForm(existing.length > 0 ? existing : [{
+      id: undefined, first_name: '', last_name: '', relationship_type: 'guardian',
+      phone: '', email: '', is_emergency_contact: false, has_app_access: false,
+    }]);
     setContactError('');
     setEditingContacts(true);
   };
