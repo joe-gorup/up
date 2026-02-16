@@ -842,73 +842,6 @@ const handleGenerateInvitation = async () => {
                   </div>
                 )}
 
-                {/* Emergency Contacts within Column 1 */}
-                <div className="mt-5 pt-4 border-t border-gray-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-blue-500" />
-                      <h3 className="text-sm font-semibold text-gray-900">Emergency Contacts</h3>
-                    </div>
-                    {canEdit && !editingEmergency && (
-                      <button
-                        onClick={() => setEditingEmergency(true)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit emergency contacts"
-                      >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  {editingEmergency ? (
-                    <div className="space-y-3">
-                      {emergencyForm.map((contact, index) => (
-                        <div key={index} className="p-3 border border-gray-200 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-700">Contact {index + 1}</span>
-                            {emergencyForm.length > 1 && (
-                              <button type="button" onClick={() => removeEmergencyContact(index)} className="p-1 text-red-600 hover:bg-red-50 rounded">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <input type="text" value={contact.name} onChange={(e) => updateEmergencyContact(index, 'name', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Name" />
-                            <input type="text" value={contact.relationship} onChange={(e) => updateEmergencyContact(index, 'relationship', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Relationship" />
-                            <PhoneInput value={contact.phone} onChange={(e) => updateEmergencyContact(index, 'phone', e.target.value)} placeholder="Phone" mask="(999) 999-9999" />
-                          </div>
-                        </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-1">
-                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>Add Contact</span>
-                        </button>
-                        <div className="flex space-x-2">
-                          <button onClick={handleCancelEmergency} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
-                            <Save className="h-3 w-3" />
-                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      {employee.emergencyContacts.length > 0 ? (
-                        <div className="space-y-2">
-                          {employee.emergencyContacts.map((contact, index) => (
-                            <div key={index} className="text-xs bg-gray-50 p-2 rounded-lg">
-                              <p className="font-medium text-gray-900">{contact.name}</p>
-                              <p className="text-gray-500">{contact.relationship} &middot; <span className="text-blue-600">{contact.phone}</span></p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-xs italic">No emergency contacts</p>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Column 2: Interests & Challenges */}
@@ -1057,11 +990,78 @@ const handleGenerateInvitation = async () => {
               </div>
             </div>
 
-            {/* Guardians & Service Provider Row */}
-            {employee.role === 'Super Scooper' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-5 border-t border-gray-200">
-                {/* Guardians */}
-                {['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
+            {/* Emergency Contacts, Guardians & Service Provider Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 pt-5 border-t border-gray-200">
+                {/* Emergency Contacts */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Phone className="h-4 w-4 text-blue-500" />
+                      <h3 className="text-sm font-semibold text-gray-900">Emergency Contacts</h3>
+                    </div>
+                    {canEdit && !editingEmergency && (
+                      <button
+                        onClick={() => setEditingEmergency(true)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit emergency contacts"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {editingEmergency ? (
+                    <div className="space-y-3">
+                      {emergencyForm.map((contact, index) => (
+                        <div key={index} className="p-3 border border-gray-200 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-medium text-gray-700">Contact {index + 1}</span>
+                            {emergencyForm.length > 1 && (
+                              <button type="button" onClick={() => removeEmergencyContact(index)} className="p-1 text-red-600 hover:bg-red-50 rounded">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                          <div className="space-y-2">
+                            <input type="text" value={contact.name} onChange={(e) => updateEmergencyContact(index, 'name', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Name" />
+                            <input type="text" value={contact.relationship} onChange={(e) => updateEmergencyContact(index, 'relationship', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Relationship" />
+                            <PhoneInput value={contact.phone} onChange={(e) => updateEmergencyContact(index, 'phone', e.target.value)} placeholder="Phone" mask="(999) 999-9999" />
+                          </div>
+                        </div>
+                      ))}
+                      <div className="flex justify-between items-center pt-1">
+                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Add Contact</span>
+                        </button>
+                        <div className="flex space-x-2">
+                          <button onClick={handleCancelEmergency} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                            <Save className="h-3 w-3" />
+                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {employee.emergencyContacts.length > 0 ? (
+                        <div className="space-y-2">
+                          {employee.emergencyContacts.map((contact, index) => (
+                            <div key={index} className="text-xs bg-gray-50 p-2 rounded-lg">
+                              <p className="font-medium text-gray-900">{contact.name}</p>
+                              <p className="text-gray-500">{contact.relationship} &middot; <span className="text-blue-600">{contact.phone}</span></p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-gray-400 text-xs italic">No emergency contacts</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Guardians - Super Scoopers only */}
+                {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-2">
@@ -1180,7 +1180,8 @@ const handleGenerateInvitation = async () => {
                   </div>
                 )}
 
-                {/* Service Provider */}
+                {/* Service Provider - Super Scoopers only */}
+                {employee.role === 'Super Scooper' && (
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
@@ -1254,8 +1255,8 @@ const handleGenerateInvitation = async () => {
                     </div>
                   )}
                 </div>
+                )}
               </div>
-            )}
           </div>
         )}
       </div>
