@@ -2214,37 +2214,46 @@ const handleGenerateInvitation = async () => {
 
           {/* Guardian Notes Card */}
           {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' &&
-           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+           employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center space-x-2 mb-4">
                 <Heart className="h-5 w-5 text-rose-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-                <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).length}
-                </span>
+                {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+                  <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
+                    {guardianNotes.filter(n => n.scooperId === employeeId).length}
+                  </span>
+                )}
               </div>
-              <div className="space-y-3">
-                {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                  const guardian = employees.find(e => e.id === note.guardianId);
-                  return (
-                    <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center space-x-1">
-                          <Users className="h-3.5 w-3.5 text-rose-400" />
+              {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
+                <div className="space-y-3">
+                  {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
+                    const guardian = employees.find(e => e.id === note.guardianId);
+                    return (
+                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
                           <span className="font-semibold text-rose-900 text-sm">
                             {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
                           </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-500">
-                          {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                        </span>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
+                        <div className="mt-2 flex items-center space-x-1">
+                          <Users className="h-3 w-3 text-rose-400" />
+                          <span className="text-xs text-rose-600">Guardian</span>
+                        </div>
                       </div>
-                      <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No guardian notes yet</p>
+                </div>
+              )}
             </div>
           )}
 
