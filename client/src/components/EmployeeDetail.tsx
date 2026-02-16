@@ -919,7 +919,6 @@ const handleGenerateInvitation = async () => {
           </div>
         </div>
 
-        {!assessmentMode && (
         <button
           onClick={() => setShowSupportExpanded(!showSupportExpanded)}
           className="w-full flex items-center justify-center gap-2 py-2 border-t border-gray-100 text-sm text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-colors rounded-b-xl"
@@ -927,9 +926,8 @@ const handleGenerateInvitation = async () => {
           <span className="font-medium">{showSupportExpanded ? 'Hide Details' : 'View Details'}</span>
           {showSupportExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
         </button>
-        )}
 
-        {showSupportExpanded && !assessmentMode && (
+        {showSupportExpanded && (
           <div className="border-t border-gray-200 p-3 sm:p-5">
             <div>
               <div className="flex items-center justify-between mb-3">
@@ -1529,7 +1527,9 @@ const handleGenerateInvitation = async () => {
       </div>
 
       <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
-        <div className={employee.role === 'Super Scooper' ? 'lg:col-span-1 space-y-6' : 'contents'}>
+        {/* Left Column for Super Scoopers: Assessment card (when not in assessment mode) + Guardian/Coach Notes */}
+        {/* On mobile during assessment mode, this renders AFTER the right column via order classes */}
+        <div className={employee.role === 'Super Scooper' ? `lg:col-span-1 space-y-6 ${assessmentMode ? 'order-2 lg:order-1' : ''}` : 'contents'}>
 
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
           {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
@@ -1604,34 +1604,9 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Goal Assessment Section - in left column for Super Scoopers */}
-          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && (
+          {/* Goal Assessment Section - in left column for Super Scoopers (only when NOT in assessment mode) */}
+          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && !assessmentMode && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              {assessmentMode ? (
-                <div>
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-2">
-                      <ClipboardCheck className="h-5 w-5 text-green-600" />
-                      <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
-                    </div>
-                    <button
-                      onClick={handleEndAssessment}
-                      className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
-                      title="End Assessment"
-                    >
-                      <X className="h-4 w-4" />
-                      <span className="hidden sm:inline">End Assessment</span>
-                    </button>
-                  </div>
-                  <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
-                    <span>Location: {assessmentLocation}</span>
-                  </div>
-                  <EmployeeProgress
-                    employee={employee}
-                    assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
-                  />
-                </div>
-              ) : (
                 <div>
                   <div className="flex items-center space-x-2 mb-4">
                     <ClipboardCheck className="h-5 w-5 text-blue-600" />
@@ -1814,12 +1789,11 @@ const handleGenerateInvitation = async () => {
                     )}
                   </div>
                 </div>
-              )}
             </div>
           )}
 
-          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible (Super Scooper left column) */}
-          {employee.role === 'Super Scooper' && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible in left column (Super Scooper) */}
+          {employee.role === 'Super Scooper' && (!(canAssess && isAssessable && activeGoals.length > 0) || assessmentMode) && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
@@ -2013,9 +1987,38 @@ const handleGenerateInvitation = async () => {
 
         </div>
 
-        {/* Right Column - Goals */}
+        {/* Right Column - Goals (and Assessment when in assessment mode for Super Scoopers) */}
         {employee.role !== 'Job Coach' && (
-        <div className={employee.role === 'Super Scooper' ? 'lg:col-span-2 space-y-6' : 'contents'}>
+        <div className={employee.role === 'Super Scooper' ? `lg:col-span-2 space-y-6 ${assessmentMode ? 'order-1 lg:order-2' : ''}` : 'contents'}>
+
+          {/* Assessment in Progress - shown in right column for Super Scoopers during assessment mode */}
+          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && assessmentMode && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center space-x-2">
+                    <ClipboardCheck className="h-5 w-5 text-green-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
+                  </div>
+                  <button
+                    onClick={handleEndAssessment}
+                    className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                    title="End Assessment"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="hidden sm:inline">End Assessment</span>
+                  </button>
+                </div>
+                <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+                  <span>Location: {assessmentLocation}</span>
+                </div>
+                <EmployeeProgress
+                  employee={employee}
+                  assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Goal Assessment Section - for non-Super Scoopers in right column */}
           {employee.role !== 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && (
