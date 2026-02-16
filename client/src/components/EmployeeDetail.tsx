@@ -1056,296 +1056,212 @@ const handleGenerateInvitation = async () => {
                 )}
               </div>
             </div>
+
+            {/* Guardians & Service Provider Row */}
+            {employee.role === 'Super Scooper' && (
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-5 border-t border-gray-200">
+                {/* Guardians */}
+                {['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
+                  <div>
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center space-x-2">
+                        <Shield className="h-4 w-4 text-purple-500" />
+                        <h3 className="text-sm font-semibold text-gray-900">Guardians</h3>
+                      </div>
+                      {user?.role === 'Administrator' && (
+                        <button
+                          onClick={() => setShowAddGuardian(!showAddGuardian)}
+                          className="flex items-center space-x-1 text-xs font-medium text-purple-600 hover:text-purple-700"
+                        >
+                          {showAddGuardian ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+                          <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {showAddGuardian && (
+                      <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-3 mb-3 space-y-2">
+                        <h3 className="font-medium text-gray-900 text-xs">New Guardian</h3>
+                        {guardianError && (
+                          <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                            <input type="text" required value={guardianForm.first_name} onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="First name" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                            <input type="text" required value={guardianForm.last_name} onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Last name" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                            <input type="email" value={guardianForm.email} onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Email address" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
+                            <input type="tel" value={guardianForm.phone} onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Phone number" />
+                          </div>
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
+                            <select value={guardianForm.relationship_type} onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
+                              <option value="Parent/Guardian">Parent/Guardian</option>
+                              <option value="Legal Guardian">Legal Guardian</option>
+                              <option value="Case Manager">Case Manager</option>
+                              <option value="Family Member">Family Member</option>
+                              <option value="Other">Other</option>
+                            </select>
+                          </div>
+                        </div>
+                        <div className="flex justify-end">
+                          <button type="submit" disabled={guardianSaving} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50">
+                            {guardianSaving ? 'Saving...' : 'Add Guardian'}
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    {connectedGuardians.length > 0 ? (
+                      <div className="space-y-2">
+                        {connectedGuardians.map((rel: any) => {
+                          const guardianName = rel.guardian_first_name && rel.guardian_last_name
+                            ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
+                            : getPersonName(rel.guardian_id);
+                          return (
+                            <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-3 py-2 rounded-lg">
+                              <div>
+                                <p className="font-medium text-gray-900 text-xs">{guardianName}</p>
+                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                  {rel.guardian_email && <p className="text-xs text-gray-500">{rel.guardian_email}</p>}
+                                  {rel.relationship_type && <p className="text-xs text-purple-600">{rel.relationship_type}</p>}
+                                </div>
+                              </div>
+                              {user?.role === 'Administrator' && (
+                                <button onClick={() => handleRemoveGuardian(rel.id)} className="text-red-400 hover:text-red-600 p-1" title="Remove guardian">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-400 italic">No guardians linked yet.</p>
+                    )}
+
+                    {/* Guardian Notes inline */}
+                    {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+                     guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+                      <div className="mt-4 pt-3 border-t border-gray-100">
+                        <div className="flex items-center space-x-2 mb-2">
+                          <FileText className="h-3.5 w-3.5 text-rose-500" />
+                          <h4 className="text-xs font-semibold text-gray-900">Guardian Notes</h4>
+                        </div>
+                        <div className="space-y-2">
+                          {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
+                            const guardian = employees.find(e => e.id === note.guardianId);
+                            return (
+                              <div key={note.id} className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="font-medium text-rose-800 text-xs">
+                                    {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                                  </span>
+                                  <span className="text-xs text-gray-500">
+                                    {new Date(note.updatedAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                                <p className="text-gray-700 text-xs whitespace-pre-wrap">{note.note}</p>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Service Provider */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <Building2 className="h-4 w-4 text-indigo-500" />
+                      <h3 className="text-sm font-semibold text-gray-900">Service Provider</h3>
+                    </div>
+                    {canEdit && !editingServiceProvider && (
+                      <button
+                        onClick={() => setEditingServiceProvider(true)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        title="Edit service provider"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {editingServiceProvider ? (
+                    <div className="space-y-3">
+                      <label className="flex items-center space-x-3 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={serviceProviderForm.hasServiceProvider}
+                          onChange={(e) => setServiceProviderForm(prev => ({ ...prev, hasServiceProvider: e.target.checked }))}
+                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Has a service provider</span>
+                      </label>
+
+                      {serviceProviderForm.hasServiceProvider && (
+                        <div className="space-y-2 pl-2 border-l-2 border-indigo-200">
+                          {serviceProviderForm.providers.map((provider, index) => (
+                            <div key={index} className="flex space-x-2">
+                              <input type="text" value={provider.name} onChange={(e) => { const updated = [...serviceProviderForm.providers]; updated[index] = { ...updated[index], name: e.target.value }; setServiceProviderForm(prev => ({ ...prev, providers: updated })); }} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Agency or person name" />
+                              {serviceProviderForm.providers.length > 1 && (
+                                <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: prev.providers.filter((_, i) => i !== index) })); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: [...prev.providers, { name: '', type: '' }] })); }} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs">
+                            <Plus className="h-3.5 w-3.5" />
+                            <span>Add Provider</span>
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="flex space-x-2 pt-2">
+                        <button onClick={handleSaveServiceProvider} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                        <button onClick={handleCancelServiceProvider} className="px-2 py-1 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      {employee.hasServiceProvider && employee.serviceProviders?.length > 0 ? (
+                        <ul className="space-y-1.5">
+                          {employee.serviceProviders.map((provider, index) => (
+                            <li key={index} className="flex items-center space-x-2 text-gray-700 text-sm">
+                              <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
+                              <span>{provider.name}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-gray-400 text-xs italic">No service provider</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
       <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
         <div className={assessmentMode ? 'lg:col-span-1 space-y-6' : 'contents'}>
-
-          {/* Guardians Section - for Super Scoopers, visible to managers */}
-          {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Shield className="h-5 w-5 text-purple-500" />
-                  <h2 className="text-lg font-semibold text-gray-900">Guardians</h2>
-                </div>
-                {user?.role === 'Administrator' && (
-                  <button
-                    onClick={() => setShowAddGuardian(!showAddGuardian)}
-                    className="flex items-center space-x-1 text-sm font-medium text-purple-600 hover:text-purple-700"
-                  >
-                    {showAddGuardian ? <X className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
-                  </button>
-                )}
-              </div>
-
-              {showAddGuardian && (
-                <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-4 mb-4 space-y-3">
-                  <h3 className="font-medium text-gray-900 text-sm">New Guardian</h3>
-                  {guardianError && (
-                    <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
-                  )}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={guardianForm.first_name}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="First name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
-                      <input
-                        type="text"
-                        required
-                        value={guardianForm.last_name}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Last name"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                      <input
-                        type="email"
-                        value={guardianForm.email}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Email address"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-                      <input
-                        type="tel"
-                        value={guardianForm.phone}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                        placeholder="Phone number"
-                      />
-                    </div>
-                    <div className="sm:col-span-2">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
-                      <select
-                        value={guardianForm.relationship_type}
-                        onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      >
-                        <option value="Parent/Guardian">Parent/Guardian</option>
-                        <option value="Legal Guardian">Legal Guardian</option>
-                        <option value="Case Manager">Case Manager</option>
-                        <option value="Family Member">Family Member</option>
-                        <option value="Other">Other</option>
-                      </select>
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      disabled={guardianSaving}
-                      className="bg-purple-600 text-white px-4 py-2 rounded-xl text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
-                    >
-                      {guardianSaving ? 'Saving...' : 'Add Guardian'}
-                    </button>
-                  </div>
-                </form>
-              )}
-
-              {connectedGuardians.length > 0 ? (
-                <div className="space-y-3">
-                  {connectedGuardians.map((rel: any) => {
-                    const guardianName = rel.guardian_first_name && rel.guardian_last_name
-                      ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
-                      : getPersonName(rel.guardian_id);
-                    return (
-                      <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-4 py-3 rounded-xl">
-                        <div>
-                          <p className="font-medium text-gray-900 text-sm">{guardianName}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1">
-                            {rel.guardian_email && (
-                              <p className="text-xs text-gray-500">{rel.guardian_email}</p>
-                            )}
-                            {rel.relationship_type && (
-                              <p className="text-xs text-purple-600">{rel.relationship_type}</p>
-                            )}
-                          </div>
-                        </div>
-                        {user?.role === 'Administrator' && (
-                          <button
-                            onClick={() => handleRemoveGuardian(rel.id)}
-                            className="text-red-400 hover:text-red-600 p-1"
-                            title="Remove guardian"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-500 italic">No guardians linked yet.</p>
-              )}
-            </div>
-          )}
-
-          {/* Guardian Notes - visible to Admins, Managers, Job Coaches (read-only) */}
-{['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && 
-           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <FileText className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-              </div>
-              <div className="space-y-4">
-                {guardianNotes
-                  .filter(n => n.scooperId === employeeId)
-                  .map(note => {
-                    const guardian = employees.find(e => e.id === note.guardianId);
-                    return (
-                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-medium text-rose-800">
-                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            Updated: {new Date(note.updatedAt).toLocaleDateString()}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                      </div>
-                    );
-                  })}
-              </div>
-            </div>
-          )}
-
-          {/* Service Provider - Only show for Super Scoopers */}
-          {employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
-                  <Building2 className="h-5 w-5 text-indigo-500" />
-                  <h2 className="text-lg font-semibold text-gray-900">Service Provider</h2>
-                </div>
-                {canEdit && !editingServiceProvider && (
-                  <button
-                    onClick={() => setEditingServiceProvider(true)}
-                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                    title="Edit service provider"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-
-              {editingServiceProvider ? (
-                <div className="space-y-4">
-                  <label className="flex items-center space-x-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={serviceProviderForm.hasServiceProvider}
-                      onChange={(e) => setServiceProviderForm(prev => ({ 
-                        ...prev, 
-                        hasServiceProvider: e.target.checked 
-                      }))}
-                      className="h-5 w-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm font-medium text-gray-700">
-                      Has a service provider
-                    </span>
-                  </label>
-
-                  {serviceProviderForm.hasServiceProvider && (
-                    <div className="space-y-3 pl-2 border-l-2 border-indigo-200">
-                      {serviceProviderForm.providers.map((provider, index) => (
-                        <div key={index} className="flex space-x-2">
-                          <input
-                            type="text"
-                            value={provider.name}
-                            onChange={(e) => {
-                              const updated = [...serviceProviderForm.providers];
-                              updated[index] = { ...updated[index], name: e.target.value };
-                              setServiceProviderForm(prev => ({ ...prev, providers: updated }));
-                            }}
-                            className={`flex-1 ${INPUT_BASE_CLASSES}`}
-                            placeholder="Agency or person name"
-                          />
-                          {serviceProviderForm.providers.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setServiceProviderForm(prev => ({
-                                  ...prev,
-                                  providers: prev.providers.filter((_, i) => i !== index)
-                                }));
-                              }}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setServiceProviderForm(prev => ({
-                            ...prev,
-                            providers: [...prev.providers, { name: '', type: '' }]
-                          }));
-                        }}
-                        className="flex items-center space-x-2 text-indigo-600 hover:text-indigo-700"
-                      >
-                        <Plus className="h-4 w-4" />
-                        <span>Add Provider</span>
-                      </button>
-                    </div>
-                  )}
-
-                  <div className="flex space-x-3 pt-2">
-                    <button
-                      onClick={handleSaveServiceProvider}
-                      disabled={savingProfile}
-                      className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                    </button>
-                    <button
-                      onClick={handleCancelServiceProvider}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  {employee.hasServiceProvider && employee.serviceProviders?.length > 0 ? (
-                    <ul className="space-y-2">
-                      {employee.serviceProviders.map((provider, index) => (
-                        <li key={index} className="flex items-center space-x-2 text-gray-700">
-                          <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
-                          <span>{provider.name}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-gray-500 italic">No service provider</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Job Coaches */}
           {assignedCoaches.length > 0 && (
