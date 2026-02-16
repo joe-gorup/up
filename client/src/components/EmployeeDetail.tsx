@@ -43,6 +43,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [inviteLinkMap, setInviteLinkMap] = useState<Record<string, string>>({});
   const [copiedContactId, setCopiedContactId] = useState<string | null>(null);
   const [assignedCoaches, setAssignedCoaches] = useState<any[]>([]);
+  const [coachNotes, setCoachNotes] = useState<Array<{ id: string; employee_id: string; coach_id: string; title: string; content: string; created_at: string; updated_at: string; coach_name?: string }>>([]);
+  const [loadingCoachNotes, setLoadingCoachNotes] = useState(false);
 
   // Inline editing states
   const [editingSafety, setEditingSafety] = useState(false);
@@ -288,6 +290,19 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     const canViewNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
     if (canViewNotes && employee?.role === 'Super Scooper') {
       loadGuardianNotesForScooper(employeeId);
+    }
+  }, [employeeId, user?.role, employee?.role]);
+
+  // Load coach notes for this employee
+  useEffect(() => {
+    const canViewCoachNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
+    if (canViewCoachNotes && employee?.role === 'Super Scooper') {
+      setLoadingCoachNotes(true);
+      apiRequest(`/api/coach-notes/${employeeId}`)
+        .then(res => res.ok ? res.json() : [])
+        .then(notes => setCoachNotes(notes))
+        .catch(() => setCoachNotes([]))
+        .finally(() => setLoadingCoachNotes(false));
     }
   }, [employeeId, user?.role, employee?.role]);
 
@@ -1176,33 +1191,6 @@ const handleGenerateInvitation = async () => {
                     </>
                   )}
 
-                  {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-                   guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-                    <div className="mt-4 pt-3 border-t border-gray-100">
-                      <div className="flex items-center space-x-2 mb-2">
-                        <FileText className="h-3.5 w-3.5 text-rose-500" />
-                        <h4 className="text-xs font-semibold text-gray-900">Guardian Notes</h4>
-                      </div>
-                      <div className="space-y-2">
-                        {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                          const guardian = employees.find(e => e.id === note.guardianId);
-                          return (
-                            <div key={note.id} className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="font-medium text-rose-800 text-xs">
-                                  {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                                </span>
-                                <span className="text-xs text-gray-500">
-                                  {new Date(note.updatedAt).toLocaleDateString()}
-                                </span>
-                              </div>
-                              <p className="text-gray-700 text-xs whitespace-pre-wrap">{note.note}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
 
                 {/* Service Provider - Super Scoopers only */}
@@ -2177,6 +2165,88 @@ const handleGenerateInvitation = async () => {
               </div>
             )}
           </div>
+
+          {/* Job Coach Notes Card */}
+          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+           employee.role === 'Super Scooper' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
+                {coachNotes.length > 0 && (
+                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                    {coachNotes.length}
+                  </span>
+                )}
+              </div>
+              {loadingCoachNotes ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
+                </div>
+              ) : coachNotes.length > 0 ? (
+                <div className="space-y-3">
+                  {coachNotes.map(note => (
+                      <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-indigo-900 text-sm">{note.title}</h3>
+                          <span className="text-xs text-gray-500">
+                            {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
+                        <div className="mt-2 flex items-center space-x-1">
+                          <UserCheck className="h-3 w-3 text-indigo-400" />
+                          <span className="text-xs text-indigo-600">
+                            {note.coach_name || 'Job Coach'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No coach notes yet</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Guardian Notes Card */}
+          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+           employee.role === 'Super Scooper' &&
+           guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Heart className="h-5 w-5 text-rose-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
+                <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {guardianNotes.filter(n => n.scooperId === employeeId).length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
+                  const guardian = employees.find(e => e.id === note.guardianId);
+                  return (
+                    <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center space-x-1">
+                          <Users className="h-3.5 w-3.5 text-rose-400" />
+                          <span className="font-semibold text-rose-900 text-sm">
+                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                          </span>
+                        </div>
+                        <span className="text-xs text-gray-500">
+                          {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                        </span>
+                      </div>
+                      <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Maintenance Goals */}
           {maintenanceGoals.length > 0 && (
