@@ -926,10 +926,10 @@ const handleGenerateInvitation = async () => {
                     {canEdit && !showAddContact && (
                       <button
                         onClick={() => setShowAddContact(true)}
-                        className="flex items-center space-x-1 text-xs font-medium text-purple-600 hover:text-purple-700"
+                        className="p-1.5 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="Add contact"
                       >
-                        <Plus className="h-3.5 w-3.5" />
-                        <span>Add Contact</span>
+                        <SquarePen className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -976,7 +976,7 @@ const handleGenerateInvitation = async () => {
                           </label>
                         </div>
                       </div>
-                      <div className="flex justify-between items-center pt-1">
+                      <div className="flex justify-end space-x-2 pt-2">
                         <button onClick={() => { setShowAddContact(false); setContactError(''); setContactForm({ first_name: '', last_name: '', relationship_type: 'Parent/Guardian', phone: '', email: '', is_emergency_contact: false }); }} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
                         <button onClick={handleAddContact} disabled={contactSaving} className="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 text-xs font-medium disabled:opacity-50 transition-colors">
                           <Save className="h-3 w-3" />
