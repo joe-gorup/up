@@ -17,6 +17,7 @@ import OnboardingVerify from './components/OnboardingVerify';
 import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 import PermissionsManager from './components/PermissionsManager';
+import HelpGuide from './components/HelpGuide';
 
 function AppContent() {
   const { user, isAuthenticated, showSessionWarning, timeUntilExpiry, extendSession, logout } = useAuth();
@@ -79,6 +80,8 @@ function AppContent() {
         return { title: 'My Profile', description: 'View and manage your personal information' };
       case 'my-scoopers':
         return { title: 'My Scoopers', description: 'View your assigned super scoopers and their progress' };
+      case 'help-guide':
+        return { title: 'Help Guide', description: 'Learn how to use each feature based on your role' };
       case 'my-scooper':
         return { title: 'My Loved Ones', description: 'View your family member\'s profile and progress' };
       default:
@@ -132,6 +135,8 @@ function AppContent() {
         return <EmployeeDashboard />;
       case 'my-scoopers':
         return <MyScoopers />;
+      case 'help-guide':
+        return <HelpGuide />;
       case 'my-scooper':
         return <MyLovedOnes />;
       default:

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Users, Target, Settings, LogOut, Menu, X, PanelLeft, ClipboardList, FolderOpen, Upload, Heart, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, Target, Settings, LogOut, Menu, X, PanelLeft, ClipboardList, FolderOpen, Upload, Heart, Shield, HelpCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -30,7 +30,10 @@ export default function Sidebar({ activeSection, setActiveSection, collapsed, se
 
     // Super Scooper menu items
     { id: 'employee-dashboard', label: 'My Dashboard', icon: LayoutDashboard, roles: ['employee', 'super scooper'] },
-    { id: 'my-profile', label: 'My Profile', icon: Users, roles: ['employee', 'super scooper'] }
+    { id: 'my-profile', label: 'My Profile', icon: Users, roles: ['employee', 'super scooper'] },
+
+    // Help guide - all roles
+    { id: 'help-guide', label: 'Help Guide', icon: HelpCircle, roles: ['administrator', 'shift lead', 'assistant manager', 'job coach', 'guardian', 'employee', 'super scooper'] }
   ];
 
   const filteredMenuItems = menuItems.filter(item => {
