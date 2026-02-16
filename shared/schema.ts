@@ -238,6 +238,28 @@ export const guardian_notes = pgTable("guardian_notes", {
   uniqueGuardianScooperNote: unique("guardian_notes_unique").on(table.guardian_id, table.scooper_id),
 }));
 
+// Employee contacts table - unified contacts for each employee (replaces emergency_contacts JSON + guardian add flow)
+export const employee_contacts = pgTable("employee_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  first_name: text("first_name").notNull(),
+  last_name: text("last_name").notNull(),
+  relationship_type: text("relationship_type").notNull().default("Parent/Guardian"),
+  phone: text("phone"),
+  email: text("email"),
+  is_emergency_contact: boolean("is_emergency_contact").default(false),
+  has_app_access: boolean("has_app_access").default(false),
+  linked_guardian_id: varchar("linked_guardian_id").references(() => employees.id, { onDelete: "set null" }),
+  invite_token: text("invite_token"),
+  invite_status: text("invite_status").default("none"),
+  created_by: varchar("created_by").references(() => employees.id),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("employee_contacts_employee_id_idx").on(table.employee_id),
+  linkedGuardianIdIdx: index("employee_contacts_linked_guardian_id_idx").on(table.linked_guardian_id),
+}));
+
 // Account invitations table - tokens for setting up new accounts via email
 export const account_invitations = pgTable("account_invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -296,6 +318,7 @@ export const insertCoachAssignmentSchema = createInsertSchema(coach_assignments)
 export const insertGuardianRelationshipSchema = createInsertSchema(guardian_relationships).omit({ id: true, created_at: true });
 export const insertAccountInvitationSchema = createInsertSchema(account_invitations).omit({ id: true, created_at: true, used_at: true });
 export const insertGuardianNoteSchema = createInsertSchema(guardian_notes).omit({ id: true, created_at: true, updated_at: true });
+export const insertEmployeeContactSchema = createInsertSchema(employee_contacts).omit({ id: true, created_at: true, updated_at: true });
 
 // Utility function to calculate discrete date from relative duration
 export function calculateDateFromRelativeDuration(relativeDuration: string, fromDate: Date = new Date()): string {
@@ -529,3 +552,5 @@ export type InsertGuardianRelationship = z.infer<typeof insertGuardianRelationsh
 export type GuardianRelationship = typeof guardian_relationships.$inferSelect;
 export type InsertGuardianNote = z.infer<typeof insertGuardianNoteSchema>;
 export type GuardianNote = typeof guardian_notes.$inferSelect;
+export type InsertEmployeeContact = z.infer<typeof insertEmployeeContactSchema>;
+export type EmployeeContact = typeof employee_contacts.$inferSelect;

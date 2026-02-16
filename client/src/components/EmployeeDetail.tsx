@@ -31,19 +31,27 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     description: '',
     targetEndDate: ''
   });
-  const [connectedGuardians, setConnectedGuardians] = useState<any[]>([]);
+  const [employeeContacts, setEmployeeContacts] = useState<any[]>([]);
+  const [showAddContact, setShowAddContact] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+    phone: '', email: '', is_emergency_contact: false
+  });
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactError, setContactError] = useState('');
+  const [grantingAccess, setGrantingAccess] = useState<string | null>(null);
+  const [inviteLinkMap, setInviteLinkMap] = useState<Record<string, string>>({});
+  const [copiedContactId, setCopiedContactId] = useState<string | null>(null);
   const [assignedCoaches, setAssignedCoaches] = useState<any[]>([]);
 
   // Inline editing states
   const [editingSafety, setEditingSafety] = useState(false);
-  const [editingEmergency, setEditingEmergency] = useState(false);
   const [editingServiceProvider, setEditingServiceProvider] = useState(false);
   const [editingSupport, setEditingSupport] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
   const [safetyForm, setSafetyForm] = useState<string[]>(['']);
-  const [emergencyForm, setEmergencyForm] = useState<Array<{ name: string; relationship: string; phone: string }>>([{ name: '', relationship: '', phone: '' }]);
   const [supportForm, setSupportForm] = useState({
     interestsMotivators: [''],
     challenges: [''],
@@ -68,10 +76,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   const [invitationLoading, setInvitationLoading] = useState(false);
   const [invitationCopied, setInvitationCopied] = useState(false);
   const [invitationError, setInvitationError] = useState('');
-  const [showAddGuardian, setShowAddGuardian] = useState(false);
-  const [guardianForm, setGuardianForm] = useState({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
-  const [guardianSaving, setGuardianSaving] = useState(false);
-  const [guardianError, setGuardianError] = useState('');
   const [coachMentees, setCoachMentees] = useState<any[]>([]);
   const [selectedMenteeId, setSelectedMenteeId] = useState('');
   const [menteeError, setMenteeError] = useState('');
@@ -245,13 +249,13 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
             setCoachMentees(data);
           }
         } else {
-          const [guardianRes, coachRes] = await Promise.all([
+          const [guardianRes, coachRes, contactsRes] = await Promise.all([
             apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
-            apiRequest(`/api/coach-assignments/scooper/${employeeId}`)
+            apiRequest(`/api/coach-assignments/scooper/${employeeId}`),
+            apiRequest(`/api/employees/${employeeId}/contacts`)
           ]);
-          if (guardianRes.ok) {
-            const data = await guardianRes.json();
-            setConnectedGuardians(data);
+          if (contactsRes.ok) {
+            setEmployeeContacts(await contactsRes.json());
           }
           if (coachRes.ok) {
             const data = await coachRes.json();
@@ -285,7 +289,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   useEffect(() => {
     if (employee) {
       setSafetyForm(employee.allergies.length > 0 ? [...employee.allergies] : ['']);
-      setEmergencyForm(employee.emergencyContacts.length > 0 ? [...employee.emergencyContacts] : [{ name: '', relationship: '', phone: '' }]);
       setSupportForm({
         interestsMotivators: employee.interestsMotivators.length > 0 ? [...employee.interestsMotivators] : [''],
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
@@ -315,19 +318,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     setter(prev => prev.map((item, i) => i === index ? value : item));
   };
 
-  const addEmergencyContact = () => {
-    setEmergencyForm(prev => [...prev, { name: '', relationship: '', phone: '' }]);
-  };
-
-  const removeEmergencyContact = (index: number) => {
-    setEmergencyForm(prev => prev.filter((_, i) => i !== index));
-  };
-
-  const updateEmergencyContact = (index: number, field: string, value: string) => {
-    setEmergencyForm(prev => prev.map((contact, i) =>
-      i === index ? { ...contact, [field]: value } : contact
-    ));
-  };
 
   const updateSupportArrayItem = (field: keyof typeof supportForm, index: number, value: string) => {
     setSupportForm(prev => ({
@@ -365,19 +355,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     }
   };
 
-  const handleSaveEmergency = async () => {
-    setSavingProfile(true);
-    try {
-      await updateEmployee(employeeId, {
-        emergencyContacts: emergencyForm.filter(c => c.name.trim() !== '' || c.relationship.trim() !== '' || c.phone.trim() !== '')
-      });
-      setEditingEmergency(false);
-    } catch (error) {
-      console.error('Error saving emergency contacts:', error);
-    } finally {
-      setSavingProfile(false);
-    }
-  };
 
   const handleSaveSupport = async () => {
     setSavingProfile(true);
@@ -400,10 +377,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     setEditingSafety(false);
   };
 
-  const handleCancelEmergency = () => {
-    setEmergencyForm(employee?.emergencyContacts.length ? [...employee.emergencyContacts] : [{ name: '', relationship: '', phone: '' }]);
-    setEditingEmergency(false);
-  };
 
   const handleCancelSupport = () => {
     if (employee) {
@@ -567,39 +540,77 @@ const handleGenerateInvitation = async () => {
     }
   };
 
-  const handleCreateGuardian = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setGuardianSaving(true);
-    setGuardianError('');
+  const handleAddContact = async () => {
+    if (!contactForm.first_name.trim() || !contactForm.last_name.trim()) {
+      setContactError('First and last name are required');
+      return;
+    }
+    if (contactForm.is_emergency_contact && !contactForm.phone.trim()) {
+      setContactError('Phone is required for emergency contacts');
+      return;
+    }
+    setContactSaving(true);
+    setContactError('');
     try {
-      const res = await apiRequest('/api/guardian-relationships/create-with-guardian', {
+      const res = await apiRequest(`/api/employees/${employeeId}/contacts`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          scooper_id: employeeId,
-          first_name: guardianForm.first_name.trim(),
-          last_name: guardianForm.last_name.trim(),
-          email: guardianForm.email.trim(),
-          phone: guardianForm.phone.trim(),
-          relationship_type: guardianForm.relationship_type,
-        }),
+        body: JSON.stringify(contactForm),
       });
       if (!res.ok) {
         const data = await res.json();
-        setGuardianError(data.error || 'Failed to create guardian');
+        setContactError(data.error || 'Failed to add contact');
         return;
       }
-      setGuardianForm({ first_name: '', last_name: '', email: '', phone: '', relationship_type: 'Parent/Guardian' });
-      setShowAddGuardian(false);
-      const guardianRes = await apiRequest(`/api/guardian-relationships/scooper/${employeeId}`);
-      if (guardianRes.ok) {
-        const data = await guardianRes.json();
-        setConnectedGuardians(data);
-      }
+      const newContact = await res.json();
+      setEmployeeContacts(prev => [...prev, newContact]);
+      setContactForm({ first_name: '', last_name: '', relationship_type: 'Parent/Guardian', phone: '', email: '', is_emergency_contact: false });
+      setShowAddContact(false);
     } catch (err) {
-      setGuardianError('Failed to create guardian');
+      setContactError('Failed to add contact');
     } finally {
-      setGuardianSaving(false);
+      setContactSaving(false);
+    }
+  };
+
+  const handleDeleteContact = async (contactId: string) => {
+    if (!window.confirm('Are you sure you want to remove this contact?')) return;
+    try {
+      await apiRequest(`/api/contacts/${contactId}`, { method: 'DELETE' });
+      setEmployeeContacts(prev => prev.filter(c => c.id !== contactId));
+    } catch (err) {
+      console.error('Failed to delete contact:', err);
+    }
+  };
+
+  const handleGrantAccess = async (contactId: string) => {
+    setGrantingAccess(contactId);
+    try {
+      const res = await apiRequest(`/api/contacts/${contactId}/grant-access`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        alert(data.error || 'Failed to grant access');
+        return;
+      }
+      const { contact: updatedContact, setupUrl } = await res.json();
+      setEmployeeContacts(prev => prev.map(c => c.id === contactId ? updatedContact : c));
+      setInviteLinkMap(prev => ({ ...prev, [contactId]: setupUrl }));
+    } catch (err) {
+      alert('Failed to grant access');
+    } finally {
+      setGrantingAccess(null);
+    }
+  };
+
+  const handleCopyInviteLink = (contactId: string) => {
+    const link = inviteLinkMap[contactId];
+    if (link) {
+      navigator.clipboard.writeText(link);
+      setCopiedContactId(contactId);
+      setTimeout(() => setCopiedContactId(null), 2000);
     }
   };
 
@@ -642,15 +653,6 @@ const handleGenerateInvitation = async () => {
     }
   };
 
-  const handleRemoveGuardian = async (relationshipId: string) => {
-    if (!window.confirm('Are you sure you want to remove this guardian?')) return;
-    try {
-      await apiRequest(`/api/guardian-relationships/${relationshipId}`, { method: 'DELETE' });
-      setConnectedGuardians(prev => prev.filter(r => r.id !== relationshipId));
-    } catch (err) {
-      console.error('Failed to remove guardian:', err);
-    }
-  };
 
   const getGoalProgress = (goal: any) => {
     const requiredSteps = goal.steps.filter((step: any) => step.isRequired);
@@ -714,10 +716,10 @@ const handleGenerateInvitation = async () => {
                   </div>
                 )}
                 <div className="flex items-center flex-wrap gap-1.5 mt-1.5">
-                  {employee.emergencyContacts.length > 0 && (
-                    <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs" title={`${employee.emergencyContacts.length} emergency contact(s)`}>
+                  {employeeContacts.filter(c => c.is_emergency_contact).length > 0 && (
+                    <div className="flex items-center space-x-1 text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full text-xs" title={`${employeeContacts.filter(c => c.is_emergency_contact).length} emergency contact(s)`}>
                       <Phone className="h-3 w-3" />
-                      <span>{employee.emergencyContacts.length}</span>
+                      <span>{employeeContacts.filter(c => c.is_emergency_contact).length}</span>
                     </div>
                   )}
                   {employee.interestsMotivators.length > 0 && (
@@ -912,195 +914,182 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
 
-            {/* Emergency Contacts, Guardians & Service Provider Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 pt-5 border-t border-gray-200">
-                {/* Emergency Contacts */}
+            {/* Contacts & Service Provider Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-5 border-t border-gray-200">
+                {/* Contacts - unified */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center space-x-2">
-                      <Phone className="h-4 w-4 text-blue-500" />
-                      <h3 className="text-sm font-semibold text-gray-900">Emergency Contacts</h3>
+                      <Users className="h-4 w-4 text-purple-500" />
+                      <h3 className="text-sm font-semibold text-gray-900">Contacts</h3>
                     </div>
-                    {canEdit && !editingEmergency && (
+                    {canEdit && !showAddContact && (
                       <button
-                        onClick={() => setEditingEmergency(true)}
-                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit emergency contacts"
+                        onClick={() => setShowAddContact(true)}
+                        className="flex items-center space-x-1 text-xs font-medium text-purple-600 hover:text-purple-700"
                       >
-                        <SquarePen className="h-3.5 w-3.5" />
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add Contact</span>
                       </button>
                     )}
                   </div>
-                  {editingEmergency ? (
-                    <div className="space-y-3">
-                      {emergencyForm.map((contact, index) => (
-                        <div key={index} className="p-3 border border-gray-200 rounded-lg">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-medium text-gray-700">Contact {index + 1}</span>
-                            {emergencyForm.length > 1 && (
-                              <button type="button" onClick={() => removeEmergencyContact(index)} className="p-1 text-red-600 hover:bg-red-50 rounded">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                          <div className="space-y-2">
-                            <input type="text" value={contact.name} onChange={(e) => updateEmergencyContact(index, 'name', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Name" />
-                            <input type="text" value={contact.relationship} onChange={(e) => updateEmergencyContact(index, 'relationship', e.target.value)} className={`text-sm ${INPUT_BASE_CLASSES}`} placeholder="Relationship" />
-                            <PhoneInput value={contact.phone} onChange={(e) => updateEmergencyContact(index, 'phone', e.target.value)} placeholder="Phone" mask="(999) 999-9999" />
-                          </div>
+
+                  {showAddContact && (
+                    <div className="bg-purple-50 rounded-xl p-3 mb-3 space-y-2">
+                      <h3 className="font-medium text-gray-900 text-xs">New Contact</h3>
+                      {contactError && (
+                        <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">{contactError}</div>
+                      )}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
+                          <input type="text" value={contactForm.first_name} onChange={e => setContactForm(prev => ({ ...prev, first_name: e.target.value }))} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="First name" />
                         </div>
-                      ))}
-                      <div className="flex justify-between items-center pt-2">
-                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium">
-                          <Plus className="h-3.5 w-3.5" />
-                          <span>Add</span>
-                        </button>
-                        <div className="flex space-x-2">
-                          <button onClick={handleCancelEmergency} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
-                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 text-xs font-medium disabled:opacity-50 transition-colors">
-                            <Save className="h-3 w-3" />
-                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                          </button>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
+                          <input type="text" value={contactForm.last_name} onChange={e => setContactForm(prev => ({ ...prev, last_name: e.target.value }))} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="Last name" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                          <input type="email" value={contactForm.email} onChange={e => setContactForm(prev => ({ ...prev, email: e.target.value }))} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="Email address" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Phone {contactForm.is_emergency_contact ? '*' : ''}</label>
+                          <input type="tel" value={contactForm.phone} onChange={e => setContactForm(prev => ({ ...prev, phone: e.target.value }))} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="Phone number" />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
+                          <select value={contactForm.relationship_type} onChange={e => setContactForm(prev => ({ ...prev, relationship_type: e.target.value }))} className={`w-full text-sm ${INPUT_BASE_CLASSES}`}>
+                            <option value="Parent/Guardian">Parent/Guardian</option>
+                            <option value="Parent">Parent</option>
+                            <option value="Legal Guardian">Legal Guardian</option>
+                            <option value="Case Manager">Case Manager</option>
+                            <option value="Family Member">Family Member</option>
+                            <option value="Employer">Employer</option>
+                            <option value="Other">Other</option>
+                          </select>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <label className="flex items-center space-x-2 cursor-pointer">
+                            <input type="checkbox" checked={contactForm.is_emergency_contact} onChange={e => setContactForm(prev => ({ ...prev, is_emergency_contact: e.target.checked }))} className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
+                            <span className="text-xs font-medium text-gray-700">Emergency Contact</span>
+                          </label>
                         </div>
                       </div>
-                    </div>
-                  ) : (
-                    <div>
-                      {employee.emergencyContacts.length > 0 ? (
-                        <div className="space-y-2">
-                          {employee.emergencyContacts.map((contact, index) => (
-                            <div key={index} className="text-xs bg-gray-50 p-2 rounded-lg">
-                              <p className="font-medium text-gray-900">{contact.name}</p>
-                              <p className="text-gray-500">{contact.relationship} &middot; <span className="text-blue-600">{contact.phone}</span></p>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-xs italic">No emergency contacts</p>
-                      )}
+                      <div className="flex justify-between items-center pt-1">
+                        <button onClick={() => { setShowAddContact(false); setContactError(''); setContactForm({ first_name: '', last_name: '', relationship_type: 'Parent/Guardian', phone: '', email: '', is_emergency_contact: false }); }} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={handleAddContact} disabled={contactSaving} className="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{contactSaving ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
                     </div>
                   )}
-                </div>
 
-                {/* Guardians - Super Scoopers only */}
-                {employee.role === 'Super Scooper' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center space-x-2">
-                        <Shield className="h-4 w-4 text-purple-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Guardians</h3>
-                      </div>
-                      {user?.role === 'Administrator' && (
-                        <button
-                          onClick={() => setShowAddGuardian(!showAddGuardian)}
-                          className="flex items-center space-x-1 text-xs font-medium text-purple-600 hover:text-purple-700"
-                        >
-                          {showAddGuardian ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
-                          <span>{showAddGuardian ? 'Cancel' : 'Add Guardian'}</span>
-                        </button>
-                      )}
-                    </div>
-
-                    {showAddGuardian && (
-                      <form onSubmit={handleCreateGuardian} className="bg-purple-50 rounded-xl p-3 mb-3 space-y-2">
-                        <h3 className="font-medium text-gray-900 text-xs">New Guardian</h3>
-                        {guardianError && (
-                          <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg">{guardianError}</div>
-                        )}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">First Name *</label>
-                            <input type="text" required value={guardianForm.first_name} onChange={e => setGuardianForm(prev => ({ ...prev, first_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="First name" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Last Name *</label>
-                            <input type="text" required value={guardianForm.last_name} onChange={e => setGuardianForm(prev => ({ ...prev, last_name: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Last name" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
-                            <input type="email" value={guardianForm.email} onChange={e => setGuardianForm(prev => ({ ...prev, email: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Email address" />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Phone</label>
-                            <input type="tel" value={guardianForm.phone} onChange={e => setGuardianForm(prev => ({ ...prev, phone: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500" placeholder="Phone number" />
-                          </div>
-                          <div className="sm:col-span-2">
-                            <label className="block text-xs font-medium text-gray-600 mb-1">Relationship</label>
-                            <select value={guardianForm.relationship_type} onChange={e => setGuardianForm(prev => ({ ...prev, relationship_type: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500">
-                              <option value="Parent/Guardian">Parent/Guardian</option>
-                              <option value="Legal Guardian">Legal Guardian</option>
-                              <option value="Case Manager">Case Manager</option>
-                              <option value="Family Member">Family Member</option>
-                              <option value="Other">Other</option>
-                            </select>
-                          </div>
-                        </div>
-                        <div className="flex justify-end">
-                          <button type="submit" disabled={guardianSaving} className="bg-purple-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-purple-700 disabled:opacity-50">
-                            {guardianSaving ? 'Saving...' : 'Add Guardian'}
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    {connectedGuardians.length > 0 ? (
-                      <div className="space-y-2">
-                        {connectedGuardians.map((rel: any) => {
-                          const guardianName = rel.guardian_first_name && rel.guardian_last_name
-                            ? `${rel.guardian_first_name} ${rel.guardian_last_name}`
-                            : getPersonName(rel.guardian_id);
-                          return (
-                            <div key={rel.id} className="flex items-center justify-between bg-purple-50 px-3 py-2 rounded-lg">
-                              <div>
-                                <p className="font-medium text-gray-900 text-xs">{guardianName}</p>
-                                <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                                  {rel.guardian_email && <p className="text-xs text-gray-500">{rel.guardian_email}</p>}
-                                  {rel.relationship_type && <p className="text-xs text-purple-600">{rel.relationship_type}</p>}
-                                </div>
+                  {employeeContacts.length > 0 ? (
+                    <div className="space-y-2">
+                      {employeeContacts.map(contact => (
+                        <div key={contact.id} className={`px-3 py-2 rounded-lg ${contact.is_emergency_contact ? 'bg-blue-50 border border-blue-100' : 'bg-purple-50 border border-purple-100'}`}>
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center space-x-2">
+                                <p className="font-medium text-gray-900 text-xs">{contact.first_name} {contact.last_name}</p>
+                                {contact.is_emergency_contact && (
+                                  <span className="inline-flex items-center bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                    <Phone className="h-2.5 w-2.5 mr-0.5" />
+                                    Emergency
+                                  </span>
+                                )}
+                                {contact.has_app_access && (
+                                  <span className="inline-flex items-center bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                    <Check className="h-2.5 w-2.5 mr-0.5" />
+                                    App Access
+                                  </span>
+                                )}
                               </div>
-                              {user?.role === 'Administrator' && (
-                                <button onClick={() => handleRemoveGuardian(rel.id)} className="text-red-400 hover:text-red-600 p-1" title="Remove guardian">
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                                <p className="text-xs text-purple-600">{contact.relationship_type}</p>
+                                {contact.phone && <p className="text-xs text-blue-600">{contact.phone}</p>}
+                                {contact.email && <p className="text-xs text-gray-500">{contact.email}</p>}
+                              </div>
+                            </div>
+                            <div className="flex items-center space-x-1 ml-2">
+                              {user?.role === 'Administrator' && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
+                                <button
+                                  onClick={() => handleGrantAccess(contact.id)}
+                                  disabled={grantingAccess === contact.id}
+                                  className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 rounded transition-colors"
+                                  title="Grant app access"
+                                >
+                                  {grantingAccess === contact.id ? (
+                                    <Clock className="h-3.5 w-3.5 animate-spin" />
+                                  ) : (
+                                    <Link className="h-3.5 w-3.5" />
+                                  )}
+                                </button>
+                              )}
+                              {inviteLinkMap[contact.id] && (
+                                <button
+                                  onClick={() => handleCopyInviteLink(contact.id)}
+                                  className="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
+                                  title="Copy invite link"
+                                >
+                                  {copiedContactId === contact.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                                </button>
+                              )}
+                              {canEdit && (
+                                <button onClick={() => handleDeleteContact(contact.id)} className="p-1 text-red-400 hover:text-red-600 rounded transition-colors" title="Remove contact">
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </button>
                               )}
                             </div>
+                          </div>
+                          {inviteLinkMap[contact.id] && (
+                            <div className="mt-2 p-2 bg-white rounded-lg border border-green-200">
+                              <p className="text-[10px] text-gray-500 mb-1">Invite link (expires in 7 days):</p>
+                              <div className="flex items-center space-x-1">
+                                <code className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded flex-1 truncate">{inviteLinkMap[contact.id]}</code>
+                                <button onClick={() => handleCopyInviteLink(contact.id)} className="p-1 text-green-600 hover:bg-green-50 rounded">
+                                  {copiedContactId === contact.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No contacts added yet.</p>
+                  )}
+
+                  {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+                   guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+                    <div className="mt-4 pt-3 border-t border-gray-100">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <FileText className="h-3.5 w-3.5 text-rose-500" />
+                        <h4 className="text-xs font-semibold text-gray-900">Guardian Notes</h4>
+                      </div>
+                      <div className="space-y-2">
+                        {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
+                          const guardian = employees.find(e => e.id === note.guardianId);
+                          return (
+                            <div key={note.id} className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-medium text-rose-800 text-xs">
+                                  {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                                </span>
+                                <span className="text-xs text-gray-500">
+                                  {new Date(note.updatedAt).toLocaleDateString()}
+                                </span>
+                              </div>
+                              <p className="text-gray-700 text-xs whitespace-pre-wrap">{note.note}</p>
+                            </div>
                           );
                         })}
                       </div>
-                    ) : (
-                      <p className="text-xs text-gray-400 italic">No guardians linked yet.</p>
-                    )}
-
-                    {/* Guardian Notes inline */}
-                    {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-                     guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-                      <div className="mt-4 pt-3 border-t border-gray-100">
-                        <div className="flex items-center space-x-2 mb-2">
-                          <FileText className="h-3.5 w-3.5 text-rose-500" />
-                          <h4 className="text-xs font-semibold text-gray-900">Guardian Notes</h4>
-                        </div>
-                        <div className="space-y-2">
-                          {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                            const guardian = employees.find(e => e.id === note.guardianId);
-                            return (
-                              <div key={note.id} className="p-3 bg-rose-50 border border-rose-100 rounded-lg">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-medium text-rose-800 text-xs">
-                                    {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                                  </span>
-                                  <span className="text-xs text-gray-500">
-                                    {new Date(note.updatedAt).toLocaleDateString()}
-                                  </span>
-                                </div>
-                                <p className="text-gray-700 text-xs whitespace-pre-wrap">{note.note}</p>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Service Provider - Super Scoopers only */}
                 {employee.role === 'Super Scooper' && (

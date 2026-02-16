@@ -6,8 +6,8 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -2578,6 +2578,192 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete coach assignment');
       res.status(500).json({ error: 'Failed to delete coach assignment' });
+    }
+  });
+
+  // Employee Contacts Routes
+  app.get("/api/employees/:employeeId/contacts", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user;
+      if (user.role === 'Guardian') {
+        const rels = await db.select().from(guardian_relationships).where(eq(guardian_relationships.guardian_id, user.id));
+        const scooperIds = rels.map(r => r.scooper_id);
+        if (!scooperIds.includes(employeeId)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      }
+      const contacts = await db.select().from(employee_contacts)
+        .where(eq(employee_contacts.employee_id, employeeId))
+        .orderBy(employee_contacts.created_at);
+      res.json(contacts);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch employee contacts');
+      res.status(500).json({ error: 'Failed to fetch contacts' });
+    }
+  });
+
+  app.post("/api/employees/:employeeId/contacts", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user;
+      const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
+
+      if (!first_name || !last_name) {
+        return res.status(400).json({ error: 'First name and last name are required' });
+      }
+      if (is_emergency_contact && (!phone || phone.trim() === '')) {
+        return res.status(400).json({ error: 'Phone number is required for emergency contacts' });
+      }
+
+      const [contact] = await db.insert(employee_contacts).values({
+        employee_id: employeeId,
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
+        relationship_type: relationship_type || 'Parent/Guardian',
+        phone: phone?.trim() || null,
+        email: email?.trim() || null,
+        is_emergency_contact: is_emergency_contact || false,
+        has_app_access: false,
+        created_by: user.id,
+      }).returning();
+
+      logger.info({ contactId: contact.id, employeeId }, 'Employee contact created');
+      res.json(contact);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to create employee contact');
+      res.status(500).json({ error: 'Failed to create contact' });
+    }
+  });
+
+  app.patch("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
+
+      if (is_emergency_contact && (!phone || phone.trim() === '')) {
+        return res.status(400).json({ error: 'Phone number is required for emergency contacts' });
+      }
+
+      const updateData: any = { updated_at: new Date() };
+      if (first_name !== undefined) updateData.first_name = first_name.trim();
+      if (last_name !== undefined) updateData.last_name = last_name.trim();
+      if (relationship_type !== undefined) updateData.relationship_type = relationship_type;
+      if (phone !== undefined) updateData.phone = phone?.trim() || null;
+      if (email !== undefined) updateData.email = email?.trim() || null;
+      if (is_emergency_contact !== undefined) updateData.is_emergency_contact = is_emergency_contact;
+
+      const [updated] = await db.update(employee_contacts)
+        .set(updateData)
+        .where(eq(employee_contacts.id, contactId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      logger.info({ contactId }, 'Employee contact updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to update contact');
+      res.status(500).json({ error: 'Failed to update contact' });
+    }
+  });
+
+  app.delete("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      await db.delete(employee_contacts).where(eq(employee_contacts.id, contactId));
+      logger.info({ contactId, employeeId: contact.employee_id }, 'Employee contact deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to delete contact');
+      res.status(500).json({ error: 'Failed to delete contact' });
+    }
+  });
+
+  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const user = (req as any).user;
+
+      const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      if (!['Parent/Guardian', 'Parent'].includes(contact.relationship_type)) {
+        return res.status(400).json({ error: 'App access can only be granted to Parent/Guardian or Parent relationships' });
+      }
+
+      if (!contact.email || contact.email.trim() === '') {
+        return res.status(400).json({ error: 'Email is required to grant app access' });
+      }
+
+      if (contact.linked_guardian_id) {
+        return res.status(400).json({ error: 'App access already granted for this contact' });
+      }
+
+      const existingEmail = await db.select().from(employees).where(eq(employees.email, contact.email)).limit(1);
+      if (existingEmail.length > 0) {
+        return res.status(409).json({ error: 'An account with this email already exists' });
+      }
+
+      const [newGuardian] = await db.insert(employees).values({
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        name: `${contact.first_name} ${contact.last_name}`,
+        email: contact.email,
+        role: 'Guardian',
+        is_active: true,
+        has_system_access: true,
+      }).returning();
+
+      await db.insert(guardian_relationships).values({
+        guardian_id: newGuardian.id,
+        scooper_id: contact.employee_id,
+        relationship_type: contact.relationship_type,
+        assigned_by: user.id,
+      });
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await db.insert(account_invitations).values({
+        employee_id: newGuardian.id,
+        email: contact.email,
+        token,
+        expires_at: expiresAt,
+        created_by: user.id,
+      });
+
+      const [updatedContact] = await db.update(employee_contacts)
+        .set({
+          has_app_access: true,
+          linked_guardian_id: newGuardian.id,
+          invite_token: token,
+          invite_status: 'invited',
+          updated_at: new Date(),
+        })
+        .where(eq(employee_contacts.id, contactId))
+        .returning();
+
+      const setupUrl = `${req.protocol}://${req.get('host')}?setup=${token}`;
+
+      logger.info({ contactId, guardianId: newGuardian.id, employeeId: contact.employee_id }, 'App access granted to contact');
+      res.json({ contact: updatedContact, setupUrl });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'This guardian relationship already exists' });
+      }
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to grant app access');
+      res.status(500).json({ error: 'Failed to grant app access' });
     }
   });
 
