@@ -26,6 +26,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    dateOfBirth: '',
     username: '',
     role: 'Super Scooper',
     profileImageUrl: '',
@@ -51,6 +52,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         setFormData({
           firstName: employee.first_name || '',
           lastName: employee.last_name || '',
+          dateOfBirth: employee.date_of_birth ? new Date(employee.date_of_birth).toISOString().split('T')[0] : '',
           username: employee.email || '',
           role: employee.role,
           profileImageUrl: employee.profileImageUrl || '',
@@ -149,6 +151,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         profileImageUrl: formData.profileImageUrl,
         isActive: formData.isActive,
         hasSystemAccess: formData.hasSystemAccess,
+        ...(formData.dateOfBirth && { date_of_birth: formData.dateOfBirth }),
         ...(formData.hasSystemAccess && formData.password && { password: formData.password })
       };
 
@@ -213,7 +216,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                 value={formData.firstName}
                 onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                 className={`w-full ${INPUT_BASE_CLASSES}`}
-                placeholder="J"
+                placeholder="First name"
                 data-testid="input-first-name"
               />
             </div>
@@ -229,11 +232,24 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                 value={formData.lastName}
                 onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                 className={`w-full ${INPUT_BASE_CLASSES}`}
-                placeholder="Group"
+                placeholder="Last name"
                 data-testid="input-last-name"
               />
             </div>
 
+            <div>
+              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                id="dateOfBirth"
+                value={formData.dateOfBirth}
+                onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                className={`w-full ${INPUT_BASE_CLASSES}`}
+                data-testid="input-date-of-birth"
+              />
+            </div>
 
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">

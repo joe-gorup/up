@@ -24,6 +24,7 @@ export interface Employee {
   regulationStrategies: string[];
   hasServiceProvider: boolean;
   serviceProviders: Array<{ name: string; type: string }>;
+  date_of_birth?: string | null;
   last_login: string | null;
   roi_status: boolean;
   createdAt: string;
