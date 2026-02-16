@@ -1603,8 +1603,7 @@ const handleGenerateInvitation = async () => {
         )}
       </div>
 
-      {!hideGoalCards && (
-      <>
+      {!hideGoalCards && (<>
       {/* Full-width Assessment in Progress card - shown above the grid during assessment mode for Super Scoopers */}
       {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && assessmentMode && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6 mb-6">
@@ -2575,9 +2574,9 @@ const handleGenerateInvitation = async () => {
 
         </div>
         )}
-      </>
-      )}
+
       </div>
+      </>)}
     </div>
   );
 }
