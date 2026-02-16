@@ -91,6 +91,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   }>>([]);
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
   const [pastAssessmentsExpanded, setPastAssessmentsExpanded] = useState(false);
+  const [menteesExpanded, setMenteesExpanded] = useState(true);
+  const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(true);
+  const [coachNotesExpanded, setCoachNotesExpanded] = useState(true);
+  const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(true);
+  const [archivedGoalsExpanded, setArchivedGoalsExpanded] = useState(false);
   const [pastAssessmentsVisible, setPastAssessmentsVisible] = useState(3);
   const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [sessionDetails, setSessionDetails] = useState<Record<string, { goals: Array<{ goalId: string; goalTitle: string; steps: Array<{ stepId: string; stepOrder: number; stepDescription: string; outcome: string; notes: string | null; completionTimeSeconds: number | null; timerManuallyEntered: boolean | null }>}>; summary: string | null; totalSteps: number }>>({});
@@ -1633,14 +1638,21 @@ const handleGenerateInvitation = async () => {
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
           {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-2">
+              <div className="flex items-center justify-between">
+                <button
+                  onClick={() => setMenteesExpanded(!menteesExpanded)}
+                  className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+                >
+                  {menteesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                   <Users className="h-5 w-5 text-green-500" />
                   <h2 className="text-lg font-semibold text-gray-900">Assigned Mentees</h2>
-                </div>
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                    {coachMentees.length}
+                  </span>
+                </button>
               </div>
 
-              {user?.role === 'Administrator' && (
+              {menteesExpanded && user?.role === 'Administrator' && (
                 <div className="mb-4">
                   {menteeError && (
                     <div className="text-sm text-red-600 bg-red-50 p-2 rounded-lg mb-3">{menteeError}</div>
@@ -1675,8 +1687,8 @@ const handleGenerateInvitation = async () => {
                 </div>
               )}
 
-              {coachMentees.length > 0 ? (
-                <div className="space-y-3">
+              {menteesExpanded && (coachMentees.length > 0 ? (
+                <div className="space-y-3 mt-4">
                   {coachMentees.map((assignment: any) => (
                     <div key={assignment.id} className="flex items-center justify-between bg-green-50 px-4 py-3 rounded-xl">
                       <div>
@@ -1698,8 +1710,8 @@ const handleGenerateInvitation = async () => {
                   ))}
                 </div>
               ) : (
-                <p className="text-sm text-gray-500 italic">No mentees assigned yet.</p>
-              )}
+                <p className="text-sm text-gray-500 italic mt-4">No mentees assigned yet.</p>
+              ))}
             </div>
           )}
 
@@ -1868,17 +1880,19 @@ const handleGenerateInvitation = async () => {
           {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
            employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
+              <button
+                onClick={() => setGuardianNotesExpanded(!guardianNotesExpanded)}
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+              >
+                {guardianNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
                 <Heart className="h-5 w-5 text-rose-500" />
                 <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-                {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-                  <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
-                    {guardianNotes.filter(n => n.scooperId === employeeId).length}
-                  </span>
-                )}
-              </div>
-              {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
-                <div className="space-y-3">
+                <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {guardianNotes.filter(n => n.scooperId === employeeId).length}
+                </span>
+              </button>
+              {guardianNotesExpanded && (guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
+                <div className="space-y-3 mt-4">
                   {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
                     const guardian = employees.find(e => e.id === note.guardianId);
                     return (
@@ -1905,7 +1919,7 @@ const handleGenerateInvitation = async () => {
                   <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
                   <p className="text-sm text-gray-500">No guardian notes yet</p>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
