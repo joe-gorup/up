@@ -14,9 +14,10 @@ interface EmployeeDetailProps {
   employeeId: string;
   onClose: () => void;
   onEdit: (employeeId: string) => void;
+  hideGoalCards?: boolean;
 }
 
-export default function EmployeeDetail({ employeeId, onClose, onEdit }: EmployeeDetailProps) {
+export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
   const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useData();
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
@@ -1602,6 +1603,8 @@ const handleGenerateInvitation = async () => {
         )}
       </div>
 
+      {!hideGoalCards && (
+      <>
       {/* Full-width Assessment in Progress card - shown above the grid during assessment mode for Super Scoopers */}
       {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && assessmentMode && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6 mb-6">
@@ -2572,6 +2575,8 @@ const handleGenerateInvitation = async () => {
 
         </div>
         )}
+      </>
+      )}
       </div>
     </div>
   );

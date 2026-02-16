@@ -78,6 +78,7 @@ export default function EmployeeManagement() {
         employeeId={selectedEmployee} 
         onClose={handleCloseDetail}
         onEdit={handleEditEmployee}
+        hideGoalCards
       />
     );
   }
