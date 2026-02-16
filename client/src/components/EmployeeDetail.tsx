@@ -1613,10 +1613,11 @@ const handleGenerateInvitation = async () => {
                     </div>
                     <button
                       onClick={handleEndAssessment}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                      className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                      title="End Assessment"
                     >
                       <X className="h-4 w-4" />
-                      <span>End Assessment</span>
+                      <span className="hidden sm:inline">End Assessment</span>
                     </button>
                   </div>
                   <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
@@ -1649,10 +1650,11 @@ const handleGenerateInvitation = async () => {
                           setAssessmentLocation(activeAssessmentSession.location || '9540 Nall Avenue');
                           setAssessmentMode(true);
                         }}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors"
+                        className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors"
                       >
                         <ClipboardCheck className="h-5 w-5" />
-                        Resume Assessment
+                        <span className="hidden sm:inline">Resume Assessment</span>
+                        <span className="sm:hidden">Resume</span>
                       </button>
                     </div>
                   ) : (
@@ -1672,10 +1674,11 @@ const handleGenerateInvitation = async () => {
                       <button
                         onClick={handleStartAssessment}
                         disabled={startingAssessment}
-                        className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                       >
                         <ClipboardCheck className="h-5 w-5" />
-                        {startingAssessment ? 'Starting...' : 'Start Assessment'}
+                        <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                        <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
                       </button>
                     </div>
                   )}
@@ -2022,10 +2025,11 @@ const handleGenerateInvitation = async () => {
                     </div>
                     <button
                       onClick={handleEndAssessment}
-                      className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                      className="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                      title="End Assessment"
                     >
                       <X className="h-4 w-4" />
-                      <span>End Assessment</span>
+                      <span className="hidden sm:inline">End Assessment</span>
                     </button>
                   </div>
                   <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
@@ -2058,10 +2062,11 @@ const handleGenerateInvitation = async () => {
                     <button
                       onClick={handleStartAssessment}
                       disabled={startingAssessment}
-                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                      className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
                     >
                       <ClipboardCheck className="h-5 w-5" />
-                      {startingAssessment ? 'Starting...' : 'Start Assessment'}
+                      <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                      <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
                     </button>
                   </div>
                 </div>
@@ -2184,10 +2189,11 @@ const handleGenerateInvitation = async () => {
               {canEdit && activeGoals.length < 2 && (
                 <button
                   onClick={() => setShowGoalAssignment(true)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium"
+                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium"
+                  title="Add Goal"
                 >
                   <Plus className="h-4 w-4" />
-                  Add Goal
+                  <span className="hidden sm:inline">Add Goal</span>
                 </button>
               )}
             </div>

@@ -371,10 +371,11 @@ export default function MyShift() {
             )}
             <button
               onClick={handleOpenSearch}
-              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
+              className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
+              title="Add Employees"
             >
               <Search className="h-4 w-4" />
-              Add Employees
+              <span className="hidden sm:inline">Add Employees</span>
             </button>
           </div>
         </div>
