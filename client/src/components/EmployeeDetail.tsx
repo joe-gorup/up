@@ -1689,152 +1689,23 @@ const handleGenerateInvitation = async () => {
                       </button>
                     </div>
                   )}
-
-                  {/* Past Assessments - collapsible */}
-                  <div className="mt-4 pt-3 border-t border-gray-200">
-                    <button
-                      onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
-                      className="w-full flex items-center justify-between py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <FileText className="h-3.5 w-3.5 text-indigo-500" />
-                        <span className="text-xs font-semibold text-gray-700">Past Assessments</span>
-                        <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
-                          {loadingPastAssessments ? '...' : pastAssessments.length}
-                        </span>
-                      </div>
-                      {pastAssessmentsExpanded ? <ChevronUp className="h-3.5 w-3.5 text-gray-400" /> : <ChevronDown className="h-3.5 w-3.5 text-gray-400" />}
-                    </button>
-                    {pastAssessmentsExpanded && (
-                      <div className="mt-2">
-                        {loadingPastAssessments ? (
-                          <div className="flex items-center justify-center py-3">
-                            <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                            <span className="ml-2 text-xs text-gray-500">Loading...</span>
-                          </div>
-                        ) : pastAssessments.length === 0 ? (
-                          <p className="text-xs text-gray-500 italic py-2">No completed assessments yet.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {pastAssessments.slice(0, pastAssessmentsVisible).map((session) => {
-                              const sessionDate = new Date(session.date + 'T00:00:00');
-                              const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                              const details = sessionDetails[session.id];
-                              const isExpanded = expandedSessionId === session.id;
-                              return (
-                              <div key={session.id} className="border border-gray-200 rounded-lg p-3">
-                                <div className="flex items-center justify-between gap-2">
-                                  <div className="flex items-center gap-2 flex-wrap text-xs text-gray-700 min-w-0">
-                                    <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
-                                    {sessionTime && <span className="text-gray-400">{sessionTime}</span>}
-                                    <span className="text-gray-500 truncate">
-                                      {session.managerFirstName && session.managerLastName
-                                        ? `${session.managerFirstName} ${session.managerLastName}`
-                                        : ''}
-                                    </span>
-                                  </div>
-                                  <button
-                                    onClick={() => toggleSessionDetails(session.id)}
-                                    className="flex items-center gap-1 px-2 py-1 border border-gray-200 rounded-md hover:bg-gray-50 transition-colors text-xs text-gray-600 flex-shrink-0"
-                                  >
-                                    <Eye className="h-3 w-3" />
-                                    {isExpanded ? 'Hide' : 'View'}
-                                  </button>
-                                </div>
-
-                                {loadingSessionDetail && !details && isExpanded ? (
-                                  <div className="flex items-center py-2">
-                                    <div className="animate-spin h-3 w-3 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                                    <span className="ml-2 text-xs text-gray-500">Loading...</span>
-                                  </div>
-                                ) : details && isExpanded ? (
-                                  <div className="mt-2 pt-2 border-t border-gray-100">
-                                    <div className="flex flex-wrap gap-1 mb-2">
-                                      {details.goals.map((goal) => (
-                                        <span key={goal.goalId} className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
-                                          {goal.goalTitle}
-                                        </span>
-                                      ))}
-                                    </div>
-                                    {details.summary && (
-                                      <p className="text-xs text-gray-600 mb-2">{details.summary}</p>
-                                    )}
-                                    {details.goals.length > 0 && (
-                                      <div className="space-y-3">
-                                        {details.goals.map((goal) => (
-                                          <div key={goal.goalId} className="space-y-1">
-                                            <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1">
-                                              <Target className="h-3 w-3 text-blue-500" />
-                                              {goal.goalTitle}
-                                            </h4>
-                                            <div className="space-y-1">
-                                              {goal.steps.map((step, idx) => (
-                                                <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
-                                                  <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
-                                                  <div className="flex-1 min-w-0">
-                                                    <div className="flex items-center gap-1.5 flex-wrap">
-                                                      <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                                      <span className={`inline-flex items-center px-1 py-0 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
-                                                        {getOutcomeLabel(step.outcome)}
-                                                      </span>
-                                                      {step.completionTimeSeconds ? (
-                                                        <span className="text-xs text-gray-400 flex items-center gap-0.5">
-                                                          <Clock className="h-2.5 w-2.5" />
-                                                          {formatTime(step.completionTimeSeconds)}
-                                                        </span>
-                                                      ) : null}
-                                                    </div>
-                                                    {step.notes && (
-                                                      <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>
-                                                    )}
-                                                  </div>
-                                                </div>
-                                              ))}
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    )}
-                                    {details.goals.length === 0 && !details.summary && (
-                                      <p className="text-xs text-gray-400 italic">No details recorded.</p>
-                                    )}
-                                  </div>
-                                ) : null}
-                              </div>
-                              );
-                            })}
-                            {pastAssessmentsVisible < pastAssessments.length && (
-                              <button
-                                onClick={() => setPastAssessmentsVisible(prev => prev + 3)}
-                                className="w-full text-center py-2 text-xs font-medium text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors"
-                              >
-                                Load more ({pastAssessments.length - pastAssessmentsVisible} remaining)
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
                 </div>
             </div>
           )}
 
-          {/* Past Assessments standalone card - shown in left column when Goal Assessment card is not visible and NOT in assessment mode (Super Scooper) */}
-          {employee.role === 'Super Scooper' && !assessmentMode && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+          {/* Past Assessments card - always separate in left column for Super Scoopers (not in assessment mode) */}
+          {employee.role === 'Super Scooper' && !assessmentMode && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
-                className="w-full flex items-center justify-between py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
               >
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-indigo-500" />
-                  <span className="text-sm font-semibold text-gray-900">Past Assessments</span>
-                  <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    {pastAssessments.length}
-                  </span>
-                </div>
                 {pastAssessmentsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
               </button>
               {pastAssessmentsExpanded && (
                 <div className="mt-3 space-y-2">
@@ -2024,16 +1895,14 @@ const handleGenerateInvitation = async () => {
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
-                className="w-full flex items-center justify-between py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
               >
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-indigo-500" />
-                  <span className="text-sm font-semibold text-gray-900">Past Assessments</span>
-                  <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    {pastAssessments.length}
-                  </span>
-                </div>
                 {pastAssessmentsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
               </button>
               {pastAssessmentsExpanded && (
                 <div className="mt-3 space-y-2">
@@ -2182,21 +2051,19 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Past Assessments standalone card - for non-Super Scoopers */}
-          {employee.role !== 'Super Scooper' && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+          {/* Past Assessments card - for non-Super Scoopers */}
+          {employee.role !== 'Super Scooper' && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => { setPastAssessmentsExpanded(!pastAssessmentsExpanded); setPastAssessmentsVisible(3); }}
-                className="w-full flex items-center justify-between py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
+                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
               >
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-4 w-4 text-indigo-500" />
-                  <span className="text-sm font-semibold text-gray-900">Past Assessments</span>
-                  <span className="bg-indigo-100 text-indigo-800 px-1.5 py-0.5 rounded-full text-xs font-medium">
-                    {pastAssessments.length}
-                  </span>
-                </div>
                 {pastAssessmentsExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
               </button>
               {pastAssessmentsExpanded && (
                 <div className="mt-3 space-y-2">
