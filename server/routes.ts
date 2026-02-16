@@ -973,6 +973,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/employees/:employeeId/assessment-history", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const sessions = await db.select({
+        id: assessment_sessions.id,
+        manager_id: assessment_sessions.manager_id,
+        date: assessment_sessions.date,
+        location: assessment_sessions.location,
+        status: assessment_sessions.status,
+        created_at: assessment_sessions.created_at,
+        updated_at: assessment_sessions.updated_at,
+        managerFirstName: employees.first_name,
+        managerLastName: employees.last_name,
+      })
+        .from(assessment_sessions)
+        .leftJoin(employees, eq(assessment_sessions.manager_id, employees.id))
+        .where(sql`${assessment_sessions.employee_ids}::jsonb @> ${JSON.stringify([employeeId])}::jsonb AND ${assessment_sessions.status} = 'completed'`)
+        .orderBy(desc(assessment_sessions.date), desc(assessment_sessions.created_at))
+        .limit(20);
+      res.json(sessions);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch assessment history');
+      res.status(500).json({ error: 'Failed to fetch assessment history' });
+    }
+  });
+
   app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
