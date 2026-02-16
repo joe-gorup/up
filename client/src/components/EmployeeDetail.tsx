@@ -51,7 +51,9 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   // Inline editing states
   const [editingSafety, setEditingSafety] = useState(false);
   const [editingServiceProvider, setEditingServiceProvider] = useState(false);
-  const [editingSupport, setEditingSupport] = useState(false);
+  const [editingSupportInterests, setEditingSupportInterests] = useState(false);
+  const [editingSupportChallenges, setEditingSupportChallenges] = useState(false);
+  const [editingSupportStrategies, setEditingSupportStrategies] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
@@ -459,15 +461,15 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   };
 
 
-  const handleSaveSupport = async () => {
+  const handleSaveSupportCategory = async (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies') => {
     setSavingProfile(true);
     try {
       await updateEmployee(employeeId, {
-        interestsMotivators: supportForm.interestsMotivators.filter(i => i.trim() !== ''),
-        challenges: supportForm.challenges.filter(c => c.trim() !== ''),
-        regulationStrategies: supportForm.regulationStrategies.filter(r => r.trim() !== '')
+        [category]: supportForm[category].filter(i => i.trim() !== '')
       });
-      setEditingSupport(false);
+      if (category === 'interestsMotivators') setEditingSupportInterests(false);
+      if (category === 'challenges') setEditingSupportChallenges(false);
+      if (category === 'regulationStrategies') setEditingSupportStrategies(false);
     } catch (error) {
       console.error('Error saving support info:', error);
     } finally {
@@ -481,15 +483,17 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   };
 
 
-  const handleCancelSupport = () => {
+  const handleCancelSupportCategory = (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies') => {
     if (employee) {
-      setSupportForm({
-        interestsMotivators: employee.interestsMotivators.length > 0 ? [...employee.interestsMotivators] : [''],
-        challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
-        regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
-      });
+      const data = employee[category];
+      setSupportForm(prev => ({
+        ...prev,
+        [category]: data.length > 0 ? [...data] : ['']
+      }));
     }
-    setEditingSupport(false);
+    if (category === 'interestsMotivators') setEditingSupportInterests(false);
+    if (category === 'challenges') setEditingSupportChallenges(false);
+    if (category === 'regulationStrategies') setEditingSupportStrategies(false);
   };
 
   const startEditingServiceProvider = () => {
@@ -936,137 +940,168 @@ const handleGenerateInvitation = async () => {
         {showSupportExpanded && (
           <div className="border-t border-gray-200 p-3 sm:p-5">
             <div>
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center space-x-2">
-                  <Heart className="h-4 w-4 text-pink-500" />
-                  <h3 className="text-sm font-semibold text-gray-900">Support Information</h3>
-                </div>
-                {canEdit && !editingSupport && (
-                  <button
-                    onClick={() => setEditingSupport(true)}
-                    className="p-1.5 text-pink-400 hover:text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
-                    title="Edit support info"
-                  >
-                    <SquarePen className="h-3.5 w-3.5" />
-                  </button>
-                )}
+              <div className="flex items-center space-x-2 mb-4">
+                <Heart className="h-4 w-4 text-pink-500" />
+                <h3 className="text-sm font-semibold text-gray-900">Support Information</h3>
               </div>
-              {editingSupport ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
-                      <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
-                    </label>
-                    <div className="space-y-1.5">
-                      {supportForm.interestsMotivators.map((item, index) => (
-                        <div key={index} className="flex space-x-1.5">
-                          <input type="text" value={item} onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Interest or motivator" />
-                          {supportForm.interestsMotivators.length > 1 && (
-                            <button type="button" onClick={() => removeSupportArrayItem('interestsMotivators', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
-                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
-                    </button>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
-                      <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
-                    </label>
-                    <div className="space-y-1.5">
-                      {supportForm.challenges.map((challenge, index) => (
-                        <div key={index} className="flex space-x-1.5">
-                          <input type="text" value={challenge} onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Challenge" />
-                          {supportForm.challenges.length > 1 && (
-                            <button type="button" onClick={() => removeSupportArrayItem('challenges', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
-                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
-                    </button>
-                  </div>
-                  <div>
-                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
-                      <Brain className="h-3 w-3 text-purple-600 mr-1" /> Regulation Strategies
-                    </label>
-                    <div className="space-y-1.5">
-                      {supportForm.regulationStrategies.map((strategy, index) => (
-                        <div key={index} className="flex space-x-1.5">
-                          <input type="text" value={strategy} onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Strategy" />
-                          {supportForm.regulationStrategies.length > 1 && (
-                            <button type="button" onClick={() => removeSupportArrayItem('regulationStrategies', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                    <button type="button" onClick={() => addSupportArrayItem('regulationStrategies')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
-                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
-                    </button>
-                  </div>
-                  <div className="lg:col-span-3 flex justify-end space-x-2 pt-3 border-t border-gray-100">
-                    <button onClick={handleCancelSupport} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
-                    <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-pink-600 text-white rounded-full hover:bg-pink-700 text-xs font-medium disabled:opacity-50 transition-colors">
-                      <Save className="h-3 w-3" />
-                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
-                      <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                      <Heart className="h-3.5 w-3.5 text-green-600 mr-1.5" /> Interests & Motivators
                     </h4>
-                    {employee.interestsMotivators.length > 0 ? (
+                    {canEdit && !editingSupportInterests && (
+                      <button
+                        onClick={() => setEditingSupportInterests(true)}
+                        className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Edit interests & motivators"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {editingSupportInterests ? (
+                    <div>
+                      <div className="space-y-1.5">
+                        {supportForm.interestsMotivators.map((item, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input type="text" value={item} onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Interest or motivator" />
+                            {supportForm.interestsMotivators.length > 1 && (
+                              <button type="button" onClick={() => removeSupportArrayItem('interestsMotivators', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                        <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                        <button onClick={() => handleCancelSupportCategory('interestsMotivators')} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={() => handleSaveSupportCategory('interestsMotivators')} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-green-600 text-white rounded-full hover:bg-green-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    employee.interestsMotivators.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {employee.interestsMotivators.map((item, i) => (
-                          <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                          <span key={i} className="bg-green-100 text-green-800 px-2.5 py-1 rounded-full text-sm">{item}</span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-xs italic">None recorded</p>
+                      <p className="text-gray-400 text-sm italic">None recorded</p>
+                    )
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                      <Zap className="h-3.5 w-3.5 text-orange-500 mr-1.5" /> Challenges
+                    </h4>
+                    {canEdit && !editingSupportChallenges && (
+                      <button
+                        onClick={() => setEditingSupportChallenges(true)}
+                        className="p-1.5 text-orange-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                        title="Edit challenges"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
-                      <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
-                    </h4>
-                    {employee.challenges.length > 0 ? (
+                  {editingSupportChallenges ? (
+                    <div>
+                      <div className="space-y-1.5">
+                        {supportForm.challenges.map((challenge, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input type="text" value={challenge} onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Challenge" />
+                            {supportForm.challenges.length > 1 && (
+                              <button type="button" onClick={() => removeSupportArrayItem('challenges', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                        <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                        <button onClick={() => handleCancelSupportCategory('challenges')} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={() => handleSaveSupportCategory('challenges')} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-orange-600 text-white rounded-full hover:bg-orange-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    employee.challenges.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {employee.challenges.map((item, i) => (
-                          <span key={i} className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                          <span key={i} className="bg-yellow-100 text-yellow-800 px-2.5 py-1 rounded-full text-sm">{item}</span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-xs italic">None recorded</p>
+                      <p className="text-gray-400 text-sm italic">None recorded</p>
+                    )
+                  )}
+                </div>
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                      <Brain className="h-3.5 w-3.5 text-purple-600 mr-1.5" /> Regulation Strategies
+                    </h4>
+                    {canEdit && !editingSupportStrategies && (
+                      <button
+                        onClick={() => setEditingSupportStrategies(true)}
+                        className="p-1.5 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                        title="Edit regulation strategies"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
                     )}
                   </div>
-                  <div>
-                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
-                      <Brain className="h-3 w-3 text-purple-600 mr-1" /> Regulation Strategies
-                    </h4>
-                    {employee.regulationStrategies.length > 0 ? (
+                  {editingSupportStrategies ? (
+                    <div>
+                      <div className="space-y-1.5">
+                        {supportForm.regulationStrategies.map((strategy, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input type="text" value={strategy} onChange={(e) => updateSupportArrayItem('regulationStrategies', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Strategy" />
+                            {supportForm.regulationStrategies.length > 1 && (
+                              <button type="button" onClick={() => removeSupportArrayItem('regulationStrategies', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addSupportArrayItem('regulationStrategies')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                        <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                        <button onClick={() => handleCancelSupportCategory('regulationStrategies')} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={() => handleSaveSupportCategory('regulationStrategies')} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-purple-600 text-white rounded-full hover:bg-purple-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    employee.regulationStrategies.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {employee.regulationStrategies.map((item, i) => (
-                          <span key={i} className="bg-purple-100 text-purple-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                          <span key={i} className="bg-purple-100 text-purple-800 px-2.5 py-1 rounded-full text-sm">{item}</span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-xs italic">None recorded</p>
-                    )}
-                  </div>
+                      <p className="text-gray-400 text-sm italic">None recorded</p>
+                    )
+                  )}
                 </div>
-              )}
+              </div>
             </div>
 
             {/* Contacts, Service Provider & Job Coaches Row */}
@@ -1195,7 +1230,7 @@ const handleGenerateInvitation = async () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-gray-400 italic">No contacts added yet.</p>
+                        <p className="text-sm text-gray-400 italic">No contacts added yet.</p>
                       )}
                     </>
                   )}
@@ -1257,7 +1292,7 @@ const handleGenerateInvitation = async () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-gray-400 text-xs italic">No service provider</p>
+                        <p className="text-gray-400 text-sm italic">No service provider</p>
                       )}
                     </div>
                   )}
@@ -1274,7 +1309,7 @@ const handleGenerateInvitation = async () => {
                   {assignedCoaches.length > 0 ? (
                     <div className="space-y-2">
                       {assignedCoaches.map((assignment: any) => (
-                        <div key={assignment.id} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
+                        <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
                           {getPersonName(assignment.coach_id)}
                         </div>
                       ))}
@@ -1335,11 +1370,11 @@ const handleGenerateInvitation = async () => {
                     {employee.allergies.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {employee.allergies.map((allergy, index) => (
-                          <span key={index} className="bg-red-100 text-red-800 px-2 py-1 rounded-full text-xs">{allergy}</span>
+                          <span key={index} className="bg-red-100 text-red-800 px-2.5 py-1 rounded-full text-sm">{allergy}</span>
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-xs italic">No allergies recorded</p>
+                      <p className="text-gray-400 text-sm italic">No allergies recorded</p>
                     )}
                   </div>
                 )}
@@ -1405,7 +1440,7 @@ const handleGenerateInvitation = async () => {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-xs text-gray-400 italic mb-3">No certifications recorded yet.</p>
+                  <p className="text-sm text-gray-400 italic mb-3">No certifications recorded yet.</p>
                 )}
 
                 {editingCerts && (
