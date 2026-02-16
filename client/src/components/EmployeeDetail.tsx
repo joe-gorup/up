@@ -2165,7 +2165,7 @@ const handleGenerateInvitation = async () => {
                   {activeGoals.length}/2
                 </span>
               </button>
-              {canEdit && activeGoals.length < 2 && (
+              {canEdit && activeGoals.length < 2 && !assessmentMode && (
                 <button
                   onClick={() => setShowGoalAssignment(true)}
                   className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium"
