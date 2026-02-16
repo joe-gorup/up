@@ -3,7 +3,6 @@ import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDo
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';
-import GoalAssignment from './GoalAssignment';
 import AssessmentHistory from './AssessmentHistory';
 import Timer from './Timer';
 
@@ -107,7 +106,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const [showHistory, setShowHistory] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
     title: '',
@@ -511,16 +509,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     };
   };
 
-  if (showGoalAssignment) {
-    return (
-      <GoalAssignment
-        employeeId={employee.id}
-        onClose={() => setShowGoalAssignment(false)}
-        onSuccess={() => setShowGoalAssignment(false)}
-      />
-    );
-  }
-
   // Show assessment history if requested
   if (showHistory) {
     return (
@@ -546,17 +534,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
             </div>
             
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-              {user?.role === 'Administrator' && (
-                <button
-                  onClick={() => setShowGoalAssignment(true)}
-                  className="flex items-center justify-center space-x-2 bg-gray-600 text-white px-4 py-3 rounded-xl hover:bg-gray-700 transition-colors text-sm font-medium"
-                  data-testid="button-assign-goal"
-                >
-                  <Plus className="h-5 w-5" />
-                  <span>Assign Goal</span>
-                </button>
-              )}
-              
               <div className="flex gap-2 sm:gap-3">
                 <button
                   onClick={handleSaveDraft}
