@@ -778,117 +778,64 @@ const handleGenerateInvitation = async () => {
 
         {showSupportExpanded && !assessmentMode && (
           <div className="border-t border-gray-200 p-3 sm:p-5">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Column 1: Interests & Challenges */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <Heart className="h-4 w-4 text-pink-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Support Information</h3>
-                  </div>
-                  {canEdit && !editingSupport && (
-                    <button
-                      onClick={() => setEditingSupport(true)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      title="Edit support info"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center space-x-2">
+                  <Heart className="h-4 w-4 text-pink-500" />
+                  <h3 className="text-sm font-semibold text-gray-900">Support Information</h3>
                 </div>
-                {editingSupport ? (
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
-                        <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
-                      </label>
-                      <div className="space-y-1.5">
-                        {supportForm.interestsMotivators.map((item, index) => (
-                          <div key={index} className="flex space-x-1.5">
-                            <input type="text" value={item} onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Interest or motivator" />
-                            {supportForm.interestsMotivators.length > 1 && (
-                              <button type="button" onClick={() => removeSupportArrayItem('interestsMotivators', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
-                        <Plus className="h-3 w-3" /><span>Add</span>
-                      </button>
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
-                        <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
-                      </label>
-                      <div className="space-y-1.5">
-                        {supportForm.challenges.map((challenge, index) => (
-                          <div key={index} className="flex space-x-1.5">
-                            <input type="text" value={challenge} onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Challenge" />
-                            {supportForm.challenges.length > 1 && (
-                              <button type="button" onClick={() => removeSupportArrayItem('challenges', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                      <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
-                        <Plus className="h-3 w-3" /><span>Add</span>
-                      </button>
-                    </div>
-                    <div className="flex justify-end space-x-2 pt-2 border-t border-gray-100">
-                      <button onClick={handleCancelSupport} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                      <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
-                        <Save className="h-3 w-3" />
-                        <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
-                        <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
-                      </h4>
-                      {employee.interestsMotivators.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {employee.interestsMotivators.map((item, i) => (
-                            <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-xs italic">None recorded</p>
-                      )}
-                    </div>
-                    <div>
-                      <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
-                        <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
-                      </h4>
-                      {employee.challenges.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {employee.challenges.map((item, i) => (
-                            <span key={i} className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-gray-400 text-xs italic">None recorded</p>
-                      )}
-                    </div>
-                  </div>
+                {canEdit && !editingSupport && (
+                  <button
+                    onClick={() => setEditingSupport(true)}
+                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    title="Edit support info"
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
                 )}
               </div>
-
-              {/* Column 3: Strategies */}
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center space-x-2">
-                    <Brain className="h-4 w-4 text-purple-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Support Strategies</h3>
+              {editingSupport ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
+                      <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
+                    </label>
+                    <div className="space-y-1.5">
+                      {supportForm.interestsMotivators.map((item, index) => (
+                        <div key={index} className="flex space-x-1.5">
+                          <input type="text" value={item} onChange={(e) => updateSupportArrayItem('interestsMotivators', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Interest or motivator" />
+                          {supportForm.interestsMotivators.length > 1 && (
+                            <button type="button" onClick={() => removeSupportArrayItem('interestsMotivators', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => addSupportArrayItem('interestsMotivators')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
+                      <Plus className="h-3 w-3" /><span>Add</span>
+                    </button>
                   </div>
-                </div>
-                {editingSupport ? (
+                  <div>
+                    <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
+                      <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
+                    </label>
+                    <div className="space-y-1.5">
+                      {supportForm.challenges.map((challenge, index) => (
+                        <div key={index} className="flex space-x-1.5">
+                          <input type="text" value={challenge} onChange={(e) => updateSupportArrayItem('challenges', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Challenge" />
+                          {supportForm.challenges.length > 1 && (
+                            <button type="button" onClick={() => removeSupportArrayItem('challenges', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => addSupportArrayItem('challenges')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs mt-1">
+                      <Plus className="h-3 w-3" /><span>Add</span>
+                    </button>
+                  </div>
                   <div>
                     <label className="text-xs font-medium text-gray-600 flex items-center mb-1.5">
                       <Brain className="h-3 w-3 text-purple-600 mr-1" /> Regulation Strategies
@@ -909,8 +856,48 @@ const handleGenerateInvitation = async () => {
                       <Plus className="h-3 w-3" /><span>Add</span>
                     </button>
                   </div>
-                ) : (
+                  <div className="lg:col-span-3 flex justify-end space-x-2 pt-2 border-t border-gray-100">
+                    <button onClick={handleCancelSupport} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
+                    <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                      <Save className="h-3 w-3" />
+                      <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                   <div>
+                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
+                      <Heart className="h-3 w-3 text-green-600 mr-1" /> Interests & Motivators
+                    </h4>
+                    {employee.interestsMotivators.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.interestsMotivators.map((item, i) => (
+                          <span key={i} className="bg-green-100 text-green-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">None recorded</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
+                      <Zap className="h-3 w-3 text-orange-500 mr-1" /> Challenges
+                    </h4>
+                    {employee.challenges.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {employee.challenges.map((item, i) => (
+                          <span key={i} className="bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full text-xs">{item}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-xs italic">None recorded</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-medium text-gray-500 flex items-center mb-1.5">
+                      <Brain className="h-3 w-3 text-purple-600 mr-1" /> Regulation Strategies
+                    </h4>
                     {employee.regulationStrategies.length > 0 ? (
                       <div className="flex flex-wrap gap-1.5">
                         {employee.regulationStrategies.map((item, i) => (
@@ -921,8 +908,8 @@ const handleGenerateInvitation = async () => {
                       <p className="text-gray-400 text-xs italic">None recorded</p>
                     )}
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </div>
 
             {/* Emergency Contacts, Guardians & Service Provider Row */}
