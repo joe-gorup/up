@@ -57,10 +57,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     challenges: [''],
     regulationStrategies: ['']
   });
-  const [serviceProviderForm, setServiceProviderForm] = useState({
-    hasServiceProvider: false,
-    providers: [{ name: '', type: '' }]
-  });
+  const [serviceProviderForm, setServiceProviderForm] = useState<Array<{ name: string; type: string }>>([]);
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
@@ -294,12 +291,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
         regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
       });
-      setServiceProviderForm({
-        hasServiceProvider: employee.hasServiceProvider || false,
-        providers: employee.serviceProviders?.length > 0 
-          ? [...employee.serviceProviders] 
-          : [{ name: '', type: '' }]
-      });
+      setServiceProviderForm(
+        employee.serviceProviders?.length > 0 
+          ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
+          : []
+      );
     }
   }, [employee?.id]);
 
@@ -389,14 +385,21 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
     setEditingSupport(false);
   };
 
+  const startEditingServiceProvider = () => {
+    const providers = employee?.serviceProviders && employee.serviceProviders.length > 0
+      ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
+      : [];
+    setServiceProviderForm(providers);
+    setEditingServiceProvider(true);
+  };
+
   const handleSaveServiceProvider = async () => {
     setSavingProfile(true);
     try {
+      const filtered = serviceProviderForm.filter(p => p.name.trim() !== '');
       await updateEmployee(employeeId, {
-        hasServiceProvider: serviceProviderForm.hasServiceProvider,
-        serviceProviders: serviceProviderForm.hasServiceProvider 
-          ? serviceProviderForm.providers.filter(p => p.name.trim() !== '')
-          : []
+        hasServiceProvider: filtered.length > 0,
+        serviceProviders: filtered
       });
       setEditingServiceProvider(false);
     } catch (error) {
@@ -407,12 +410,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
   };
 
   const handleCancelServiceProvider = () => {
-    setServiceProviderForm({
-      hasServiceProvider: employee?.hasServiceProvider || false,
-      providers: (employee?.serviceProviders?.length ?? 0) > 0 
-        ? [...(employee?.serviceProviders || [])] 
-        : [{ name: '', type: '' }]
-    });
+    setServiceProviderForm([]);
     setEditingServiceProvider(false);
   };
 
@@ -1130,7 +1128,7 @@ const handleGenerateInvitation = async () => {
                     </div>
                     {canEdit && !editingServiceProvider && (
                       <button
-                        onClick={() => setEditingServiceProvider(true)}
+                        onClick={startEditingServiceProvider}
                         className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         title="Edit service provider"
                       >
@@ -1141,57 +1139,39 @@ const handleGenerateInvitation = async () => {
 
                   {editingServiceProvider ? (
                     <div className="space-y-3">
-                      <label className="flex items-center space-x-3 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={serviceProviderForm.hasServiceProvider}
-                          onChange={(e) => setServiceProviderForm(prev => ({ ...prev, hasServiceProvider: e.target.checked }))}
-                          className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                        />
-                        <span className="text-sm font-medium text-gray-700">Has a service provider</span>
-                      </label>
-
-                      {serviceProviderForm.hasServiceProvider && (
-                        <div className="space-y-2 pl-2 border-l-2 border-indigo-200">
-                          {serviceProviderForm.providers.map((provider, index) => (
-                            <div key={index} className="flex space-x-2">
-                              <input type="text" value={provider.name} onChange={(e) => { const updated = [...serviceProviderForm.providers]; updated[index] = { ...updated[index], name: e.target.value }; setServiceProviderForm(prev => ({ ...prev, providers: updated })); }} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Agency or person name" />
-                              {serviceProviderForm.providers.length > 1 && (
-                                <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: prev.providers.filter((_, i) => i !== index) })); }} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
-                            </div>
-                          ))}
-                          <button type="button" onClick={() => { setServiceProviderForm(prev => ({ ...prev, providers: [...prev.providers, { name: '', type: '' }] })); }} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs font-medium mt-2 pt-1">
-                            <Plus className="h-3.5 w-3.5" />
-                            <span>Add</span>
+                      {serviceProviderForm.map((provider, index) => (
+                        <div key={index} className="flex space-x-2">
+                          <input type="text" value={provider.name} onChange={(e) => { const updated = [...serviceProviderForm]; updated[index] = { ...updated[index], name: e.target.value }; setServiceProviderForm(updated); }} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Agency or person name" />
+                          <button type="button" onClick={() => setServiceProviderForm(prev => prev.filter((_, i) => i !== index))} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
-                      )}
-
-                      <div className="flex justify-between items-center pt-2">
-                        <span></span>
-                        <div className="flex space-x-2">
-                          <button onClick={handleCancelServiceProvider} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
-                          <button onClick={handleSaveServiceProvider} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 text-xs font-medium disabled:opacity-50 transition-colors">
-                            <Save className="h-3 w-3" />
-                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                          </button>
-                        </div>
+                      ))}
+                      <button type="button" onClick={() => setServiceProviderForm(prev => [...prev, { name: '', type: '' }])} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs font-medium mt-2 pt-1">
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Add</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-2">
+                        <button onClick={handleCancelServiceProvider} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={handleSaveServiceProvider} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
                       </div>
                     </div>
                   ) : (
                     <div>
                       {employee.hasServiceProvider && employee.serviceProviders?.length > 0 ? (
-                        <ul className="space-y-1.5">
+                        <div className="space-y-1.5">
                           {employee.serviceProviders.map((provider, index) => (
-                            <li key={index} className="flex items-center space-x-2 text-gray-700 text-sm">
-                              <span className="w-2 h-2 bg-indigo-400 rounded-full"></span>
-                              <span>{provider.name}</span>
-                            </li>
+                            <div key={index} className="p-3 border border-gray-200 rounded-xl bg-gray-50">
+                              <div className="flex items-center space-x-2">
+                                <Building2 className="h-4 w-4 text-indigo-400 shrink-0" />
+                                <span className="text-sm font-medium text-gray-900">{provider.name}</span>
+                              </div>
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       ) : (
                         <p className="text-gray-400 text-xs italic">No service provider</p>
                       )}
