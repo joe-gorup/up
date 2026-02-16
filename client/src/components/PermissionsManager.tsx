@@ -1,9 +1,33 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Shield, Lock, Search, Save, RefreshCw, Eye, Pencil, Trash2, AlertTriangle } from 'lucide-react';
+import { Shield, Lock, Search, Save, RefreshCw, Eye, Pencil, Trash2, AlertTriangle, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import { PERMISSION_FEATURES, PERMISSION_FEATURE_LABELS, CONFIGURABLE_ROLES, type PermissionFeature } from '@shared/schema';
 import { invalidatePermissionsCache } from '../hooks/usePermissions';
+
+const FEATURE_DESCRIPTIONS: Record<PermissionFeature, string> = {
+  my_shift: 'The working shift page where Shift Leads and Admins search, pin, and manage employees for the day.',
+  my_scoopers: 'The Job Coach view showing their assigned mentees. Only applicable to the Job Coach role.',
+  my_loved_ones: 'The Guardian view showing their linked family members. Only applicable to the Guardian role.',
+  employee_profiles: 'View and manage individual employee profile details, support information, and demographics.',
+  goal_assessment: 'Document and record step-by-step progress on employee development goals during shifts.',
+  goal_assignment: 'Assign development goal templates to individual employees.',
+  goal_templates: 'Create, edit, and manage reusable goal templates with steps and mastery criteria.',
+  employee_management: 'Add, edit, and manage employee records, roles, and account access.',
+  user_management: 'Manage system users, invitations, and login credentials.',
+  promotion_certifications: 'Track and manage Mentor and Shift Lead promotion certifications for employees.',
+  roi_compliance: 'Manage ROI consent forms, legal agreements, signatures, and service provider tracking.',
+  coach_notes: 'Rich text notes written by Job Coaches about their assigned scoopers.',
+  coach_files: 'File uploads and attachments managed by Job Coaches for their scoopers.',
+  guardian_notes: 'Notes written by Guardians about their linked family members.',
+  contacts: 'Manage emergency contacts, parent/guardian info, and other contact records for employees.',
+  past_assessments: 'View historical assessment session records and documented progress.',
+};
+
+const FEATURE_ROLE_NA: Partial<Record<PermissionFeature, string[]>> = {
+  my_scoopers: ['Shift Lead', 'Assistant Manager', 'Guardian'],
+  my_loved_ones: ['Shift Lead', 'Assistant Manager', 'Job Coach'],
+};
 
 interface PermissionEntry {
   role: string;
@@ -257,10 +281,19 @@ export default function PermissionsManager() {
               {filteredFeatures.map((feature, idx) => (
                 <tr key={feature} className={`border-b border-gray-100 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'} hover:bg-amber-50/30 transition-colors`}>
                   <td className={`px-4 py-3 text-sm font-medium text-gray-800 sticky left-0 z-10 ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}`}>
-                    {PERMISSION_FEATURE_LABELS[feature]}
+                    <div className="flex items-center gap-1.5">
+                      <span>{PERMISSION_FEATURE_LABELS[feature]}</span>
+                      <div className="relative group">
+                        <Info className="h-3.5 w-3.5 text-gray-400 cursor-help" />
+                        <div className="absolute left-5 top-1/2 -translate-y-1/2 z-50 hidden group-hover:block w-64 px-3 py-2 text-xs text-gray-700 bg-white border border-gray-200 rounded-lg shadow-lg">
+                          {FEATURE_DESCRIPTIONS[feature]}
+                        </div>
+                      </div>
+                    </div>
                   </td>
                   {allRoles.map(role => {
                     const isAdmin = role === 'Administrator';
+                    const isNA = FEATURE_ROLE_NA[feature]?.includes(role);
                     const perm = isAdmin ? null : permissions[role]?.[feature];
                     const origPerm = isAdmin ? null : originalPermissions[role]?.[feature];
 
@@ -273,6 +306,8 @@ export default function PermissionsManager() {
                               <LockedToggle />
                               <LockedToggle />
                             </>
+                          ) : isNA ? (
+                            <span className="text-xs text-gray-400 font-medium py-1.5">N/A</span>
                           ) : (
                             <>
                               <PermToggle
@@ -311,7 +346,7 @@ export default function PermissionsManager() {
         </div>
       </div>
 
-      <div className="mt-4 flex items-center gap-4 text-xs text-gray-500">
+      <div className="mt-4 flex flex-wrap items-center gap-4 text-xs text-gray-500">
         <div className="flex items-center gap-1.5">
           <Lock className="h-3 w-3" />
           <span>Administrator permissions are locked to full access</span>
@@ -319,6 +354,14 @@ export default function PermissionsManager() {
         <div className="flex items-center gap-1.5">
           <AlertTriangle className="h-3 w-3" />
           <span>Edit and Delete require View to be enabled</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="font-medium text-gray-400">N/A</span>
+          <span>Feature not applicable to that role</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <Info className="h-3 w-3" />
+          <span>Hover the info icon for feature descriptions</span>
         </div>
       </div>
     </div>
