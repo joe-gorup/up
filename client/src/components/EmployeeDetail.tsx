@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, Pencil, Award, Trash2, FileText, ClipboardCheck, Building2 } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2 } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -787,10 +787,10 @@ const handleGenerateInvitation = async () => {
                 {canEdit && !editingSupport && (
                   <button
                     onClick={() => setEditingSupport(true)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-1.5 text-pink-400 hover:text-pink-600 hover:bg-pink-50 rounded-lg transition-colors"
                     title="Edit support info"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <SquarePen className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -856,9 +856,9 @@ const handleGenerateInvitation = async () => {
                       <Plus className="h-3 w-3" /><span>Add</span>
                     </button>
                   </div>
-                  <div className="lg:col-span-3 flex justify-end space-x-2 pt-2 border-t border-gray-100">
-                    <button onClick={handleCancelSupport} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                    <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                  <div className="lg:col-span-3 flex justify-end space-x-2 pt-3 border-t border-gray-100">
+                    <button onClick={handleCancelSupport} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                    <button onClick={handleSaveSupport} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-pink-600 text-white rounded-full hover:bg-pink-700 text-xs font-medium disabled:opacity-50 transition-colors">
                       <Save className="h-3 w-3" />
                       <span>{savingProfile ? 'Saving...' : 'Save'}</span>
                     </button>
@@ -924,10 +924,10 @@ const handleGenerateInvitation = async () => {
                     {canEdit && !editingEmergency && (
                       <button
                         onClick={() => setEditingEmergency(true)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-1.5 text-blue-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Edit emergency contacts"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <SquarePen className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -950,14 +950,14 @@ const handleGenerateInvitation = async () => {
                           </div>
                         </div>
                       ))}
-                      <div className="flex justify-between items-center pt-1">
-                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                      <div className="flex justify-between items-center pt-2">
+                        <button type="button" onClick={addEmergencyContact} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium">
                           <Plus className="h-3.5 w-3.5" />
-                          <span>Add Contact</span>
+                          <span>Add</span>
                         </button>
                         <div className="flex space-x-2">
-                          <button onClick={handleCancelEmergency} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                          <button onClick={handleCancelEmergency} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                          <button onClick={handleSaveEmergency} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-blue-600 text-white rounded-full hover:bg-blue-700 text-xs font-medium disabled:opacity-50 transition-colors">
                             <Save className="h-3 w-3" />
                             <span>{savingProfile ? 'Saving...' : 'Save'}</span>
                           </button>
@@ -1113,10 +1113,10 @@ const handleGenerateInvitation = async () => {
                     {canEdit && !editingServiceProvider && (
                       <button
                         onClick={() => setEditingServiceProvider(true)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
                         title="Edit service provider"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
+                        <SquarePen className="h-3.5 w-3.5" />
                       </button>
                     )}
                   </div>
@@ -1152,12 +1152,15 @@ const handleGenerateInvitation = async () => {
                         </div>
                       )}
 
-                      <div className="flex space-x-2 pt-2">
-                        <button onClick={handleSaveServiceProvider} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
-                          <Save className="h-3 w-3" />
-                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
-                        </button>
-                        <button onClick={handleCancelServiceProvider} className="px-2 py-1 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs">Cancel</button>
+                      <div className="flex justify-between items-center pt-2">
+                        <span></span>
+                        <div className="flex space-x-2">
+                          <button onClick={handleCancelServiceProvider} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                          <button onClick={handleSaveServiceProvider} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                            <Save className="h-3 w-3" />
+                            <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   ) : (
@@ -1190,10 +1193,10 @@ const handleGenerateInvitation = async () => {
                 {canEdit && !editingSafety && (
                   <button
                     onClick={() => setEditingSafety(true)}
-                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
                     title="Edit allergies"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <SquarePen className="h-3.5 w-3.5" />
                   </button>
                 )}
               </div>
@@ -1209,14 +1212,14 @@ const handleGenerateInvitation = async () => {
                       )}
                     </div>
                   ))}
-                  <div className="flex justify-between items-center pt-1">
-                    <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs">
+                  <div className="flex justify-between items-center pt-2">
+                    <button type="button" onClick={() => addArrayItem(setSafetyForm)} className="flex items-center space-x-1 text-amber-600 hover:text-amber-700 text-xs font-medium">
                       <Plus className="h-3.5 w-3.5" />
                       <span>Add</span>
                     </button>
                     <div className="flex space-x-2">
-                      <button onClick={handleCancelSafety} className="px-2 py-1 text-gray-600 hover:bg-gray-100 rounded-lg text-xs">Cancel</button>
-                      <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-2 py-1 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs disabled:opacity-50">
+                      <button onClick={handleCancelSafety} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                      <button onClick={handleSaveSafety} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium disabled:opacity-50 transition-colors">
                         <Save className="h-3 w-3" />
                         <span>{savingProfile ? 'Saving...' : 'Save'}</span>
                       </button>
