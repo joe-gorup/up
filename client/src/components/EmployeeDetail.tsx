@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2 } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -297,7 +297,17 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit }: Employee
       try {
         const res = await apiRequest(`/api/employees/${employeeId}/assessment-history`);
         if (res.ok) {
-          setPastAssessments(await res.json());
+          const sessions = await res.json();
+          setPastAssessments(sessions);
+          for (const session of sessions) {
+            try {
+              const detailRes = await apiRequest(`/api/assessment-sessions/${session.id}/details?employeeId=${employeeId}`);
+              if (detailRes.ok) {
+                const data = await detailRes.json();
+                setSessionDetails(prev => ({ ...prev, [session.id]: data }));
+              }
+            } catch (err) {}
+          }
         }
       } catch (err) {
       }
@@ -1705,43 +1715,73 @@ const handleGenerateInvitation = async () => {
                     ) : pastAssessments.length === 0 ? (
                       <p className="text-xs text-gray-500 italic">No completed assessments yet.</p>
                     ) : (
-                      <div className="space-y-2">
-                        {pastAssessments.map((session) => (
-                          <div key={session.id}>
-                            <button
-                              onClick={() => toggleSessionDetails(session.id)}
-                              className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                            >
-                              <div className="flex items-center space-x-3">
-                                <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900">
-                                    {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                                  </p>
-                                  <p className="text-xs text-gray-500">
-                                    {session.managerFirstName && session.managerLastName
-                                      ? `${session.managerFirstName} ${session.managerLastName}`
-                                      : 'Unknown'} &middot; {session.location}
-                                  </p>
-                                </div>
+                      <div className="space-y-3">
+                        {pastAssessments.map((session) => {
+                          const sessionDate = new Date(session.date + 'T00:00:00');
+                          const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                          const details = sessionDetails[session.id];
+                          const isExpanded = expandedSessionId === session.id;
+                          return (
+                          <div key={session.id} className="border border-gray-200 rounded-xl p-4">
+                            <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                              <div className="flex items-center gap-3 flex-wrap text-sm text-gray-700">
+                                <span className="flex items-center gap-1">
+                                  <FileText className="h-3.5 w-3.5 text-gray-400" />
+                                  <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                                </span>
+                                {sessionTime && (
+                                  <span className="flex items-center gap-1 text-gray-500">
+                                    <Clock className="h-3.5 w-3.5" />
+                                    {sessionTime}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1 text-gray-500">
+                                  <Users className="h-3.5 w-3.5" />
+                                  {session.managerFirstName && session.managerLastName
+                                    ? `${session.managerFirstName} ${session.managerLastName}`
+                                    : 'Unknown'}
+                                </span>
                               </div>
-                              {expandedSessionId === session.id ? (
-                                <ChevronUp className="h-4 w-4 text-gray-400" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4 text-gray-400" />
-                              )}
-                            </button>
+                              <button
+                                onClick={() => toggleSessionDetails(session.id)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                {isExpanded ? 'Hide Details' : 'View Details'}
+                              </button>
+                            </div>
 
-                            {expandedSessionId === session.id && (
-                              <div className="mt-2 ml-2 mr-2 mb-2 p-3 bg-white border border-gray-200 rounded-xl">
-                                {loadingSessionDetail && !sessionDetails[session.id] ? (
-                                  <div className="flex items-center justify-center py-4">
-                                    <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                                    <span className="ml-2 text-xs text-gray-500">Loading details...</span>
+                            {loadingSessionDetail && !details && isExpanded ? (
+                              <div className="flex items-center py-3">
+                                <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
+                                <span className="ml-2 text-xs text-gray-500">Loading...</span>
+                              </div>
+                            ) : details ? (
+                              <div>
+                                <div className="flex items-center gap-1.5 mb-2">
+                                  <Target className="h-3.5 w-3.5 text-green-500" />
+                                  <span className="text-sm text-gray-700">Goals assessed: {details.goals.length}</span>
+                                </div>
+                                <div className="flex flex-wrap gap-1.5 mb-3">
+                                  {details.goals.map((goal) => (
+                                    <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-300 text-blue-700 bg-blue-50">
+                                      {goal.goalTitle}
+                                    </span>
+                                  ))}
+                                </div>
+                                {details.summary && (
+                                  <div>
+                                    <p className="text-sm font-semibold text-gray-900 mb-1">Assessment Summary</p>
+                                    <p className="text-sm text-gray-600">{details.summary}</p>
                                   </div>
-                                ) : sessionDetails[session.id] ? (
-                                  <div className="space-y-4">
-                                    {sessionDetails[session.id].goals.map((goal) => (
+                                )}
+                                {details.goals.length === 0 && !details.summary && (
+                                  <p className="text-xs text-gray-400 italic">No details recorded for this session.</p>
+                                )}
+
+                                {isExpanded && details.goals.length > 0 && (
+                                  <div className="mt-4 pt-3 border-t border-gray-100 space-y-4">
+                                    {details.goals.map((goal) => (
                                       <div key={goal.goalId} className="space-y-2">
                                         <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                                           <Target className="h-3.5 w-3.5 text-blue-500" />
@@ -1773,24 +1813,13 @@ const handleGenerateInvitation = async () => {
                                         </div>
                                       </div>
                                     ))}
-                                    {sessionDetails[session.id].summary && (
-                                      <div className="pt-2 border-t border-gray-100">
-                                        <p className="text-xs text-gray-600">
-                                          <span className="font-medium">Summary:</span> {sessionDetails[session.id].summary}
-                                        </p>
-                                      </div>
-                                    )}
-                                    {sessionDetails[session.id].goals.length === 0 && (
-                                      <p className="text-xs text-gray-400 italic">No step details recorded for this session.</p>
-                                    )}
                                   </div>
-                                ) : (
-                                  <p className="text-xs text-gray-400 italic">Failed to load details.</p>
                                 )}
                               </div>
-                            )}
+                            ) : null}
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>
@@ -1809,42 +1838,68 @@ const handleGenerateInvitation = async () => {
                   {pastAssessments.length}
                 </span>
               </div>
-              <div className="space-y-2">
-                {pastAssessments.map((session) => (
-                  <div key={session.id}>
-                    <button
-                      onClick={() => toggleSessionDetails(session.id)}
-                      className="w-full flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50 hover:bg-gray-100 transition-colors text-left"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <CheckCircle className="h-4 w-4 text-green-500 flex-shrink-0" />
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {new Date(session.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {session.managerFirstName && session.managerLastName
-                              ? `${session.managerFirstName} ${session.managerLastName}`
-                              : 'Unknown'} &middot; {session.location}
-                          </p>
-                        </div>
+              <div className="space-y-3">
+                {pastAssessments.map((session) => {
+                  const sessionDate = new Date(session.date + 'T00:00:00');
+                  const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                  const details = sessionDetails[session.id];
+                  const isExpanded = expandedSessionId === session.id;
+                  return (
+                  <div key={session.id} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                      <div className="flex items-center gap-3 flex-wrap text-sm text-gray-700">
+                        <span className="flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                        </span>
+                        {sessionTime && (
+                          <span className="flex items-center gap-1 text-gray-500">
+                            <Clock className="h-3.5 w-3.5" />
+                            {sessionTime}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-gray-500">
+                          <Users className="h-3.5 w-3.5" />
+                          {session.managerFirstName && session.managerLastName
+                            ? `${session.managerFirstName} ${session.managerLastName}`
+                            : 'Unknown'}
+                        </span>
                       </div>
-                      {expandedSessionId === session.id ? (
-                        <ChevronUp className="h-4 w-4 text-gray-400" />
-                      ) : (
-                        <ChevronDown className="h-4 w-4 text-gray-400" />
-                      )}
-                    </button>
-                    {expandedSessionId === session.id && (
-                      <div className="mt-2 ml-2 mr-2 mb-2 p-3 bg-white border border-gray-200 rounded-xl">
-                        {loadingSessionDetail && !sessionDetails[session.id] ? (
-                          <div className="flex items-center justify-center py-4">
-                            <div className="animate-spin h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full"></div>
-                            <span className="ml-2 text-xs text-gray-500">Loading details...</span>
+                      <button
+                        onClick={() => toggleSessionDetails(session.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {isExpanded ? 'Hide Details' : 'View Details'}
+                      </button>
+                    </div>
+
+                    {details ? (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Target className="h-3.5 w-3.5 text-green-500" />
+                          <span className="text-sm text-gray-700">Goals assessed: {details.goals.length}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {details.goals.map((goal) => (
+                            <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-300 text-blue-700 bg-blue-50">
+                              {goal.goalTitle}
+                            </span>
+                          ))}
+                        </div>
+                        {details.summary && (
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 mb-1">Assessment Summary</p>
+                            <p className="text-sm text-gray-600">{details.summary}</p>
                           </div>
-                        ) : sessionDetails[session.id] ? (
-                          <div className="space-y-4">
-                            {sessionDetails[session.id].goals.map((goal) => (
+                        )}
+                        {details.goals.length === 0 && !details.summary && (
+                          <p className="text-xs text-gray-400 italic">No details recorded for this session.</p>
+                        )}
+
+                        {isExpanded && details.goals.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 space-y-4">
+                            {details.goals.map((goal) => (
                               <div key={goal.goalId} className="space-y-2">
                                 <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
                                   <Target className="h-3.5 w-3.5 text-blue-500" />
@@ -1876,24 +1931,13 @@ const handleGenerateInvitation = async () => {
                                 </div>
                               </div>
                             ))}
-                            {sessionDetails[session.id].summary && (
-                              <div className="pt-2 border-t border-gray-100">
-                                <p className="text-xs text-gray-600">
-                                  <span className="font-medium">Summary:</span> {sessionDetails[session.id].summary}
-                                </p>
-                              </div>
-                            )}
-                            {sessionDetails[session.id].goals.length === 0 && (
-                              <p className="text-xs text-gray-400 italic">No step details recorded for this session.</p>
-                            )}
                           </div>
-                        ) : (
-                          <p className="text-xs text-gray-400 italic">Failed to load details.</p>
                         )}
                       </div>
-                    )}
+                    ) : null}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
