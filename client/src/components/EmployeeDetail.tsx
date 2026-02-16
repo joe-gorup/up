@@ -1523,8 +1523,8 @@ const handleGenerateInvitation = async () => {
         )}
       </div>
 
-      <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
-        <div className={assessmentMode ? 'lg:col-span-1 space-y-6' : 'contents'}>
+      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+        <div className={employee.role === 'Super Scooper' ? 'lg:col-span-1 space-y-6' : 'contents'}>
 
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
           {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
@@ -1599,14 +1599,8 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-        </div>
-
-        {/* Right Column - Goals */}
-        {employee.role !== 'Job Coach' && (
-        <div className={assessmentMode ? 'lg:col-span-2 space-y-6' : 'contents'}>
-
-          {/* Goal Assessment Section */}
-          {canAssess && isAssessable && activeGoals.length > 0 && (
+          {/* Goal Assessment Section - in left column for Super Scoopers */}
+          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               {assessmentMode ? (
                 <div>
@@ -1816,8 +1810,278 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible */}
-          {!(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+          {/* Past Assessments standalone card - shown when Goal Assessment card is not visible (Super Scooper left column) */}
+          {employee.role === 'Super Scooper' && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-3">
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Past Assessments</h2>
+                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                  {pastAssessments.length}
+                </span>
+              </div>
+              <div className="space-y-3">
+                {pastAssessments.map((session) => {
+                  const sessionDate = new Date(session.date + 'T00:00:00');
+                  const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
+                  const details = sessionDetails[session.id];
+                  const isExpanded = expandedSessionId === session.id;
+                  return (
+                  <div key={session.id} className="border border-gray-200 rounded-xl p-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2 mb-3">
+                      <div className="flex items-center gap-3 flex-wrap text-sm text-gray-700">
+                        <span className="flex items-center gap-1">
+                          <FileText className="h-3.5 w-3.5 text-gray-400" />
+                          <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                        </span>
+                        {sessionTime && (
+                          <span className="flex items-center gap-1 text-gray-500">
+                            <Clock className="h-3.5 w-3.5" />
+                            {sessionTime}
+                          </span>
+                        )}
+                        <span className="flex items-center gap-1 text-gray-500">
+                          <Users className="h-3.5 w-3.5" />
+                          {session.managerFirstName && session.managerLastName
+                            ? `${session.managerFirstName} ${session.managerLastName}`
+                            : 'Unknown'}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => toggleSessionDetails(session.id)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm text-gray-700"
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        {isExpanded ? 'Hide Details' : 'View Details'}
+                      </button>
+                    </div>
+
+                    {details ? (
+                      <div>
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Target className="h-3.5 w-3.5 text-green-500" />
+                          <span className="text-sm text-gray-700">Goals assessed: {details.goals.length}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mb-3">
+                          {details.goals.map((goal) => (
+                            <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-300 text-blue-700 bg-blue-50">
+                              {goal.goalTitle}
+                            </span>
+                          ))}
+                        </div>
+                        {details.summary && (
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900 mb-1">Assessment Summary</p>
+                            <p className="text-sm text-gray-600">{details.summary}</p>
+                          </div>
+                        )}
+                        {details.goals.length === 0 && !details.summary && (
+                          <p className="text-xs text-gray-400 italic">No details recorded for this session.</p>
+                        )}
+
+                        {isExpanded && details.goals.length > 0 && (
+                          <div className="mt-4 pt-3 border-t border-gray-100 space-y-4">
+                            {details.goals.map((goal) => (
+                              <div key={goal.goalId} className="space-y-2">
+                                <h4 className="text-sm font-semibold text-gray-800 flex items-center gap-2">
+                                  <Target className="h-3.5 w-3.5 text-blue-500" />
+                                  {goal.goalTitle}
+                                </h4>
+                                <div className="space-y-1.5">
+                                  {goal.steps.map((step, idx) => (
+                                    <div key={step.stepId || idx} className="flex items-start gap-2 pl-2">
+                                      <span className="text-xs text-gray-400 font-mono mt-0.5 w-4 flex-shrink-0">{step.stepOrder}.</span>
+                                      <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 flex-wrap">
+                                          <span className="text-xs text-gray-700">{step.stepDescription}</span>
+                                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
+                                            {getOutcomeLabel(step.outcome)}
+                                          </span>
+                                          {step.completionTimeSeconds ? (
+                                            <span className="text-xs text-gray-400 flex items-center gap-0.5">
+                                              <Clock className="h-3 w-3" />
+                                              {formatTime(step.completionTimeSeconds)}
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                        {step.notes && (
+                                          <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Guardian Notes Card - in left column for Super Scoopers */}
+          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+           employee.role === 'Super Scooper' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <Heart className="h-5 w-5 text-rose-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
+                {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
+                  <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
+                    {guardianNotes.filter(n => n.scooperId === employeeId).length}
+                  </span>
+                )}
+              </div>
+              {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
+                <div className="space-y-3">
+                  {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
+                    const guardian = employees.find(e => e.id === note.guardianId);
+                    return (
+                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="font-semibold text-rose-900 text-sm">
+                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
+                        <div className="mt-2 flex items-center space-x-1">
+                          <Users className="h-3 w-3 text-rose-400" />
+                          <span className="text-xs text-rose-600">Guardian</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No guardian notes yet</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Job Coach Notes Card - in left column for Super Scoopers */}
+          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
+           employee.role === 'Super Scooper' && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              <div className="flex items-center space-x-2 mb-4">
+                <FileText className="h-5 w-5 text-indigo-500" />
+                <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
+                {coachNotes.length > 0 && (
+                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
+                    {coachNotes.length}
+                  </span>
+                )}
+              </div>
+              {loadingCoachNotes ? (
+                <div className="flex items-center justify-center py-6">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
+                </div>
+              ) : coachNotes.length > 0 ? (
+                <div className="space-y-3">
+                  {coachNotes.map(note => (
+                      <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="font-semibold text-indigo-900 text-sm">{note.title}</h3>
+                          <span className="text-xs text-gray-500">
+                            {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </span>
+                        </div>
+                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
+                        <div className="mt-2 flex items-center space-x-1">
+                          <UserCheck className="h-3 w-3 text-indigo-400" />
+                          <span className="text-xs text-indigo-600">
+                            {note.coach_name || 'Job Coach'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-6">
+                  <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No coach notes yet</p>
+                </div>
+              )}
+            </div>
+          )}
+
+        </div>
+
+        {/* Right Column - Goals */}
+        {employee.role !== 'Job Coach' && (
+        <div className={employee.role === 'Super Scooper' ? 'lg:col-span-2 space-y-6' : 'contents'}>
+
+          {/* Goal Assessment Section - for non-Super Scoopers in right column */}
+          {employee.role !== 'Super Scooper' && canAssess && isAssessable && activeGoals.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
+              {assessmentMode ? (
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-2">
+                      <ClipboardCheck className="h-5 w-5 text-green-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">Assessment in Progress</h2>
+                    </div>
+                    <button
+                      onClick={handleEndAssessment}
+                      className="flex items-center space-x-2 px-4 py-2 bg-red-50 text-red-700 border border-red-200 rounded-xl hover:bg-red-100 transition-colors text-sm font-medium"
+                    >
+                      <X className="h-4 w-4" />
+                      <span>End Assessment</span>
+                    </button>
+                  </div>
+                  <div className="text-sm text-gray-500 mb-4 flex items-center gap-2">
+                    <span>Location: {assessmentLocation}</span>
+                  </div>
+                  <EmployeeProgress
+                    employee={employee}
+                    assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+                  />
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center space-x-2 mb-4">
+                    <ClipboardCheck className="h-5 w-5 text-blue-600" />
+                    <h2 className="text-lg font-semibold text-gray-900">Goal Assessment</h2>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                      <select
+                        value={assessmentLocation}
+                        onChange={(e) => setAssessmentLocation(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                      >
+                        <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                        <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                        <option value="Remote">Remote</option>
+                      </select>
+                    </div>
+                    <button
+                      onClick={handleStartAssessment}
+                      disabled={startingAssessment}
+                      className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                    >
+                      <ClipboardCheck className="h-5 w-5" />
+                      {startingAssessment ? 'Starting...' : 'Start Assessment'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Past Assessments standalone card - for non-Super Scoopers */}
+          {employee.role !== 'Super Scooper' && !(canAssess && isAssessable && activeGoals.length > 0) && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <div className="flex items-center space-x-2 mb-3">
                 <FileText className="h-5 w-5 text-indigo-500" />
@@ -2165,97 +2429,6 @@ const handleGenerateInvitation = async () => {
               </div>
             )}
           </div>
-
-          {/* Job Coach Notes Card */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <FileText className="h-5 w-5 text-indigo-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
-                {coachNotes.length > 0 && (
-                  <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
-                    {coachNotes.length}
-                  </span>
-                )}
-              </div>
-              {loadingCoachNotes ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
-                </div>
-              ) : coachNotes.length > 0 ? (
-                <div className="space-y-3">
-                  {coachNotes.map(note => (
-                      <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-indigo-900 text-sm">{note.title}</h3>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <UserCheck className="h-3 w-3 text-indigo-400" />
-                          <span className="text-xs text-indigo-600">
-                            {note.coach_name || 'Job Coach'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No coach notes yet</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Guardian Notes Card */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <Heart className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-                {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 && (
-                  <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
-                    {guardianNotes.filter(n => n.scooperId === employeeId).length}
-                  </span>
-                )}
-              </div>
-              {guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
-                <div className="space-y-3">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                    const guardian = employees.find(e => e.id === note.guardianId);
-                    return (
-                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-rose-900 text-sm">
-                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <Users className="h-3 w-3 text-rose-400" />
-                          <span className="text-xs text-rose-600">Guardian</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No guardian notes yet</p>
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Maintenance Goals */}
           {maintenanceGoals.length > 0 && (
