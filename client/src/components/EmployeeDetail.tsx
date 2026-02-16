@@ -987,13 +987,14 @@ const handleGenerateInvitation = async () => {
                   )}
 
                   {employeeContacts.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {employeeContacts.map(contact => (
-                        <div key={contact.id} className={`px-3 py-2 rounded-lg ${contact.is_emergency_contact ? 'bg-blue-50 border border-blue-100' : 'bg-purple-50 border border-purple-100'}`}>
-                          <div className="flex items-center justify-between">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center space-x-2">
-                                <p className="font-medium text-gray-900 text-xs">{contact.first_name} {contact.last_name}</p>
+                        <div key={contact.id} className="flex items-center justify-between p-3 border border-gray-200 rounded-xl bg-gray-50">
+                          <div className="flex items-center space-x-3 flex-1 min-w-0">
+                            <Users className="h-5 w-5 text-purple-500 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="flex items-center flex-wrap gap-x-2 gap-y-0.5">
+                                <p className="font-medium text-gray-900">{contact.first_name} {contact.last_name}</p>
                                 {contact.is_emergency_contact && (
                                   <span className="inline-flex items-center bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
                                     <Phone className="h-2.5 w-2.5 mr-0.5" />
@@ -1008,53 +1009,42 @@ const handleGenerateInvitation = async () => {
                                 )}
                               </div>
                               <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
-                                <p className="text-xs text-purple-600">{contact.relationship_type}</p>
-                                {contact.phone && <p className="text-xs text-blue-600">{contact.phone}</p>}
-                                {contact.email && <p className="text-xs text-gray-500">{contact.email}</p>}
+                                <p className="text-sm text-gray-500">{contact.relationship_type}</p>
+                                {contact.phone && <p className="text-sm text-blue-600">{contact.phone}</p>}
+                                {contact.email && <p className="text-sm text-gray-500">{contact.email}</p>}
                               </div>
-                            </div>
-                            <div className="flex items-center space-x-1 ml-2">
-                              {user?.role === 'Administrator' && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
-                                <button
-                                  onClick={() => handleGrantAccess(contact.id)}
-                                  disabled={grantingAccess === contact.id}
-                                  className="p-1 text-purple-400 hover:text-purple-600 hover:bg-purple-100 rounded transition-colors"
-                                  title="Grant app access"
-                                >
-                                  {grantingAccess === contact.id ? (
-                                    <Clock className="h-3.5 w-3.5 animate-spin" />
-                                  ) : (
-                                    <Link className="h-3.5 w-3.5" />
-                                  )}
-                                </button>
-                              )}
-                              {inviteLinkMap[contact.id] && (
-                                <button
-                                  onClick={() => handleCopyInviteLink(contact.id)}
-                                  className="p-1 text-green-500 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
-                                  title="Copy invite link"
-                                >
-                                  {copiedContactId === contact.id ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-                                </button>
-                              )}
-                              {canEdit && (
-                                <button onClick={() => handleDeleteContact(contact.id)} className="p-1 text-red-400 hover:text-red-600 rounded transition-colors" title="Remove contact">
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                              )}
                             </div>
                           </div>
-                          {inviteLinkMap[contact.id] && (
-                            <div className="mt-2 p-2 bg-white rounded-lg border border-green-200">
-                              <p className="text-[10px] text-gray-500 mb-1">Invite link (expires in 7 days):</p>
-                              <div className="flex items-center space-x-1">
-                                <code className="text-[10px] text-green-700 bg-green-50 px-1.5 py-0.5 rounded flex-1 truncate">{inviteLinkMap[contact.id]}</code>
-                                <button onClick={() => handleCopyInviteLink(contact.id)} className="p-1 text-green-600 hover:bg-green-50 rounded">
-                                  {copiedContactId === contact.id ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
-                                </button>
-                              </div>
-                            </div>
-                          )}
+                          <div className="flex items-center space-x-1 ml-2 shrink-0">
+                            {user?.role === 'Administrator' && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
+                              <button
+                                onClick={() => handleGrantAccess(contact.id)}
+                                disabled={grantingAccess === contact.id}
+                                className="p-1 text-purple-500 hover:bg-purple-50 rounded-lg transition-colors"
+                                title="Grant app access"
+                              >
+                                {grantingAccess === contact.id ? (
+                                  <Clock className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Link className="h-4 w-4" />
+                                )}
+                              </button>
+                            )}
+                            {inviteLinkMap[contact.id] && (
+                              <button
+                                onClick={() => handleCopyInviteLink(contact.id)}
+                                className="p-1 text-green-500 hover:bg-green-50 rounded-lg transition-colors"
+                                title="Copy invite link"
+                              >
+                                {copiedContactId === contact.id ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                              </button>
+                            )}
+                            {canEdit && (
+                              <button onClick={() => handleDeleteContact(contact.id)} className="p-1 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Remove contact">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       ))}
                     </div>
