@@ -137,35 +137,6 @@ All new columns are nullable with safe defaults - publishing will add them witho
 
 ---
 
-## Multi-Tool Development Workflow
+## Development Workflow
 
-This project uses **two development tools simultaneously**. To avoid merge conflicts and keep work organized, follow this workflow strictly.
-
-### Tool Responsibilities
-| Tool | Scope | Files |
-|------|-------|-------|
-| **Warp** | Backend only | `shared/schema.ts`, `server/routes.ts`, `server/storage.ts`, `server/*.ts` |
-| **Replit Agent** | Frontend only | `client/src/**/*`, frontend components, pages, styles |
-
-### Development Order
-1. **Backend first (Warp)**: Schema changes, API endpoints, storage methods
-2. **Frontend second (Replit Agent)**: UI components, pages, API integration
-
-### Handoff Protocol
-When finishing work in one tool, provide a **handoff note** for the other tool describing:
-- What was added/changed (new endpoints, new schema fields, new components)
-- API contracts (request/response shapes, URL paths, HTTP methods)
-- Any new types or interfaces the other side needs to use
-- Any dependencies or prerequisites
-
-### Git Rules (Preventing Merge Conflicts)
-- **ALWAYS commit and push from the current tool BEFORE switching to the other tool**
-- **ALWAYS pull in the new tool BEFORE starting any work**
-- Never have uncommitted changes in both tools at the same time
-- Sequence: Finish work → commit → push → switch tools → pull → start work
-
-### Conflict Prevention
-- Warp should NOT edit any files under `client/src/`
-- Replit Agent should NOT edit `shared/schema.ts`, `server/routes.ts`, or other backend files
-- Exception: `shared/schema.ts` types may be read by Replit Agent but only modified by Warp
-- If a change truly requires both backend and frontend files, do backend first in Warp, push, then do frontend in Replit Agent
+All frontend and backend development is done through Replit Agent. This includes schema changes, API endpoints, storage methods, UI components, pages, and styles.
