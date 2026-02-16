@@ -1415,7 +1415,7 @@ const handleGenerateInvitation = async () => {
                 onClose={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
                 title="Record Certification"
                 titleIcon={<Award className="h-5 w-5 text-amber-600" />}
-                size="md"
+                size="lg"
               >
                 <div className="space-y-4">
                   <div className="flex space-x-2">
