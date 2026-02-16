@@ -914,8 +914,8 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
 
-            {/* Contacts & Service Provider Row */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6 pt-5 border-t border-gray-200">
+            {/* Contacts, Service Provider & Job Coaches Row */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6 pt-5 border-t border-gray-200">
                 {/* Contacts - unified */}
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -1170,6 +1170,27 @@ const handleGenerateInvitation = async () => {
                   )}
                 </div>
                 )}
+
+                {/* Job Coaches */}
+                {employee.role === 'Super Scooper' && (
+                <div>
+                  <div className="flex items-center space-x-2 mb-3">
+                    <UserCheck className="h-4 w-4 text-green-500" />
+                    <h3 className="text-sm font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h3>
+                  </div>
+                  {assignedCoaches.length > 0 ? (
+                    <div className="space-y-2">
+                      {assignedCoaches.map((assignment: any) => (
+                        <div key={assignment.id} className="text-xs bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
+                          {getPersonName(assignment.coach_id)}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-400 italic">No job coaches assigned</p>
+                  )}
+                </div>
+                )}
               </div>
 
             {/* Health & Safety Row */}
@@ -1235,23 +1256,6 @@ const handleGenerateInvitation = async () => {
 
       <div className={`grid grid-cols-1 ${assessmentMode ? 'lg:grid-cols-3' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
         <div className={assessmentMode ? 'lg:col-span-1 space-y-6' : 'contents'}>
-
-          {/* Job Coaches */}
-          {assignedCoaches.length > 0 && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <div className="flex items-center space-x-2 mb-4">
-                <UserCheck className="h-5 w-5 text-green-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h2>
-              </div>
-              <div className="space-y-2">
-                {assignedCoaches.map((assignment: any) => (
-                  <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg">
-                    {getPersonName(assignment.coach_id)}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Assigned Mentees Section - for Job Coaches, visible to managers */}
           {employee.role === 'Job Coach' && ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '') && (
