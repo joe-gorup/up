@@ -12,9 +12,11 @@ Golden Scoop is a comprehensive employee development and shift management applic
 To provide a digital solution for tracking employee skill development, managing work shifts, and documenting progress toward mastery of job-related competencies in an ice cream shop environment.
 
 ### 1.2 Target Users
-- **Shift Managers**: Track employee progress during shifts, document outcomes
+- **Shift Leads / Assistant Managers**: Track employee progress during shifts, document outcomes
 - **Administrators**: Manage employees, create goal templates, oversee system operations
-- **Employees**: Indirect beneficiaries through structured development tracking
+- **Job Coaches**: Access assigned scoopers, document check-ins, manage notes and files
+- **Guardians**: View linked scoopers' progress, leave notes
+- **Super Scoopers (Employees)**: Indirect beneficiaries through structured development tracking
 
 ### 1.3 Business Goals
 - Standardize employee training and development processes
@@ -54,6 +56,11 @@ To provide a digital solution for tracking employee skill development, managing 
 - Edit existing employee information
 - View comprehensive employee details
 - Archive/deactivate employees
+
+**Service Provider Tracking**
+- Optional service provider section on Super Scooper profiles
+- Track whether an employee has an external service provider
+- Record service provider contact details
 
 ### 2.3 Goal Template System
 **Priority: High**
@@ -115,7 +122,28 @@ To provide a digital solution for tracking employee skill development, managing 
 - Goal completion notifications
 - Progress visualization
 
-### 2.7 Reporting & Analytics
+### 2.7 Coach Notes & File Management
+**Priority: High**
+
+**Coach Notes**
+- Job Coaches can create rich text notes for their assigned scoopers
+- Notes include title and formatted content
+- Only the creating coach or an Administrator can edit or delete notes
+
+**Coach Files**
+- Job Coaches can upload files (PDF, TXT, DOC, DOCX, RTF) for assigned scoopers
+- Files are stored with access control—only assigned coaches, administrators, and shift leads can view
+- Download and delete capabilities with ownership enforcement
+
+### 2.8 Guardian Notes
+**Priority: Medium**
+
+- Guardians can leave notes about their linked super scoopers from the "My Loved Ones" page
+- One note per guardian-scooper pair (upsert behavior)
+- Only the guardian who created the note can edit or delete it
+- Administrators, shift leads, and job coaches can view all guardian notes for a scooper
+
+### 2.9 Reporting & Analytics
 **Priority: Medium**
 
 **Dashboard Overview**
@@ -141,12 +169,15 @@ To provide a digital solution for tracking employee skill development, managing 
 - **Authentication**: Demo system with role-based access
 
 ### 3.2 Data Models
-- Users (authentication and roles)
-- Employees (profile and personal information)
+- Employees (unified user/employee profiles with authentication)
 - Goal Templates (reusable goal structures)
 - Development Goals (employee-specific goal instances)
 - Step Progress (individual step outcomes)
-- Shift Management (active sessions and summaries)
+- Assessment Sessions (active sessions and summaries)
+- Coach Assignments, Guardian Relationships (role-based linking)
+- Coach Notes, Coach Files, Guardian Notes (documentation and communication)
+- Promotion Certifications (mentor/shift lead certs)
+- Account Invitations (user onboarding tokens)
 
 ### 3.3 Performance Requirements
 - Page load times under 3 seconds
@@ -194,8 +225,10 @@ To provide a digital solution for tracking employee skill development, managing 
 
 ### 5.2 Access Control
 - Administrators can manage all system functions
-- Shift Managers can track progress and manage shifts
-- All users can view employee information (read-only for managers)
+- Shift Leads and Assistant Managers can document assessments and view all scoopers
+- Job Coaches can only access assigned scoopers (via coach_assignments)
+- Guardians can view assigned scoopers and leave notes (via guardian_relationships)
+- Super Scoopers have minimal system access
 
 ### 5.3 Data Integrity
 - Employee information must be complete before goal assignment
@@ -261,6 +294,6 @@ To provide a digital solution for tracking employee skill development, managing 
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: January 2025*  
-*Status: Implementation Complete*
+*Document Version: 1.1*  
+*Last Updated: March 2026*  
+*Status: Implementation In Progress — Coach/Guardian features added*

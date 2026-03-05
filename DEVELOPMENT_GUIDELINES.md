@@ -109,9 +109,10 @@ These tables and columns exist in production and MUST NOT be altered destructive
 ### New Tables (added in development, not yet in production)
 - `coach_assignments` - coach-to-scooper linking
 - `guardian_relationships` - guardian-to-scooper linking
+- `guardian_notes` - notes from guardians about their linked super scoopers (one note per guardian-scooper pair)
 - `account_invitations` - setup tokens
 - `coach_checkins` - structured visit notes
-- `coach_files` - uploaded documents
+- `coach_files` - uploaded documents (PDF, TXT, DOC, DOCX, RTF)
 - `coach_notes` - rich text notes
 - `promotion_certifications` - mentor/shift lead certs
 
@@ -132,7 +133,7 @@ All new columns are nullable with safe defaults - publishing will add them witho
 | Shift Lead | Can document assessments, view all scoopers |
 | Assistant Manager | Can document assessments, view all scoopers |
 | Job Coach | Can only access assigned scoopers (via coach_assignments) |
-| Guardian | Can only view assigned scoopers (via guardian_relationships) |
+| Guardian | Can view assigned scoopers and leave notes (via guardian_relationships, guardian_notes) |
 | Super Scooper | Employee being tracked, minimal system access |
 
 ---
