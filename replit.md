@@ -29,14 +29,14 @@ Preferred communication style: Simple, everyday language.
 -   **Technology Stack**: Express.js REST API with Node.js and TypeScript.
 -   **Structure**: Monolithic server architecture.
 -   **Authentication**: Session-less authentication (demo credentials for development), with a token-based invitation system for user onboarding.
--   **Authorization**: Role-Based Access Control (RBAC) with roles including Administrator, Shift Manager, Job Coach, and Guardian, enforcing read-only access for Job Coach and Guardian roles on specific endpoints.
+-   **Authorization**: Role-Based Access Control (RBAC) with roles including Administrator, Shift Lead, Assistant Manager, Job Coach, Guardian, and Super Scooper, enforcing scoped access for Job Coach and Guardian roles on specific endpoints.
 -   **Concurrency Control**: PostgreSQL Advisory Locks prevent race conditions during assessment session creation and ensure data integrity.
 
 ## Database Layer
 -   **ORM**: Drizzle ORM for type-safe database queries and schema management.
 -   **Database**: PostgreSQL, specifically configured for Neon Database for serverless hosting and connection pooling.
 -   **Schema**: Normalized relational design for users, employees, goal templates, development goals, progress tracking, and assessment sessions.
--   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files` for storing check-in notes, certification details, rich-text coach notes, and file attachments respectively.
+-   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `guardian_notes`, `guardian_relationships`, `coach_assignments`, `account_invitations` for storing check-in notes, certification details, rich-text coach notes, file attachments, guardian notes, and relationship/assignment linking respectively.
 
 ## Key Features & Implementations
 -   **Goal Management**: Creation of goal templates, employee-specific goal instances, and step-by-step progress tracking with mastery criteria.
@@ -44,7 +44,9 @@ Preferred communication style: Simple, everyday language.
 -   **User Management**: Role-based access, account invitation system, and a dedicated setup page for new users.
 -   **Employee Features**: Comprehensive employee profiles, promotion certifications (Mentor, Shift Lead), and ROI compliance flow with legal text, consent toggles, and signature capture.
 -   **Coach & Guardian Experience**: Dedicated "My Scoopers" and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
--   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities with access control.
+-   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities (PDF, TXT, DOC, DOCX, RTF) with access control.
+-   **Guardian Notes**: Guardians can leave and manage notes about their linked super scoopers via the "My Loved Ones" page.
+-   **Service Provider Tracking**: Employee profiles for Super Scoopers include an optional service provider section to record external service provider information.
 
 # External Dependencies
 
