@@ -477,40 +477,43 @@ export default function HelpGuide() {
   return (
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-3">
           <HelpCircle className="h-5 w-5 text-amber-500" />
           <span className="text-sm text-amber-600 font-medium">Your role: {currentRole}</span>
         </div>
-        <p className="text-sm text-gray-500 mb-3">
-          This guide is organized into three sections — use whichever is most helpful:
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="flex items-start gap-2.5 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
-            <HelpCircle className="h-4 w-4 text-amber-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-amber-800">How To</p>
-              <p className="text-xs text-amber-700 mt-0.5">Step-by-step instructions for every page, organized by role. Your role's section appears first.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5 bg-purple-50 border border-purple-100 rounded-lg px-3 py-2.5">
-            <Info className="h-4 w-4 text-purple-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-purple-800">How It Works</p>
-              <p className="text-xs text-purple-700 mt-0.5">Explanations of key features like goal mastery logic and assessment history circles.</p>
-            </div>
-          </div>
-          <div className="flex items-start gap-2.5 bg-green-50 border border-green-100 rounded-lg px-3 py-2.5">
-            <Megaphone className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-green-800">Release Notes</p>
-              <p className="text-xs text-green-700 mt-0.5">A running log of what's new and recently fixed in the app.</p>
-            </div>
-          </div>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <span>This guide is organized into:</span>
+          <span className="inline-flex items-center gap-1 bg-green-50 border border-green-200 text-green-700 font-medium px-2 py-0.5 rounded-full">
+            <Megaphone className="h-3 w-3" /> Release Notes
+          </span>
+          <span className="inline-flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 font-medium px-2 py-0.5 rounded-full">
+            <HelpCircle className="h-3 w-3" /> How To
+          </span>
+          <span className="inline-flex items-center gap-1 bg-purple-50 border border-purple-200 text-purple-700 font-medium px-2 py-0.5 rounded-full">
+            <Info className="h-3 w-3" /> How It Works
+          </span>
         </div>
       </div>
 
-      <div className="mb-4">
+      <div className="mb-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-1.5 text-green-700">
+            <Megaphone className="h-4 w-4" />
+            <span className="text-sm font-semibold">Release Notes</span>
+          </div>
+          <div className="flex-1 border-t border-green-200" />
+        </div>
         <ReleaseNotesSection />
+      </div>
+
+      <div className="mb-2">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-1.5 text-amber-700">
+            <HelpCircle className="h-4 w-4" />
+            <span className="text-sm font-semibold">How To</span>
+          </div>
+          <div className="flex-1 border-t border-amber-200" />
+        </div>
       </div>
 
       <div className="space-y-4">
@@ -585,11 +588,18 @@ export default function HelpGuide() {
         })}
       </div>
 
-      <div className="mt-6">
+      <div className="mt-8">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-1.5 text-purple-700">
+            <Info className="h-4 w-4" />
+            <span className="text-sm font-semibold">How It Works</span>
+          </div>
+          <div className="flex-1 border-t border-purple-200" />
+        </div>
         <HowItWorksSection />
       </div>
 
-      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
         <h3 className="font-semibold text-blue-900 text-sm mb-2">Common Tips</h3>
         <ul className="space-y-1.5 text-sm text-blue-800">
           <li className="flex items-start gap-2">
