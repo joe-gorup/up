@@ -919,52 +919,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const goalSteps = await db.select().from(goal_steps)
             .where(eq(goal_steps.goal_id, goalId));
 
-          // Get all submitted progress for this goal/employee
+          // Get only TODAY's submitted progress for this goal/employee
           const submittedProgress = await db.select().from(step_progress)
             .where(and(
               eq(step_progress.development_goal_id, goalId),
               eq(step_progress.employee_id, employee_id),
+              eq(step_progress.date, date),
               eq(step_progress.status, 'submitted')
             ));
 
-          // Check if all required steps are completed with "correct" outcome
+          // Check if every required step has a 'correct' outcome in today's session
           const requiredSteps = goalSteps.filter(step => step.is_required);
-          const correctSubmissions = submittedProgress.filter(p => 
-            p.outcome === 'correct' && 
-            requiredSteps.some(step => step.id === p.goal_step_id)
+          const correctStepIds = new Set(
+            submittedProgress
+              .filter(p => p.outcome === 'correct')
+              .map(p => p.goal_step_id)
           );
+          const allRequiredCorrectToday = requiredSteps.length > 0 &&
+            requiredSteps.every(step => correctStepIds.has(step.id));
 
-          // If all required steps are correct, increment consecutive count
-          if (correctSubmissions.length === requiredSteps.length) {
-            const [goal] = await db.select().from(development_goals)
-              .where(eq(development_goals.id, goalId))
-              .limit(1);
+          const [goal] = await db.select().from(development_goals)
+            .where(eq(development_goals.id, goalId))
+            .limit(1);
 
-            if (goal) {
-              const newConsecutive = (goal.consecutive_all_correct || 0) + 1;
-              const masteryAchieved = newConsecutive >= 3; // Default mastery criteria
+          if (goal) {
+            const newConsecutive = allRequiredCorrectToday
+              ? (goal.consecutive_all_correct || 0) + 1
+              : 0;
+            const masteryAchieved = newConsecutive >= 3;
 
-              await db.update(development_goals)
-                .set({
-                  consecutive_all_correct: newConsecutive,
-                  mastery_achieved: masteryAchieved,
-                  mastery_date: masteryAchieved ? new Date().toISOString().split('T')[0] : null,
-                  status: masteryAchieved ? 'completed' : 'active',
-                  updated_at: new Date()
-                })
-                .where(eq(development_goals.id, goalId));
+            await db.update(development_goals)
+              .set({
+                consecutive_all_correct: newConsecutive,
+                mastery_achieved: masteryAchieved,
+                mastery_date: masteryAchieved && !goal.mastery_achieved
+                  ? new Date().toISOString().split('T')[0]
+                  : goal.mastery_date,
+                status: masteryAchieved ? 'completed' : 'active',
+                updated_at: new Date()
+              })
+              .where(eq(development_goals.id, goalId));
 
-              logger.info({ 
-                goalId, 
-                employeeId: employee_id, 
-                sessionId: assessment_session_id,
-                documenterId: documenter_user_id,
-                consecutive: newConsecutive,
-                masteryAchieved,
-                requiredStepsCount: requiredSteps.length,
-                correctStepsCount: correctSubmissions.length
-              }, masteryAchieved ? 'MASTERY ACHIEVED - Goal completed!' : 'Goal progress updated after submission');
-            }
+            logger.info({ 
+              goalId, 
+              employeeId: employee_id, 
+              sessionId: assessment_session_id,
+              documenterId: documenter_user_id,
+              allRequiredCorrectToday,
+              consecutive: newConsecutive,
+              masteryAchieved,
+              requiredStepsCount: requiredSteps.length,
+              correctStepIdsCount: correctStepIds.size
+            }, masteryAchieved ? 'MASTERY ACHIEVED - Goal completed!' : 'Goal progress updated after submission');
           }
         }
       }
