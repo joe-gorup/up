@@ -510,6 +510,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulation_strategies: employeeData.regulationStrategies,
           has_service_provider: employeeData.hasServiceProvider,
           service_providers: employeeData.serviceProviders,
+          ...(employeeData.date_of_birth && { date_of_birth: employeeData.date_of_birth }),
         }),
       });
 
@@ -531,6 +532,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: newEmployee.regulation_strategies || [],
           hasServiceProvider: newEmployee.has_service_provider || false,
           serviceProviders: newEmployee.service_providers || [],
+          date_of_birth: newEmployee.date_of_birth || null,
           last_login: newEmployee.last_login || null,
           roi_status: newEmployee.roi_status || false,
           createdAt: newEmployee.created_at,
@@ -566,6 +568,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
       if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
       if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
+      if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
 
       const response = await apiRequest(`/api/employees/${id}`, {
         method: 'PUT',
@@ -593,6 +596,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: updatedEmployee.regulation_strategies || [],
           hasServiceProvider: updatedEmployee.has_service_provider || false,
           serviceProviders: updatedEmployee.service_providers || [],
+          date_of_birth: updatedEmployee.date_of_birth || null,
           last_login: updatedEmployee.last_login || null,
           roi_status: updatedEmployee.roi_status || false,
           createdAt: updatedEmployee.created_at,
