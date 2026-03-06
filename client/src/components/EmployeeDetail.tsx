@@ -580,7 +580,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
   const getRecentProgress = (goalId: string) => {
     const goalSteps = stepProgress.filter(
-      p => p.developmentGoalId === goalId && p.submitted
+      p => p.developmentGoalId === goalId && p.status === 'submitted'
     );
 
     const bySession = new Map<string, typeof goalSteps>();
