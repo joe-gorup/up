@@ -8,6 +8,7 @@ import CoachCheckin from './CoachCheckin';
 import EmployeeProgress from './EmployeeProgress';
 import EmployeeAvatar from './EmployeeAvatar';
 import Modal from './ui/Modal';
+import AssessmentDetailsModal from './AssessmentDetailsModal';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
 
 interface EmployeeDetailProps {
@@ -99,9 +100,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(true);
   const [archivedGoalsExpanded, setArchivedGoalsExpanded] = useState(false);
   const [pastAssessmentsVisible, setPastAssessmentsVisible] = useState(3);
-  const [expandedSessionId, setExpandedSessionId] = useState<string | null>(null);
   const [sessionDetails, setSessionDetails] = useState<Record<string, { goals: Array<{ goalId: string; goalTitle: string; steps: Array<{ stepId: string; stepOrder: number; stepDescription: string; outcome: string; notes: string | null; completionTimeSeconds: number | null; timerManuallyEntered: boolean | null }>}>; summary: string | null; totalSteps: number }>>({});
-  const [loadingSessionDetail, setLoadingSessionDetail] = useState(false);
+  const [selectedModalSessionId, setSelectedModalSessionId] = useState<string | null>(null);
 
   // Certification checklist items
   const mentorChecklistItems = [
@@ -345,22 +345,41 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     fetchPastAssessments();
   }, [employeeId]);
 
-  async function toggleSessionDetails(sessionId: string) {
-    if (expandedSessionId === sessionId) {
-      setExpandedSessionId(null);
-      return;
-    }
-    setExpandedSessionId(sessionId);
-    if (sessionDetails[sessionId]) return;
-    setLoadingSessionDetail(true);
-    try {
-      const res = await apiRequest(`/api/assessment-sessions/${sessionId}/details?employeeId=${employeeId}`);
-      if (res.ok) {
-        const data = await res.json();
-        setSessionDetails(prev => ({ ...prev, [sessionId]: data }));
-      }
-    } catch (err) {}
-    setLoadingSessionDetail(false);
+  function buildModalData(session: typeof pastAssessments[0]) {
+    const details = sessionDetails[session.id];
+    const sessionDate = new Date(session.date + 'T00:00:00');
+    const sessionTime = session.created_at
+      ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })
+      : '';
+    const assessor =
+      session.managerFirstName && session.managerLastName
+        ? `${session.managerFirstName} ${session.managerLastName}`
+        : 'Staff';
+    const dateStr = sessionDate.toLocaleDateString('en-US', {
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+    });
+    return {
+      id: session.id,
+      date: dateStr,
+      time: sessionTime,
+      assessor,
+      goalName: details?.goals?.[0]?.goalTitle ?? '',
+      progressBefore: 0, progressAfter: 0,
+      consecutiveBefore: 0, consecutiveAfter: 0, consecutiveTarget: 3,
+      stepResults: [],
+      overallSummary: details?.summary ?? '',
+      goals: (details?.goals ?? []).map(g => ({
+        goalTitle: g.goalTitle,
+        steps: g.steps.map(s => ({
+          id: s.stepId || String(s.stepOrder),
+          step: s.stepDescription,
+          outcome: (s.outcome === 'na' ? 'n/a' : s.outcome) as 'correct' | 'verbal_prompt' | 'n/a' | 'incorrect',
+          notes: s.notes ?? undefined,
+          completionTime: s.completionTimeSeconds ?? undefined,
+          timerManuallyEntered: s.timerManuallyEntered ?? undefined,
+        })),
+      })),
+    };
   }
 
   function formatTime(seconds: number | null): string {
@@ -1865,10 +1884,8 @@ const handleGenerateInvitation = async () => {
                   {pastAssessments.slice(0, pastAssessmentsVisible).map((session) => {
                     const sessionDate = new Date(session.date + 'T00:00:00');
                     const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                    const details = sessionDetails[session.id];
-                    const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <div key={session.id} className="border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -1880,61 +1897,13 @@ const handleGenerateInvitation = async () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => toggleSessionDetails(session.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          onClick={() => setSelectedModalSessionId(session.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex-shrink-0"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          {isExpanded ? 'Hide' : 'View'}
+                          View
                         </button>
                       </div>
-                      {isExpanded && loadingSessionDetail && !details && (
-                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
-                        </div>
-                      )}
-                      {details && isExpanded ? (
-                        <div className="mt-3 pt-3 border-t border-indigo-100">
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
-                                {goal.goalTitle}
-                              </span>
-                            ))}
-                          </div>
-                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
-                          {details.goals.length > 0 && (
-                            <div className="space-y-3">
-                              {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
-                                    <Target className="h-3.5 w-3.5 text-blue-500" />
-                                    {goal.goalTitle}
-                                  </h4>
-                                  <div className="space-y-1.5">
-                                    {goal.steps.map((step, idx) => (
-                                      <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
-                                        <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
-                                              {getOutcomeLabel(step.outcome)}
-                                            </span>
-                                          </div>
-                                          {step.notes && <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {details.goals.length === 0 && !details.summary && (
-                            <p className="text-xs text-gray-400 italic">No details recorded.</p>
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                     );
                   })}
@@ -2071,10 +2040,8 @@ const handleGenerateInvitation = async () => {
                   {pastAssessments.slice(0, pastAssessmentsVisible).map((session) => {
                     const sessionDate = new Date(session.date + 'T00:00:00');
                     const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                    const details = sessionDetails[session.id];
-                    const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <div key={session.id} className="border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -2086,61 +2053,13 @@ const handleGenerateInvitation = async () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => toggleSessionDetails(session.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          onClick={() => setSelectedModalSessionId(session.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex-shrink-0"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          {isExpanded ? 'Hide' : 'View'}
+                          View
                         </button>
                       </div>
-                      {isExpanded && loadingSessionDetail && !details && (
-                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
-                        </div>
-                      )}
-                      {details && isExpanded ? (
-                        <div className="mt-3 pt-3 border-t border-indigo-100">
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
-                                {goal.goalTitle}
-                              </span>
-                            ))}
-                          </div>
-                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
-                          {details.goals.length > 0 && (
-                            <div className="space-y-3">
-                              {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
-                                    <Target className="h-3.5 w-3.5 text-blue-500" />
-                                    {goal.goalTitle}
-                                  </h4>
-                                  <div className="space-y-1.5">
-                                    {goal.steps.map((step, idx) => (
-                                      <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
-                                        <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
-                                              {getOutcomeLabel(step.outcome)}
-                                            </span>
-                                          </div>
-                                          {step.notes && <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {details.goals.length === 0 && !details.summary && (
-                            <p className="text-xs text-gray-400 italic">No details recorded.</p>
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                     );
                   })}
@@ -2238,10 +2157,8 @@ const handleGenerateInvitation = async () => {
                   {pastAssessments.slice(0, pastAssessmentsVisible).map((session) => {
                     const sessionDate = new Date(session.date + 'T00:00:00');
                     const sessionTime = session.created_at ? new Date(session.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : '';
-                    const details = sessionDetails[session.id];
-                    const isExpanded = expandedSessionId === session.id;
                     return (
-                    <div key={session.id} className={`border rounded-xl p-3 transition-colors ${isExpanded ? 'border-indigo-200 bg-indigo-50/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                    <div key={session.id} className="border border-gray-200 rounded-xl p-3 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 min-w-0">
                           <span className="font-medium">{sessionDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
@@ -2253,61 +2170,13 @@ const handleGenerateInvitation = async () => {
                           </span>
                         </div>
                         <button
-                          onClick={() => toggleSessionDetails(session.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-colors flex-shrink-0 ${isExpanded ? 'bg-indigo-100 text-indigo-700 hover:bg-indigo-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                          onClick={() => setSelectedModalSessionId(session.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-gray-100 text-gray-600 hover:bg-indigo-100 hover:text-indigo-700 transition-colors flex-shrink-0"
                         >
                           <Eye className="h-3.5 w-3.5" />
-                          {isExpanded ? 'Hide' : 'View'}
+                          View
                         </button>
                       </div>
-                      {isExpanded && loadingSessionDetail && !details && (
-                        <div className="mt-3 pt-3 border-t border-indigo-100 flex items-center justify-center py-4">
-                          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-500" />
-                        </div>
-                      )}
-                      {details && isExpanded ? (
-                        <div className="mt-3 pt-3 border-t border-indigo-100">
-                          <div className="flex flex-wrap gap-1.5 mb-3">
-                            {details.goals.map((goal) => (
-                              <span key={goal.goalId} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border border-blue-200 text-blue-700 bg-blue-50">
-                                {goal.goalTitle}
-                              </span>
-                            ))}
-                          </div>
-                          {details.summary && <p className="text-sm text-gray-600 mb-3 bg-white rounded-lg p-2 border border-gray-100">{details.summary}</p>}
-                          {details.goals.length > 0 && (
-                            <div className="space-y-3">
-                              {details.goals.map((goal) => (
-                                <div key={goal.goalId} className="bg-white rounded-lg p-3 border border-gray-100">
-                                  <h4 className="text-xs font-semibold text-gray-800 flex items-center gap-1.5 mb-2">
-                                    <Target className="h-3.5 w-3.5 text-blue-500" />
-                                    {goal.goalTitle}
-                                  </h4>
-                                  <div className="space-y-1.5">
-                                    {goal.steps.map((step, idx) => (
-                                      <div key={step.stepId || idx} className="flex items-start gap-1.5 pl-1">
-                                        <span className="text-xs text-gray-400 font-mono mt-0.5 w-3 flex-shrink-0">{step.stepOrder}.</span>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="flex items-center gap-1.5 flex-wrap">
-                                            <span className="text-xs text-gray-700">{step.stepDescription}</span>
-                                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium border ${getOutcomeColor(step.outcome)}`}>
-                                              {getOutcomeLabel(step.outcome)}
-                                            </span>
-                                          </div>
-                                          {step.notes && <p className="text-xs text-gray-500 mt-0.5 italic">"{step.notes}"</p>}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                          {details.goals.length === 0 && !details.summary && (
-                            <p className="text-xs text-gray-400 italic">No details recorded.</p>
-                          )}
-                        </div>
-                      ) : null}
                     </div>
                     );
                   })}
@@ -2648,6 +2517,13 @@ const handleGenerateInvitation = async () => {
 
       </div>
       </>)}
+
+      {/* Assessment Details Modal */}
+      <AssessmentDetailsModal
+        isOpen={selectedModalSessionId !== null}
+        onClose={() => setSelectedModalSessionId(null)}
+        assessment={selectedModalSessionId ? buildModalData(pastAssessments.find(s => s.id === selectedModalSessionId)!) : null}
+      />
     </div>
   );
 }

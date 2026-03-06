@@ -3,7 +3,6 @@ import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDo
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';
-import AssessmentHistory from './AssessmentHistory';
 import Timer from './Timer';
 
 // Move OutcomeSelector outside the main component to prevent recreation on every render
@@ -104,7 +103,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const [showNotes, setShowNotes] = useState<Record<string, boolean>>({});
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
   const [timerData, setTimerData] = useState<Record<string, { seconds: number; manuallyEntered: boolean }>>({}); // Timer state for each step
-  const [showHistory, setShowHistory] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
@@ -449,14 +447,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     }
   };
 
-  const handleViewPastAssessments = () => {
-    setShowHistory(true);
-  };
-
-  const handleBackToAssessment = () => {
-    setShowHistory(false);
-  };
-  
   // Navigation guard - prompt user about unsaved changes
   const handleNavigationAttempt = (callback: () => void) => {
     if (hasUnsavedChanges) {
@@ -513,16 +503,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       consecutiveStreak: goal.consecutiveAllCorrect
     };
   };
-
-  // Show assessment history if requested
-  if (showHistory) {
-    return (
-      <AssessmentHistory
-        employee={employee}
-        onBackToAssessment={handleBackToAssessment}
-      />
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -887,19 +867,9 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
 
             {/* Overall Performance Summary - Integrated into Assessment */}
             <div className="mt-8 border-t border-gray-200 pt-8">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-                <div className="flex items-center space-x-2">
-                  <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
-                  <h3 className="text-base sm:text-lg font-semibold text-gray-900">Overall Performance Summary</h3>
-                </div>
-                <button
-                  onClick={() => handleViewPastAssessments()}
-                  className="flex items-center justify-center sm:justify-start space-x-2 px-4 py-3 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 hover:border-gray-300 transition-colors w-full sm:w-auto"
-                  data-testid="button-view-past-assessments"
-                >
-                  <Clock className="h-5 w-5" />
-                  <span>View Past Assessments ({assessmentSummaries.filter(summary => summary.employeeId === employee.id).length})</span>
-                </button>
+              <div className="flex items-center space-x-2 mb-6">
+                <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
+                <h3 className="text-base sm:text-lg font-semibold text-gray-900">Overall Performance Summary</h3>
               </div>
               
               <div className="space-y-4">
