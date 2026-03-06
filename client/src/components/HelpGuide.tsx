@@ -234,23 +234,45 @@ const GUIDE_SECTIONS: Section[] = [
   }
 ];
 
-const RELEASE_NOTES: { date: string; notes: string[] }[] = [
+const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
   {
     date: 'March 6, 2026',
-    notes: [
-      'Goal cards now display the last 5 assessment outcomes as colored circles — green for all correct, yellow for verbal prompts, red for incorrect, and gray for N/A. Hover over any circle to see the date of that session.',
-      'Past assessments on an employee profile now open in a detailed popup when clicked, showing all goals assessed in that session.',
-      'After completing an assessment, the app now automatically exits assessment mode and returns you to the employee profile.',
-      'Goal mastery streaks (consecutive correct count) now update correctly after each submitted assessment.',
-      'Timer data recorded during an in-progress assessment is now saved correctly if you navigate away and return.',
-      'Fixed an error that could occur when viewing or editing employee contacts.',
-      'Employee date of birth now saves and displays correctly.',
-      'Profile photos can now be uploaded directly from the employee edit form.',
-      'You can now review the full details of a saved promotion certification (Mentor or Shift Lead) by clicking the eye icon next to it on an employee profile.',
-      'Help guide now includes a "How It Works" section explaining goal mastery logic and the assessment history circles.',
+    groups: [
+      {
+        area: 'Assessments',
+        notes: [
+          'Goal cards now display the last 5 assessment outcomes as colored circles — green for all correct, yellow for verbal prompts, red for incorrect, and gray for N/A. Hover over any circle to see the date of that session.',
+          'Past assessments now open in a detailed popup when clicked, showing all goals assessed in that session.',
+          'After completing an assessment, the app now automatically exits assessment mode and returns you to the employee profile.',
+          'Goal mastery streaks (consecutive correct count) now update correctly after each submitted assessment.',
+          'Timer data recorded during an in-progress assessment is now saved correctly if you navigate away and return.',
+        ]
+      },
+      {
+        area: 'Employee Profiles',
+        notes: [
+          'Employee date of birth now saves and displays correctly.',
+          'Profile photos can now be uploaded directly from the employee edit form.',
+          'Fixed an error that could occur when viewing or editing employee contacts.',
+          'You can now review the full details of a saved promotion certification (Mentor or Shift Lead) by clicking the eye icon next to it.',
+        ]
+      },
+      {
+        area: 'Help Guide',
+        notes: [
+          'Added a "How It Works" section explaining goal mastery logic and the assessment history circles.',
+          'Added this Release Notes section, grouped by area of the app.',
+        ]
+      }
     ]
   }
 ];
+
+const AREA_COLORS: Record<string, string> = {
+  'Assessments': 'bg-blue-50 text-blue-700 border-blue-200',
+  'Employee Profiles': 'bg-amber-50 text-amber-700 border-amber-200',
+  'Help Guide': 'bg-purple-50 text-purple-700 border-purple-200',
+};
 
 function ReleaseNotesSection() {
   const [expanded, setExpanded] = useState(false);
@@ -277,17 +299,26 @@ function ReleaseNotesSection() {
         <div className="px-5 pb-5 space-y-4">
           {RELEASE_NOTES.map((release, idx) => (
             <div key={idx} className="border border-gray-100 rounded-lg overflow-hidden">
-              <div className="px-4 py-2.5 bg-gray-50 flex items-center gap-2">
+              <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
                 <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{release.date}</span>
               </div>
-              <ul className="px-4 py-3 space-y-2">
-                {release.notes.map((note, noteIdx) => (
-                  <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
-                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span>{note}</span>
-                  </li>
+              <div className="divide-y divide-gray-50">
+                {release.groups.map((group, gIdx) => (
+                  <div key={gIdx} className="px-4 py-3">
+                    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded border mb-2 ${AREA_COLORS[group.area] ?? 'bg-gray-50 text-gray-600 border-gray-200'}`}>
+                      {group.area}
+                    </span>
+                    <ul className="space-y-2">
+                      {group.notes.map((note, noteIdx) => (
+                        <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
+                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                          <span>{note}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 ))}
-              </ul>
+              </div>
             </div>
           ))}
         </div>
