@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   HelpCircle, ChevronDown, ChevronUp, Shield, ClipboardList, LayoutDashboard, 
-  Users, FolderOpen, Upload, Heart, CheckCircle, Award, UserCheck, Star, Info
+  Users, FolderOpen, Upload, Heart, CheckCircle, Award, UserCheck, Star, Info, Megaphone
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -234,6 +234,59 @@ const GUIDE_SECTIONS: Section[] = [
   }
 ];
 
+const RELEASE_NOTES: { date: string; notes: string[] }[] = [
+  {
+    date: 'March 5, 2026',
+    notes: [
+      'Date of birth changes on employee profiles now save correctly.',
+    ]
+  }
+];
+
+function ReleaseNotesSection() {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-green-200 ring-1 ring-green-100">
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 rounded-xl transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-green-100">
+            <Megaphone className="h-5 w-5 text-green-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">Release Notes</h2>
+            <span className="text-xs text-green-600 font-medium">What's new and improved</span>
+          </div>
+        </div>
+        {expanded ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-4">
+          {RELEASE_NOTES.map((release, idx) => (
+            <div key={idx} className="border border-gray-100 rounded-lg overflow-hidden">
+              <div className="px-4 py-2.5 bg-gray-50 flex items-center gap-2">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{release.date}</span>
+              </div>
+              <ul className="px-4 py-3 space-y-2">
+                {release.notes.map((note, noteIdx) => (
+                  <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
+                    <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                    <span>{note}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function HowItWorksSection() {
   const [expanded, setExpanded] = useState(false);
 
@@ -391,6 +444,10 @@ export default function HelpGuide() {
         <p className="text-sm text-gray-500">
           This guide explains what each role can do and how to use every feature. Your role's section is shown first. Click on any role to expand or collapse its guide.
         </p>
+      </div>
+
+      <div className="mb-4">
+        <ReleaseNotesSection />
       </div>
 
       <div className="space-y-4">
