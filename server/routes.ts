@@ -499,6 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           goal_statement: goal_templates.goal_statement,
           default_mastery_criteria: goal_templates.default_mastery_criteria,
           default_target_date: goal_templates.default_target_date,
+          relative_target_duration: goal_templates.relative_target_duration,
           status: goal_templates.status,
           created_at: goal_templates.created_at,
           updated_at: goal_templates.updated_at,
@@ -509,7 +510,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   'id', ${goal_template_steps.id},
                   'step_order', ${goal_template_steps.step_order},
                   'step_description', ${goal_template_steps.step_description},
-                  'is_required', ${goal_template_steps.is_required}
+                  'is_required', ${goal_template_steps.is_required},
+                  'timer_type', ${goal_template_steps.timer_type}
                 )
                 ORDER BY ${goal_template_steps.step_order}
               ) FILTER (WHERE ${goal_template_steps.id} IS NOT NULL),
@@ -540,7 +542,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           template_id: newTemplate.id,
           step_order: index + 1,
           step_description: step.stepDescription,
-          is_required: step.isRequired
+          is_required: step.isRequired,
+          timer_type: step.timerType || 'none'
         }));
         await db.insert(goal_template_steps).values(stepInserts);
       }
@@ -580,7 +583,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             template_id: templateId,
             step_order: index + 1,
             step_description: step.stepDescription,
-            is_required: step.isRequired
+            is_required: step.isRequired,
+            timer_type: step.timerType || 'none'
           }));
           await db.insert(goal_template_steps).values(stepInserts);
         }

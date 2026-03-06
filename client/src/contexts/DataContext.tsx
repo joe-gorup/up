@@ -240,12 +240,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStatement: template.goal_statement,
           defaultMasteryCriteria: template.default_mastery_criteria,
           defaultTargetDate: template.default_target_date,
+          relativeTargetDuration: template.relative_target_duration || '90 days',
           status: template.status,
           steps: template.steps.map((step: any) => ({
             id: step.id,
             stepOrder: step.step_order,
             stepDescription: step.step_description,
-            isRequired: step.is_required
+            isRequired: step.is_required,
+            timerType: step.timer_type || 'none'
           }))
         }));
         setGoalTemplates(mappedTemplates);
@@ -1142,7 +1144,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           status: templateData.status,
           steps: templateData.steps.map(step => ({
             stepDescription: step.stepDescription,
-            isRequired: step.isRequired
+            isRequired: step.isRequired,
+            timerType: step.timerType || 'none'
           }))
         }),
       });
@@ -1173,7 +1176,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           status: templateData.status,
           steps: templateData.steps.map(step => ({
             stepDescription: step.stepDescription,
-            isRequired: step.isRequired
+            isRequired: step.isRequired,
+            timerType: step.timerType || 'none'
           }))
         }),
       });
