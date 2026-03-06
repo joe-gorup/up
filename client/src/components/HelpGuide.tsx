@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { 
   HelpCircle, ChevronDown, ChevronUp, Shield, ClipboardList, LayoutDashboard, 
-  Users, FolderOpen, Upload, Heart, CheckCircle, Award, UserCheck
+  Users, FolderOpen, Upload, Heart, CheckCircle, Award, UserCheck, Star, Info
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -234,6 +234,133 @@ const GUIDE_SECTIONS: Section[] = [
   }
 ];
 
+function HowItWorksSection() {
+  const [expanded, setExpanded] = useState(false);
+
+  const features = [
+    {
+      title: 'Goal Mastery',
+      icon: Star,
+      color: 'amber',
+      content: (
+        <div className="space-y-4 text-sm text-gray-700">
+          <p>
+            An employee masters a goal after <strong>3 successful assessments in a row</strong> — meaning all required steps were marked <span className="font-medium text-green-700">Correct</span> in each of those sessions.
+          </p>
+
+          <div className="space-y-2">
+            <p className="font-medium text-gray-800">What counts toward mastery:</p>
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+              <span><strong>Increments the count (+1):</strong> Every required step in the session was marked Correct.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" />
+              <span><strong>Resets to zero:</strong> Any required step was marked Incorrect or required a Verbal Prompt.</span>
+            </div>
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
+              <span><strong>Pauses (no change):</strong> A required step was marked N/A — the count stays exactly where it is until the next session.</span>
+            </div>
+          </div>
+
+          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-1.5">
+            <p className="font-medium text-amber-900 text-xs uppercase tracking-wide mb-2">Example</p>
+            {[
+              { session: 'Session 1', result: 'All required steps Correct', count: '1', outcome: 'green' },
+              { session: 'Session 2', result: 'All required steps Correct', count: '2', outcome: 'green' },
+              { session: 'Session 3', result: 'A required step marked N/A', count: '2 (no change)', outcome: 'gray' },
+              { session: 'Session 4', result: 'All required steps Correct', count: '3 — Mastery achieved!', outcome: 'amber' },
+            ].map((row, i) => (
+              <div key={i} className="flex items-center gap-3 text-sm">
+                <span className="text-gray-500 w-20 flex-shrink-0">{row.session}</span>
+                <span className="text-gray-700 flex-1">{row.result}</span>
+                <span className={`font-semibold flex-shrink-0 ${row.outcome === 'green' ? 'text-green-700' : row.outcome === 'amber' ? 'text-amber-700' : 'text-gray-500'}`}>
+                  {row.count}
+                </span>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex items-start gap-2 text-gray-500 text-xs bg-gray-50 rounded-lg p-3">
+            <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+            <span>Optional steps are never counted toward mastery — only steps marked as required on the goal template matter.</span>
+          </div>
+        </div>
+      )
+    },
+    {
+      title: 'Recent Assessments (Goal Cards)',
+      icon: ClipboardList,
+      color: 'blue',
+      content: (
+        <div className="space-y-3 text-sm text-gray-700">
+          <p>
+            Each goal card on an employee's profile shows a row of <strong>5 circles</strong> representing the last 5 completed assessments for that goal — oldest on the left, most recent on the right.
+          </p>
+          <div className="space-y-2">
+            {[
+              { color: 'bg-green-500', label: 'Green', meaning: 'All required steps were Correct' },
+              { color: 'bg-yellow-400', label: 'Yellow', meaning: 'At least one Verbal Prompt (no Incorrect)' },
+              { color: 'bg-red-500', label: 'Red', meaning: 'At least one step was Incorrect' },
+              { color: 'bg-gray-300', label: 'Gray', meaning: 'All steps were marked N/A' },
+              { color: 'bg-white border-2 border-dashed border-gray-300', label: 'Empty', meaning: 'No assessment recorded yet for this slot' },
+            ].map((item, i) => (
+              <div key={i} className="flex items-center gap-3">
+                <div className={`w-4 h-4 rounded-full flex-shrink-0 ${item.color}`} />
+                <span><strong>{item.label}:</strong> {item.meaning}</span>
+              </div>
+            ))}
+          </div>
+          <div className="flex items-start gap-2 text-gray-500 text-xs bg-gray-50 rounded-lg p-3">
+            <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+            <span>Hover over any circle to see the date of that assessment. These circles are for reference only and do not affect the mastery count.</span>
+          </div>
+        </div>
+      )
+    }
+  ];
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-purple-200 ring-1 ring-purple-100">
+      <button
+        onClick={() => setExpanded(prev => !prev)}
+        className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 rounded-xl transition-colors"
+      >
+        <div className="flex items-center gap-3">
+          <div className="p-2 rounded-lg bg-purple-100">
+            <Info className="h-5 w-5 text-purple-600" />
+          </div>
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">How It Works</h2>
+            <span className="text-xs text-purple-600 font-medium">Feature explanations</span>
+          </div>
+        </div>
+        {expanded ? <ChevronUp className="h-5 w-5 text-gray-400" /> : <ChevronDown className="h-5 w-5 text-gray-400" />}
+      </button>
+
+      {expanded && (
+        <div className="px-5 pb-5 space-y-3">
+          {features.map((feature, idx) => {
+            const FeatureIcon = feature.icon;
+            return (
+              <div key={idx} className="border border-gray-100 rounded-lg overflow-hidden">
+                <div className="flex items-center gap-2.5 px-4 py-3 bg-gray-50">
+                  <FeatureIcon className="h-4 w-4 text-purple-600 flex-shrink-0" />
+                  <span className="font-medium text-gray-800 text-sm">{feature.title}</span>
+                </div>
+                <div className="px-4 py-3">
+                  {feature.content}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function HelpGuide() {
   const { user } = useAuth();
   const [expandedRole, setExpandedRole] = useState<string | null>(user?.role || null);
@@ -338,7 +465,11 @@ export default function HelpGuide() {
         })}
       </div>
 
-      <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+      <div className="mt-6">
+        <HowItWorksSection />
+      </div>
+
+      <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-xl">
         <h3 className="font-semibold text-blue-900 text-sm mb-2">Common Tips</h3>
         <ul className="space-y-1.5 text-sm text-blue-800">
           <li className="flex items-start gap-2">
