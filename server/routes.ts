@@ -928,24 +928,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
               eq(step_progress.status, 'submitted')
             ));
 
-          // Check if every required step has a 'correct' outcome in today's session
+          // Check outcomes for required steps in today's session
           const requiredSteps = goalSteps.filter(step => step.is_required);
-          const correctStepIds = new Set(
-            submittedProgress
-              .filter(p => p.outcome === 'correct')
-              .map(p => p.goal_step_id)
-          );
+
+          // Build a map of goal_step_id → outcome for today's submitted records
+          const requiredStepOutcomes = new Map<string | null, string>();
+          for (const p of submittedProgress) {
+            if (requiredSteps.some(s => s.id === p.goal_step_id)) {
+              requiredStepOutcomes.set(p.goal_step_id, p.outcome);
+            }
+          }
+
+          // Increment: all required steps documented AND all are 'correct'
           const allRequiredCorrectToday = requiredSteps.length > 0 &&
-            requiredSteps.every(step => correctStepIds.has(step.id));
+            requiredSteps.every(s => requiredStepOutcomes.get(s.id) === 'correct');
+
+          // Reset: at least one required step explicitly marked incorrect or verbal_prompt
+          const anyRequiredFailed = requiredSteps.some(s => {
+            const outcome = requiredStepOutcomes.get(s.id);
+            return outcome === 'incorrect' || outcome === 'verbal_prompt';
+          });
 
           const [goal] = await db.select().from(development_goals)
             .where(eq(development_goals.id, goalId))
             .limit(1);
 
           if (goal) {
-            const newConsecutive = allRequiredCorrectToday
-              ? (goal.consecutive_all_correct || 0) + 1
-              : 0;
+            let newConsecutive: number;
+            if (allRequiredCorrectToday) {
+              newConsecutive = (goal.consecutive_all_correct || 0) + 1;
+            } else if (anyRequiredFailed) {
+              newConsecutive = 0;
+            } else {
+              // Steps were skipped/na or not all documented — leave counter unchanged
+              newConsecutive = goal.consecutive_all_correct || 0;
+            }
+
             const masteryAchieved = newConsecutive >= 3;
 
             await db.update(development_goals)
@@ -961,15 +979,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
               .where(eq(development_goals.id, goalId));
 
             logger.info({ 
-              goalId, 
-              employeeId: employee_id, 
+              goalId,
+              employeeId: employee_id,
               sessionId: assessment_session_id,
               documenterId: documenter_user_id,
               allRequiredCorrectToday,
+              anyRequiredFailed,
               consecutive: newConsecutive,
               masteryAchieved,
               requiredStepsCount: requiredSteps.length,
-              correctStepIdsCount: correctStepIds.size
+              documentedRequiredCount: requiredStepOutcomes.size
             }, masteryAchieved ? 'MASTERY ACHIEVED - Goal completed!' : 'Goal progress updated after submission');
           }
         }
