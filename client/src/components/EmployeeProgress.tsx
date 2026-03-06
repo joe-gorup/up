@@ -93,9 +93,10 @@ interface EmployeeProgressProps {
   shiftId?: string; // Legacy support
   onViewProfile?: () => void;
   onEditEmployee?: (employeeId: string) => void;
+  onComplete?: () => void;
 }
 
-export default function EmployeeProgress({ employee, assessmentSessionId, shiftId, onViewProfile, onEditEmployee }: EmployeeProgressProps) {
+export default function EmployeeProgress({ employee, assessmentSessionId, shiftId, onViewProfile, onEditEmployee, onComplete }: EmployeeProgressProps) {
   const { user } = useAuth();
   const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useData();
   const { toast } = useToast();
@@ -426,11 +427,15 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
         type: 'success',
         title: 'Assessment Submitted!',
         description: `Successfully submitted ${result.submittedItems} goals and overall summary`,
-        duration: 4000
+        duration: 3000
       });
       
-      // Reset unsaved changes state
       setHasUnsavedChanges(false);
+
+      // Exit assessment mode after a brief moment so the toast is visible
+      setTimeout(() => {
+        if (onComplete) onComplete();
+      }, 1500);
     } catch (error) {
       console.error('Error submitting assessment:', error);
       toast({

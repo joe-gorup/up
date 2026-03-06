@@ -1704,6 +1704,7 @@ const handleGenerateInvitation = async () => {
             <EmployeeProgress
               employee={employee}
               assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+              onComplete={handleEndAssessment}
             />
           </div>
         </div>
@@ -2190,6 +2191,7 @@ const handleGenerateInvitation = async () => {
                   <EmployeeProgress
                     employee={employee}
                     assessmentSessionId={profileAssessmentSessionId || activeAssessmentSession?.id}
+                    onComplete={handleEndAssessment}
                   />
                 </div>
               ) : (
