@@ -585,7 +585,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
     const bySession = new Map<string, typeof goalSteps>();
     for (const step of goalSteps) {
-      const key = step.assessmentSessionId || step.date;
+      const key = step.date; // one dot per calendar day, matching the mastery counter
       if (!bySession.has(key)) bySession.set(key, []);
       bySession.get(key)!.push(step);
     }
