@@ -236,9 +236,18 @@ const GUIDE_SECTIONS: Section[] = [
 
 const RELEASE_NOTES: { date: string; notes: string[] }[] = [
   {
-    date: 'March 5, 2026',
+    date: 'March 6, 2026',
     notes: [
-      'Date of birth changes on employee profiles now save correctly.',
+      'Goal cards now display the last 5 assessment outcomes as colored circles — green for all correct, yellow for verbal prompts, red for incorrect, and gray for N/A. Hover over any circle to see the date of that session.',
+      'Past assessments on an employee profile now open in a detailed popup when clicked, showing all goals assessed in that session.',
+      'After completing an assessment, the app now automatically exits assessment mode and returns you to the employee profile.',
+      'Goal mastery streaks (consecutive correct count) now update correctly after each submitted assessment.',
+      'Timer data recorded during an in-progress assessment is now saved correctly if you navigate away and return.',
+      'Fixed an error that could occur when viewing or editing employee contacts.',
+      'Employee date of birth now saves and displays correctly.',
+      'Profile photos can now be uploaded directly from the employee edit form.',
+      'You can now review the full details of a saved promotion certification (Mentor or Shift Lead) by clicking the eye icon next to it on an employee profile.',
+      'Help guide now includes a "How It Works" section explaining goal mastery logic and the assessment history circles.',
     ]
   }
 ];
