@@ -556,8 +556,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const updateData: any = {};
       if (updates.first_name) updateData.first_name = updates.first_name;
       if (updates.last_name) updateData.last_name = updates.last_name;
-      if (updates.email) updateData.email = updates.email;
+      if (updates.email !== undefined) updateData.email = updates.email;
       if (updates.role) updateData.role = updates.role;
+      if (updates.password) updateData.password = updates.password;
       if (updates.profileImageUrl !== undefined) updateData.profile_image_url = updates.profileImageUrl;
       if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
       if (updates.hasSystemAccess !== undefined) updateData.has_system_access = updates.hasSystemAccess;
