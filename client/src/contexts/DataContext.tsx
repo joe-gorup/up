@@ -288,10 +288,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStepId: progress.goal_step_id,
           employeeId: progress.employee_id,
           assessmentSessionId: progress.assessment_session_id,
-
           date: progress.date,
           outcome: progress.outcome,
           notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
           status: progress.status || 'submitted'
         }));
         setStepProgress(mappedProgress);
@@ -893,11 +894,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goal_step_id: progress.goalStepId,
           employee_id: progress.employeeId,
           assessment_session_id: progress.assessmentSessionId,
-
           documenter_user_id: documenterUserId,
           date: today,
           outcome: progress.outcome,
-          notes: progress.notes
+          notes: progress.notes,
+          completionTimeSeconds: progress.completionTimeSeconds,
+          timerManuallyEntered: progress.timerManuallyEntered
         }),
       });
 
@@ -912,6 +914,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           date: newProgress.date,
           outcome: newProgress.outcome,
           notes: newProgress.notes,
+          completionTimeSeconds: newProgress.completion_time_seconds,
+          timerManuallyEntered: newProgress.timer_manually_entered,
           status: newProgress.status
         };
         
@@ -977,10 +981,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStepId: progress.goal_step_id,
           employeeId: progress.employee_id,
           assessmentSessionId: progress.assessment_session_id,
-
           date: progress.date,
           outcome: progress.outcome,
           notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
           status: progress.status || 'draft'
         }));
 
