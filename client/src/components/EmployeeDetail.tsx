@@ -578,39 +578,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const maintenanceGoals = employeeGoals.filter(goal => goal.status === 'maintenance');
   const archivedGoals = employeeGoals.filter(goal => goal.status === 'archived');
 
-  const getRecentProgress = (goalId: string) => {
-    const goalSteps = stepProgress.filter(
-      p => p.developmentGoalId === goalId && p.status === 'submitted'
-    );
-
-    const bySession = new Map<string, typeof goalSteps>();
-    for (const step of goalSteps) {
-      const key = step.date; // one dot per calendar day, matching the mastery counter
-      if (!bySession.has(key)) bySession.set(key, []);
-      bySession.get(key)!.push(step);
-    }
-
-    const sessions = Array.from(bySession.values())
-      .map(steps => {
-        const date = steps[0].date;
-        let outcome: 'correct' | 'verbal_prompt' | 'other';
-        if (steps.some(s => s.outcome === 'incorrect')) {
-          outcome = 'other';
-        } else if (steps.some(s => s.outcome === 'verbal_prompt')) {
-          outcome = 'verbal_prompt';
-        } else if (steps.every(s => s.outcome === 'correct' || s.outcome === 'na')) {
-          outcome = 'correct';
-        } else {
-          outcome = 'other';
-        }
-        return { date, outcome };
-      })
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-      .slice(0, 5);
-
-    return sessions;
-  };
-
   const handleEditGoal = (goal: any) => {
     setEditingGoal(goal.id);
     setEditForm({
@@ -2387,7 +2354,6 @@ const handleGenerateInvitation = async () => {
               <div className="space-y-6 mt-4">
                 {activeGoals.map(goal => {
                   const progress = getGoalProgress(goal);
-                  const recentProgress = getRecentProgress(goal.id);
                   
                   return (
                     <div key={goal.id} className="border border-gray-200 rounded-xl p-4">
@@ -2529,34 +2495,33 @@ const handleGenerateInvitation = async () => {
                             )}
                           </div>
 
-                          {/* Recent Progress */}
-                          {recentProgress.length > 0 && (
-                            <div>
-                              <h4 className="font-medium text-gray-900 mb-2">Recent Progress</h4>
-                              <div className="flex space-x-1">
-                                {recentProgress.slice(0, 5).reverse().map((progress, index) => (
+                          {/* Mastery Streak */}
+                          <div>
+                            <h4 className="font-medium text-gray-900 mb-2">Mastery Streak</h4>
+                            <div className="flex items-center space-x-2">
+                              {[1, 2, 3].map(slot => {
+                                const earned = slot <= (goal.consecutiveAllCorrect || 0);
+                                return (
                                   <div
-                                    key={index}
-                                    className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${
-                                      progress.outcome === 'correct'
-                                        ? 'bg-green-100 text-green-700'
-                                        : progress.outcome === 'verbal_prompt'
-                                        ? 'bg-yellow-100 text-yellow-700'
-                                        : 'bg-red-100 text-red-700'
+                                    key={slot}
+                                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
+                                      earned
+                                        ? 'bg-green-100 border-green-400 text-green-700'
+                                        : 'bg-gray-50 border-gray-300 text-gray-300'
                                     }`}
-                                    title={`${new Date(progress.date).toLocaleDateString()}: ${
-                                      progress.outcome === 'correct' ? 'All correct' :
-                                      progress.outcome === 'verbal_prompt' ? 'Needed prompts' :
-                                      'Needs work'
-                                    }`}
+                                    title={earned ? `Shift ${slot}: all correct` : `Shift ${slot}: not yet earned`}
                                   >
-                                    {progress.outcome === 'correct' ? '✓' : 
-                                     progress.outcome === 'verbal_prompt' ? '◐' : '✗'}
+                                    {earned ? '✓' : slot}
                                   </div>
-                                ))}
-                              </div>
+                                );
+                              })}
+                              <span className="text-xs text-gray-500 ml-1">
+                                {goal.consecutiveAllCorrect >= 3
+                                  ? 'Mastered!'
+                                  : `${3 - (goal.consecutiveAllCorrect || 0)} more shift${3 - (goal.consecutiveAllCorrect || 0) !== 1 ? 's' : ''} to master`}
+                              </span>
                             </div>
-                          )}
+                          </div>
                         </div>
                       )}
 
