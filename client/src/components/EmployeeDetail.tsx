@@ -74,6 +74,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
   const [checklistAnswers, setChecklistAnswers] = useState<Record<number, boolean>>({});
+  const [reviewingCert, setReviewingCert] = useState<PromotionCertification | null>(null);
 
   // Invitation and relationship states (from remote)
   const [invitationEmail, setInvitationEmail] = useState(employees.find(e => e.id === employeeId)?.email || '');
@@ -1432,6 +1433,14 @@ const handleGenerateInvitation = async () => {
                               <X className="inline h-3.5 w-3.5 ml-0.5" />
                             )}
                           </span>
+                          <button
+                            type="button"
+                            onClick={() => setReviewingCert(cert)}
+                            className="p-1 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Review answers"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </button>
                           {editingCerts && (
                             <button
                               type="button"
@@ -1602,6 +1611,73 @@ const handleGenerateInvitation = async () => {
           </div>
         )}
       </div>
+
+      {/* Certification Review Modal */}
+      {reviewingCert && (
+        <Modal
+          isOpen={true}
+          onClose={() => setReviewingCert(null)}
+          title={`${reviewingCert.certificationType === 'mentor' ? 'Mentor' : 'Shift Lead'} Certification Review`}
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+              <div>
+                <p className="text-sm font-medium text-gray-700">Date Completed</p>
+                <p className="text-sm text-gray-900">{new Date(reviewingCert.dateCompleted).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+              <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-semibold ${reviewingCert.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                {reviewingCert.score}%
+                {reviewingCert.passed ? (
+                  <CheckCircle className="h-4 w-4" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+              </span>
+            </div>
+
+            {reviewingCert.notes && (
+              <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl">
+                <p className="text-xs font-medium text-amber-700 mb-1">Notes</p>
+                <p className="text-sm text-amber-900">{reviewingCert.notes}</p>
+              </div>
+            )}
+
+            {reviewingCert.checklistResults && reviewingCert.checklistResults.length > 0 ? (
+              <div>
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  Checklist Answers ({reviewingCert.checklistResults.filter((r: any) => r.answer).length} / {reviewingCert.checklistResults.length} passed)
+                </p>
+                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                  {reviewingCert.checklistResults.map((item: any, idx: number) => (
+                    <div key={idx} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${item.answer ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
+                      <span className="mt-0.5 shrink-0">
+                        {item.answer ? (
+                          <CheckCircle className="h-4 w-4 text-green-600" />
+                        ) : (
+                          <X className="h-4 w-4 text-red-500" />
+                        )}
+                      </span>
+                      <p className="text-xs text-gray-800 leading-snug">{item.question}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400 italic text-center py-4">No checklist data available for this certification.</p>
+            )}
+
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={() => setReviewingCert(null)}
+                className="w-full px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
 
       {!hideGoalCards && (<>
       {/* Full-width Assessment in Progress card - shown above the grid during assessment mode for Super Scoopers */}
