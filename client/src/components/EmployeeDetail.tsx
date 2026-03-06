@@ -2364,31 +2364,47 @@ const handleGenerateInvitation = async () => {
                             )}
                           </div>
 
-                          {/* Mastery Streak */}
+                          {/* Recent Assessments at a Glance */}
                           <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Mastery Streak</h4>
-                            <div className="flex items-center space-x-2">
-                              {[1, 2, 3].map(slot => {
-                                const earned = slot <= (goal.consecutiveAllCorrect || 0);
-                                return (
-                                  <div
-                                    key={slot}
-                                    className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold border-2 ${
-                                      earned
-                                        ? 'bg-green-100 border-green-400 text-green-700'
-                                        : 'bg-gray-50 border-gray-300 text-gray-300'
-                                    }`}
-                                    title={earned ? `Shift ${slot}: all correct` : `Shift ${slot}: not yet earned`}
-                                  >
-                                    {earned ? '✓' : slot}
-                                  </div>
-                                );
-                              })}
-                              <span className="text-xs text-gray-500 ml-1">
-                                {goal.consecutiveAllCorrect >= 3
-                                  ? 'Mastered!'
-                                  : `${3 - (goal.consecutiveAllCorrect || 0)} more shift${3 - (goal.consecutiveAllCorrect || 0) !== 1 ? 's' : ''} to master`}
-                              </span>
+                            <h4 className="font-medium text-gray-900 mb-2">Recent Assessments</h4>
+                            <div className="flex items-center space-x-1.5">
+                              {(() => {
+                                const sessions = goal.recentSessions ?? [];
+                                const slots = Array.from({ length: 5 }, (_, i) => {
+                                  const sessionIdx = sessions.length - 5 + i;
+                                  return sessionIdx >= 0 ? sessions[sessionIdx] : null;
+                                });
+                                return slots.map((session, i) => {
+                                  if (!session) {
+                                    return (
+                                      <div
+                                        key={i}
+                                        className="w-8 h-8 rounded-full border-2 border-dashed border-gray-200 bg-gray-50"
+                                        title="No assessment yet"
+                                      />
+                                    );
+                                  }
+                                  const dateLabel = new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                                  const config = {
+                                    all_correct:  { bg: 'bg-green-100',  border: 'border-green-400',  text: 'text-green-700',  symbol: '✓', label: 'All correct' },
+                                    verbal_prompt:{ bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700', symbol: '~', label: 'Verbal prompts' },
+                                    incorrect:    { bg: 'bg-red-100',    border: 'border-red-400',    text: 'text-red-700',    symbol: '✗', label: 'Incorrect' },
+                                    na:           { bg: 'bg-gray-100',   border: 'border-gray-300',   text: 'text-gray-400',   symbol: '—', label: 'N/A' },
+                                  }[session.outcome] ?? { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-400', symbol: '?', label: 'Unknown' };
+                                  return (
+                                    <div
+                                      key={i}
+                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 cursor-default ${config.bg} ${config.border} ${config.text}`}
+                                      title={`${dateLabel}: ${config.label}`}
+                                    >
+                                      {config.symbol}
+                                    </div>
+                                  );
+                                });
+                              })()}
+                              {(goal.recentSessions ?? []).length === 0 && (
+                                <span className="text-xs text-gray-400 ml-1">No assessments yet</span>
+                              )}
                             </div>
                           </div>
                         </div>

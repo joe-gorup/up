@@ -38,6 +38,11 @@ export interface GoalStep {
   isRequired: boolean;
 }
 
+export interface RecentSession {
+  date: string;
+  outcome: 'all_correct' | 'verbal_prompt' | 'incorrect' | 'na';
+}
+
 export interface DevelopmentGoal {
   id: string;
   employeeId: string;
@@ -50,6 +55,7 @@ export interface DevelopmentGoal {
   masteryDate?: string;
   consecutiveAllCorrect: number;
   steps: GoalStep[];
+  recentSessions: RecentSession[];
 }
 
 export interface AssessmentSession {
@@ -273,7 +279,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             stepOrder: step.step_order,
             stepDescription: step.step_description,
             isRequired: step.is_required
-          }))
+          })),
+          recentSessions: (goal.recent_sessions ?? goal.recentSessions ?? []).map((s: any) => ({
+            date: s.date,
+            outcome: s.outcome,
+          })),
         }));
         setDevelopmentGoals(mappedGoals);
       }
@@ -466,6 +476,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         status: 'active',
         masteryAchieved: false,
         consecutiveAllCorrect: 1,
+        recentSessions: [],
         steps: [
           {
             id: '1',

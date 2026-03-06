@@ -660,8 +660,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         goalsWithSteps = await query.groupBy(development_goals.id);
       }
       
-      logger.info({ count: goalsWithSteps.length }, 'Development goals fetched efficiently');
-      res.json(goalsWithSteps);
+      // Enrich each goal with the last 5 assessment sessions and their aggregate outcomes
+      let enrichedGoals: any[] = goalsWithSteps;
+      if (goalsWithSteps.length > 0) {
+        const goalIds = goalsWithSteps.map(g => g.id);
+        const recentSessionsRows = await db.execute(sql`
+          SELECT development_goal_id, assessment_session_id, session_date, outcome
+          FROM (
+            SELECT
+              sp.development_goal_id,
+              sp.assessment_session_id,
+              sp.date AS session_date,
+              CASE
+                WHEN bool_or(sp.outcome = 'incorrect') THEN 'incorrect'
+                WHEN bool_or(sp.outcome = 'verbal_prompt') THEN 'verbal_prompt'
+                WHEN bool_and(sp.outcome IN ('correct','na')) AND bool_or(sp.outcome = 'correct') THEN 'all_correct'
+                ELSE 'na'
+              END AS outcome,
+              ROW_NUMBER() OVER (
+                PARTITION BY sp.development_goal_id
+                ORDER BY sp.date DESC, MAX(sp.created_at) DESC
+              ) AS rn
+            FROM step_progress sp
+            WHERE sp.development_goal_id IN (${sql.join(goalIds.map(id => sql`${id}`), sql`, `)})
+              AND sp.status = 'submitted'
+              AND sp.assessment_session_id IS NOT NULL
+            GROUP BY sp.development_goal_id, sp.assessment_session_id, sp.date
+          ) ranked
+          WHERE rn <= 5
+          ORDER BY development_goal_id, rn
+        `);
+
+        const sessionsByGoal: Record<string, Array<{ date: string; outcome: string }>> = {};
+        for (const row of recentSessionsRows.rows as any[]) {
+          if (!sessionsByGoal[row.development_goal_id]) sessionsByGoal[row.development_goal_id] = [];
+          sessionsByGoal[row.development_goal_id].push({
+            date: row.session_date,
+            outcome: row.outcome,
+          });
+        }
+
+        enrichedGoals = goalsWithSteps.map(g => ({
+          ...g,
+          recentSessions: sessionsByGoal[g.id] ?? [],
+        }));
+      }
+
+      logger.info({ count: enrichedGoals.length }, 'Development goals fetched efficiently');
+      res.json(enrichedGoals);
     } catch (error) {
       logger.error({ error }, 'Failed to fetch development goals');
       res.status(500).json({ error: 'Failed to fetch development goals' });
