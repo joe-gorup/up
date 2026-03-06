@@ -18,6 +18,8 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const [invitationEmail, setInvitationEmail] = useState('');
   const [invitationLink, setInvitationLink] = useState('');
@@ -303,22 +305,40 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                     accept="image/*"
                     className="hidden"
                     id="photo-upload"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        const placeholderUrl = `https://via.placeholder.com/150x150.png?text=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}`;
-                        setFormData(prev => ({ ...prev, profileImageUrl: placeholderUrl }));
+                      if (!file) return;
+                      setPhotoError('');
+                      setUploadingPhoto(true);
+                      try {
+                        const form = new FormData();
+                        form.append('photo', file);
+                        const res = await apiRequest('/api/employees/photo', {
+                          method: 'POST',
+                          body: form,
+                        });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          throw new Error(err.error || 'Upload failed');
+                        }
+                        const { path } = await res.json();
+                        setFormData(prev => ({ ...prev, profileImageUrl: path }));
+                      } catch (err: any) {
+                        setPhotoError(err.message || 'Failed to upload photo');
+                      } finally {
+                        setUploadingPhoto(false);
+                        e.target.value = '';
                       }
                     }}
                   />
                   <label
                     htmlFor="photo-upload"
-                    className="inline-flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer transition-colors font-medium"
+                    className={`inline-flex items-center px-6 py-2 rounded-xl cursor-pointer transition-colors font-medium ${uploadingPhoto ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Photo
+                    {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
                   </label>
-                  {formData.profileImageUrl && (
+                  {formData.profileImageUrl && !uploadingPhoto && (
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, profileImageUrl: '' }))}
@@ -328,6 +348,9 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                     >
                       <X className="h-4 w-4" />
                     </button>
+                  )}
+                  {photoError && (
+                    <p className="text-xs text-red-600 mt-1">{photoError}</p>
                   )}
                 </div>
               </div>

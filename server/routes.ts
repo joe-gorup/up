@@ -2489,6 +2489,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const photoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    },
+  });
+
+  app.post("/api/employees/photo", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), photoUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      if (!privateDir) {
+        return res.status(503).json({ error: 'Object storage not configured' });
+      }
+      const fileId = crypto.randomUUID();
+      const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase();
+      const objectPath = `${privateDir}/profile-photos/${fileId}.${ext}`;
+      const { bucketName, objectName } = parseCoachFilePath(objectPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const blob = bucket.file(objectName);
+      await blob.save(file.buffer, { contentType: file.mimetype });
+      res.json({ path: `/objects/profile-photos/${fileId}.${ext}` });
+    } catch (error) {
+      logger.error({ error }, 'Failed to upload employee photo');
+      res.status(500).json({ error: 'Failed to upload photo' });
+    }
+  });
+
   app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
