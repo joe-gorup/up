@@ -579,12 +579,36 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const archivedGoals = employeeGoals.filter(goal => goal.status === 'archived');
 
   const getRecentProgress = (goalId: string) => {
-    const recent = stepProgress
-      .filter(p => p.developmentGoalId === goalId)
+    const goalSteps = stepProgress.filter(
+      p => p.developmentGoalId === goalId && p.submitted
+    );
+
+    const bySession = new Map<string, typeof goalSteps>();
+    for (const step of goalSteps) {
+      const key = step.assessmentSessionId || step.date;
+      if (!bySession.has(key)) bySession.set(key, []);
+      bySession.get(key)!.push(step);
+    }
+
+    const sessions = Array.from(bySession.values())
+      .map(steps => {
+        const date = steps[0].date;
+        let outcome: 'correct' | 'verbal_prompt' | 'other';
+        if (steps.some(s => s.outcome === 'incorrect')) {
+          outcome = 'other';
+        } else if (steps.some(s => s.outcome === 'verbal_prompt')) {
+          outcome = 'verbal_prompt';
+        } else if (steps.every(s => s.outcome === 'correct' || s.outcome === 'na')) {
+          outcome = 'correct';
+        } else {
+          outcome = 'other';
+        }
+        return { date, outcome };
+      })
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
       .slice(0, 5);
-    
-    return recent;
+
+    return sessions;
   };
 
   const handleEditGoal = (goal: any) => {
@@ -2518,12 +2542,16 @@ const handleGenerateInvitation = async () => {
                                         ? 'bg-green-100 text-green-700'
                                         : progress.outcome === 'verbal_prompt'
                                         ? 'bg-yellow-100 text-yellow-700'
-                                        : 'bg-gray-100 text-gray-600'
+                                        : 'bg-red-100 text-red-700'
                                     }`}
-                                    title={`${new Date(progress.date).toLocaleDateString()}: ${progress.outcome}`}
+                                    title={`${new Date(progress.date).toLocaleDateString()}: ${
+                                      progress.outcome === 'correct' ? 'All correct' :
+                                      progress.outcome === 'verbal_prompt' ? 'Needed prompts' :
+                                      'Needs work'
+                                    }`}
                                   >
                                     {progress.outcome === 'correct' ? '✓' : 
-                                     progress.outcome === 'verbal_prompt' ? '◐' : '◯'}
+                                     progress.outcome === 'verbal_prompt' ? '◐' : '✗'}
                                   </div>
                                 ))}
                               </div>
