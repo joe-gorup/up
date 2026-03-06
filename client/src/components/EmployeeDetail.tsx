@@ -665,8 +665,8 @@ const handleGenerateInvitation = async () => {
       is_emergency_contact: c.is_emergency_contact, has_app_access: c.has_app_access,
     }));
     setContactsEditForm(existing.length > 0 ? existing : [{
-      id: undefined, first_name: '', last_name: '', relationship_type: 'guardian',
-      phone: '', email: '', is_emergency_contact: false, has_app_access: false,
+      id: undefined, first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+      phone: '', email: '', is_emergency_contact: false, has_app_access: false, _isNew: true,
     }]);
     setContactError('');
     setEditingContacts(true);
@@ -726,7 +726,7 @@ const handleGenerateInvitation = async () => {
           }
         }
       }
-      setEmployeeContacts(updatedContacts);
+      setEmployeeContacts(updatedContacts.filter(Boolean));
       setEditingContacts(false);
       setContactsEditForm([]);
     } catch (err) {
