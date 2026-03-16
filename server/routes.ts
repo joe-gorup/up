@@ -26,6 +26,38 @@ import {
   type AuthUser 
 } from "./auth";
 
+// Helper to strip sensitive fields from employee objects before sending to clients
+function stripSensitiveFields<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
+  const { password, ...safe } = obj;
+  return safe;
+}
+
+function stripSensitiveFieldsArray<T extends Record<string, any>>(arr: T[]): Omit<T, 'password'>[] {
+  return arr.map(stripSensitiveFields);
+}
+
+// Allowlisted fields for employee create/update to prevent mass-assignment
+const EMPLOYEE_ALLOWED_FIELDS = [
+  'first_name', 'last_name', 'email', 'role', 'date_of_birth',
+  'is_active', 'has_system_access', 'password',
+  'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
+  'regulation_strategies', 'has_service_provider', 'service_providers',
+  'profile_image_url', 'location',
+  'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
+  'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',
+  'roi_guardian_city_state_zip', 'roi_guardian_phone', 'roi_guardian_relationship'
+];
+
+function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const field of allowedFields) {
+    if (body[field] !== undefined) {
+      result[field] = body[field];
+    }
+  }
+  return result;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
   app.post("/api/login", async (req: Request, res: Response) => {
@@ -348,7 +380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(and(eq(employees.is_active, true), inArray(employees.id, scooperIds)))
           .orderBy(employees.first_name);
         logger.info({ count: assignedScoopers.length, coachId: user.id }, 'Scoped employees fetched for Job Coach');
-        return res.json(assignedScoopers);
+        return res.json(stripSensitiveFieldsArray(assignedScoopers));
       }
 
       if (user.role === 'Guardian') {
@@ -361,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(and(eq(employees.is_active, true), inArray(employees.id, scooperIds)))
           .orderBy(employees.first_name);
         logger.info({ count: relatedScoopers.length, guardianId: user.id }, 'Scoped employees fetched for Guardian');
-        return res.json(relatedScoopers);
+        return res.json(stripSensitiveFieldsArray(relatedScoopers));
       }
 
       const allEmployees = await db
@@ -371,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(employees.email, employees.created_at);
       
       logger.info({ count: allEmployees.length }, 'Employees fetched successfully');
-      res.json(allEmployees);
+      res.json(stripSensitiveFieldsArray(allEmployees));
     } catch (error) {
       logger.error({ error }, 'Failed to fetch employees');
       res.status(500).json({ error: 'Failed to fetch employees' });
@@ -389,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const employeeData = { ...req.body };
+      const employeeData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS) };
       
       // Handle empty email for Super Scoopers without system access
       if (!employeeData.email || employeeData.email.trim() === '') {
@@ -429,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const updateData = { ...req.body, updated_at: new Date() };
+      const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
       
       // Generate name field from first_name and last_name (legacy field requirement)
       if (updateData.first_name && updateData.last_name) {
@@ -449,10 +481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(employees.id, id))
         .returning();
 
-      // NOTE: Employee access is now managed entirely via has_system_access flag
-      // No separate user accounts needed
-
-      res.json(updatedEmployee);
+      res.json(stripSensitiveFields(updatedEmployee));
     } catch (error) {
       logger.error({ error, employeeId: req.params.id }, 'Failed to update employee');
       res.status(500).json({ error: 'Failed to update employee' });
@@ -713,7 +742,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user-specific drafts
-  app.get("/api/step-progress/drafts/:documenterId", async (req: Request, res: Response) => {
+  app.get("/api/step-progress/drafts/:documenterId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { documenterId } = req.params;
       

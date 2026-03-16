@@ -9,8 +9,11 @@ import { eq, and } from 'drizzle-orm';
 // Salt rounds for bcrypt (12 is secure and reasonable performance)
 const SALT_ROUNDS = 12;
 
-// JWT secret - in production this should be a strong secret from environment
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+// JWT secret - must be set via environment variable
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required. Set it to a strong random string (at least 32 characters).');
+}
 const JWT_EXPIRES_IN = '8h'; // Match session timeout
 
 export interface AuthUser {
