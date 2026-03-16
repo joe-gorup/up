@@ -1,42 +1,87 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
+description: Create and modify frontend interfaces for the Unique Pathway application. Use this skill when building or modifying web components, pages, dashboards, or UI elements within this project. Follows project-specific patterns, accessibility requirements, and design system conventions.
 license: Complete terms in LICENSE.txt
 ---
 
-This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details and creative choices.
+This skill guides creation and modification of frontend interfaces within the Unique Pathway application. All code must follow the project's established patterns and design system.
 
-The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
+The user provides frontend requirements: a component, page, or interface to build or modify. They may include context about the purpose, audience, or technical constraints.
+
+## Before You Start
+
+**Read `DEVELOPMENT_GUIDELINES.md`** — it contains security rules, frontend patterns, and code quality standards that override any defaults below.
+
+## Project-Specific Technical Constraints
+
+### Stack
+- React with TypeScript (strict — no `as any`)
+- Vite build system
+- Tailwind CSS for styling
+- `wouter` for routing (NOT react-router)
+- `apiRequest` from `client/src/lib/auth.ts` for ALL API calls (NOT React Query, NOT raw fetch)
+- `DataContext` and `AuthContext` for shared state
+- `useToast` hook for notifications
+
+### Design System
+- **Borders**: `rounded-xl` on cards and containers
+- **Primary color**: `blue-600` for buttons and accents
+- **Backgrounds**: `gray-100` for page backgrounds, white for cards
+- **Consistent spacing**: Follow existing component padding/margin patterns
+- **Mobile first**: Test at 375px minimum width
+
+### Component Rules
+- Use existing components from `client/src/components/ui/` (Modal, Tabs, Button, LoadingSpinner, etc.)
+- Do NOT redefine Button, Modal, or other UI primitives locally in feature components
+- Components MUST NOT exceed ~500 lines — extract sub-components for larger features
+- Avoid 50+ `useState` declarations — split the component or use `useReducer`
+- Move hardcoded data arrays to constants files or the database
+
+### Forbidden Patterns
+- `alert()`, `confirm()`, `prompt()` — use `useToast` and `ConfirmDialog`/`Modal`
+- `window.location.reload()` — refresh data via DataContext or re-fetch
+- `console.log` in committed code — remove before committing
+- `as any` type casts — define proper types
+- `dangerouslySetInnerHTML` without DOMPurify sanitization
+- `Date.now()` for generating IDs — use `crypto.randomUUID()`
+- `JSON.parse(JSON.stringify())` for deep cloning — use `structuredClone()`
+- Nested interactive elements (`<div onClick>` inside `<button>`)
+- Duplicate component definitions (check `ui/` folder first)
+- Manual `localStorage.getItem('golden-scoop-session')` — use `useAuth()` context
+
+### Required Patterns
+- All API calls through `apiRequest` (handles auth headers and 401 auto-logout)
+- `LoadingSpinner` during data loading states
+- `useToast` for all user-facing success/error messages
+- `try/catch` around all `JSON.parse()` calls on external data (localStorage, sessionStorage, API)
+- Proper loading, error, and empty states for every data-fetching view
+- ARIA roles on modals (`role="dialog"`, `aria-modal="true"`) and tabs (`role="tablist"`, `role="tab"`, `role="tabpanel"`)
+- Focus trapping and Escape key handling on modals
+- Keyboard navigation (arrow keys) on tab components
+- Unique `id` attributes when multiple instances of a component may render
+
+## Accessibility Requirements
+
+- All interactive elements must be keyboard accessible
+- Use semantic HTML (`<button>` for actions, `<a>` for navigation)
+- Add `aria-label` to icon-only buttons
+- Ensure WCAG AA color contrast (4.5:1 for normal text, 3:1 for large text)
+- Never use color alone to convey information
+- Test with keyboard-only navigation
 
 ## Design Thinking
 
-Before coding, understand the context and commit to a BOLD aesthetic direction:
-- **Purpose**: What problem does this interface solve? Who uses it?
-- **Tone**: Pick an extreme: brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful/toy-like, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian, etc. There are so many flavors to choose from. Use these for inspiration but design one that is true to the aesthetic direction.
-- **Constraints**: Technical requirements (framework, performance, accessibility).
-- **Differentiation**: What makes this UNFORGETTABLE? What's the one thing someone will remember?
+When creating new interfaces:
+- **Purpose**: What problem does this interface solve? Who uses it? (Refer to the Role Reference in DEVELOPMENT_GUIDELINES.md)
+- **Consistency**: Match existing app aesthetics — this is a workplace tool, not a marketing site. Prioritize clarity and usability over visual flair.
+- **Mobile**: Managers and coaches use this on tablets and phones during shifts. Touch targets must be at least 44x44px.
+- **Performance**: Avoid unnecessary re-renders. Don't fetch data the user hasn't navigated to yet.
 
-**CRITICAL**: Choose a clear conceptual direction and execute it with precision. Bold maximalism and refined minimalism both work - the key is intentionality, not intensity.
+## After Implementation
 
-Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
-- Production-grade and functional
-- Visually striking and memorable
-- Cohesive with a clear aesthetic point-of-view
-- Meticulously refined in every detail
-
-## Frontend Aesthetics Guidelines
-
-Focus on:
-- **Typography**: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics; unexpected, characterful font choices. Pair a distinctive display font with a refined body font.
-- **Color & Theme**: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
-- **Motion**: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions. Use scroll-triggering and hover states that surprise.
-- **Spatial Composition**: Unexpected layouts. Asymmetry. Overlap. Diagonal flow. Grid-breaking elements. Generous negative space OR controlled density.
-- **Backgrounds & Visual Details**: Create atmosphere and depth rather than defaulting to solid colors. Add contextual effects and textures that match the overall aesthetic. Apply creative forms like gradient meshes, noise textures, geometric patterns, layered transparencies, dramatic shadows, decorative borders, custom cursors, and grain overlays.
-
-NEVER use generic AI-generated aesthetics like overused font families (Inter, Roboto, Arial, system fonts), cliched color schemes (particularly purple gradients on white backgrounds), predictable layouts and component patterns, and cookie-cutter design that lacks context-specific character.
-
-Interpret creatively and make unexpected choices that feel genuinely designed for the context. No design should be the same. Vary between light and dark themes, different fonts, different aesthetics. NEVER converge on common choices (Space Grotesk, for example) across generations.
-
-**IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
-
-Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.
+- Verify no `console.log` statements remain
+- Verify no unused imports
+- Verify proper loading, error, and empty states
+- Verify mobile responsiveness at 375px
+- Verify keyboard accessibility
+- Verify all API calls use `apiRequest`
