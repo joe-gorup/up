@@ -12,7 +12,7 @@ export interface Employee {
   profileImageUrl?: string;
   isActive: boolean;
   hasSystemAccess: boolean;
-  password?: string; // Only for employees with system access
+  // password field removed — API no longer returns it for security
   allergies: string[];
   emergencyContacts: Array<{
     name: string;
@@ -215,6 +215,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: emp.regulation_strategies || [],
           hasServiceProvider: emp.has_service_provider || false,
           serviceProviders: emp.service_providers || [],
+          date_of_birth: emp.date_of_birth || null,
           last_login: emp.last_login || null,
           roi_status: emp.roi_status || false,
           createdAt: emp.created_at,
@@ -1442,8 +1443,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading Golden Scoop...</p>
-          <p className="text-sm text-gray-500 mt-2">Setting up demo data</p>
+          <p className="text-gray-600">Loading Unique Pathway...</p>
+          <p className="text-sm text-gray-500 mt-2">Preparing your workspace</p>
         </div>
       </div>
     );
