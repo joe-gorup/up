@@ -238,6 +238,28 @@ export const guardian_notes = pgTable("guardian_notes", {
   uniqueGuardianScooperNote: unique("guardian_notes_unique").on(table.guardian_id, table.scooper_id),
 }));
 
+// Employee contacts table - unified contacts for each employee (replaces emergency_contacts JSON + guardian add flow)
+export const employee_contacts = pgTable("employee_contacts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  first_name: text("first_name").notNull(),
+  last_name: text("last_name").notNull(),
+  relationship_type: text("relationship_type").notNull().default("Parent/Guardian"),
+  phone: text("phone"),
+  email: text("email"),
+  is_emergency_contact: boolean("is_emergency_contact").default(false),
+  has_app_access: boolean("has_app_access").default(false),
+  linked_guardian_id: varchar("linked_guardian_id").references(() => employees.id, { onDelete: "set null" }),
+  invite_token: text("invite_token"),
+  invite_status: text("invite_status").default("none"),
+  created_by: varchar("created_by").references(() => employees.id),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("employee_contacts_employee_id_idx").on(table.employee_id),
+  linkedGuardianIdIdx: index("employee_contacts_linked_guardian_id_idx").on(table.linked_guardian_id),
+}));
+
 // Account invitations table - tokens for setting up new accounts via email
 export const account_invitations = pgTable("account_invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
@@ -296,6 +318,7 @@ export const insertCoachAssignmentSchema = createInsertSchema(coach_assignments)
 export const insertGuardianRelationshipSchema = createInsertSchema(guardian_relationships).omit({ id: true, created_at: true });
 export const insertAccountInvitationSchema = createInsertSchema(account_invitations).omit({ id: true, created_at: true, used_at: true });
 export const insertGuardianNoteSchema = createInsertSchema(guardian_notes).omit({ id: true, created_at: true, updated_at: true });
+export const insertEmployeeContactSchema = createInsertSchema(employee_contacts).omit({ id: true, created_at: true, updated_at: true });
 
 // Utility function to calculate discrete date from relative duration
 export function calculateDateFromRelativeDuration(relativeDuration: string, fromDate: Date = new Date()): string {
@@ -501,6 +524,70 @@ export const insertCoachNoteSchema = createInsertSchema(coach_notes).omit({
 export type InsertCoachNote = z.infer<typeof insertCoachNoteSchema>;
 export type CoachNote = typeof coach_notes.$inferSelect;
 
+// Role Permissions table - configurable permissions per role per feature
+export const role_permissions = pgTable("role_permissions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  role: text("role").notNull(),
+  feature: text("feature").notNull(),
+  can_view: boolean("can_view").default(false),
+  can_modify: boolean("can_modify").default(false),
+  can_delete: boolean("can_delete").default(false),
+  updated_at: timestamp("updated_at", { withTimezone: true }).default(sql`now()`),
+  updated_by: varchar("updated_by"),
+}, (table) => ({
+  roleFeatureIdx: unique("role_permissions_role_feature_unique").on(table.role, table.feature),
+}));
+
+export const insertRolePermissionSchema = createInsertSchema(role_permissions).omit({
+  id: true,
+  updated_at: true,
+});
+
+export type InsertRolePermission = z.infer<typeof insertRolePermissionSchema>;
+export type RolePermission = typeof role_permissions.$inferSelect;
+
+export const PERMISSION_FEATURES = [
+  'my_shift',
+  'my_scoopers',
+  'my_loved_ones',
+  'employee_profiles',
+  'goal_assessment',
+  'goal_assignment',
+  'goal_templates',
+  'employee_management',
+  'user_management',
+  'promotion_certifications',
+  'roi_compliance',
+  'coach_notes',
+  'coach_files',
+  'guardian_notes',
+  'contacts',
+  'past_assessments',
+] as const;
+
+export type PermissionFeature = typeof PERMISSION_FEATURES[number];
+
+export const PERMISSION_FEATURE_LABELS: Record<PermissionFeature, string> = {
+  my_shift: 'My Shift',
+  my_scoopers: 'My Scoopers',
+  my_loved_ones: 'My Loved Ones',
+  employee_profiles: 'Employee Profiles',
+  goal_assessment: 'Goal Assessment / Documentation',
+  goal_assignment: 'Goal Assignment',
+  goal_templates: 'Goal Templates',
+  employee_management: 'Employee Management',
+  user_management: 'User Management',
+  promotion_certifications: 'Promotion Certifications',
+  roi_compliance: 'ROI Compliance',
+  coach_notes: 'Coach Notes',
+  coach_files: 'Coach Files',
+  guardian_notes: 'Guardian Notes',
+  contacts: 'Contacts',
+  past_assessments: 'Past Assessments',
+};
+
+export const CONFIGURABLE_ROLES = ['Shift Lead', 'Assistant Manager', 'Job Coach', 'Guardian'] as const;
+
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;
 export type PromotionCertification = typeof promotion_certifications.$inferSelect;
@@ -529,3 +616,5 @@ export type InsertGuardianRelationship = z.infer<typeof insertGuardianRelationsh
 export type GuardianRelationship = typeof guardian_relationships.$inferSelect;
 export type InsertGuardianNote = z.infer<typeof insertGuardianNoteSchema>;
 export type GuardianNote = typeof guardian_notes.$inferSelect;
+export type InsertEmployeeContact = z.infer<typeof insertEmployeeContactSchema>;
+export type EmployeeContact = typeof employee_contacts.$inferSelect;

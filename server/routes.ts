@@ -6,8 +6,9 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
+  PERMISSION_FEATURES, CONFIGURABLE_ROLES
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -24,6 +25,38 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole,
   type AuthUser 
 } from "./auth";
+
+// Helper to strip sensitive fields from employee objects before sending to clients
+function stripSensitiveFields<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
+  const { password, ...safe } = obj;
+  return safe;
+}
+
+function stripSensitiveFieldsArray<T extends Record<string, any>>(arr: T[]): Omit<T, 'password'>[] {
+  return arr.map(stripSensitiveFields);
+}
+
+// Allowlisted fields for employee create/update to prevent mass-assignment
+const EMPLOYEE_ALLOWED_FIELDS = [
+  'first_name', 'last_name', 'email', 'role', 'date_of_birth',
+  'is_active', 'has_system_access', 'password',
+  'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
+  'regulation_strategies', 'has_service_provider', 'service_providers',
+  'profile_image_url', 'location',
+  'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
+  'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',
+  'roi_guardian_city_state_zip', 'roi_guardian_phone', 'roi_guardian_relationship'
+];
+
+function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): Record<string, any> {
+  const result: Record<string, any> = {};
+  for (const field of allowedFields) {
+    if (body[field] !== undefined) {
+      result[field] = body[field];
+    }
+  }
+  return result;
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
@@ -347,7 +380,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(and(eq(employees.is_active, true), inArray(employees.id, scooperIds)))
           .orderBy(employees.first_name);
         logger.info({ count: assignedScoopers.length, coachId: user.id }, 'Scoped employees fetched for Job Coach');
-        return res.json(assignedScoopers);
+        return res.json(stripSensitiveFieldsArray(assignedScoopers));
       }
 
       if (user.role === 'Guardian') {
@@ -360,7 +393,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .where(and(eq(employees.is_active, true), inArray(employees.id, scooperIds)))
           .orderBy(employees.first_name);
         logger.info({ count: relatedScoopers.length, guardianId: user.id }, 'Scoped employees fetched for Guardian');
-        return res.json(relatedScoopers);
+        return res.json(stripSensitiveFieldsArray(relatedScoopers));
       }
 
       const allEmployees = await db
@@ -370,7 +403,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .orderBy(employees.email, employees.created_at);
       
       logger.info({ count: allEmployees.length }, 'Employees fetched successfully');
-      res.json(allEmployees);
+      res.json(stripSensitiveFieldsArray(allEmployees));
     } catch (error) {
       logger.error({ error }, 'Failed to fetch employees');
       res.status(500).json({ error: 'Failed to fetch employees' });
@@ -388,7 +421,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      const employeeData = { ...req.body };
+      const employeeData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS) };
       
       // Handle empty email for Super Scoopers without system access
       if (!employeeData.email || employeeData.email.trim() === '') {
@@ -413,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employeeData.password = await hashPassword(employeeData.password);
       }
       
-      const [newEmployee] = await db.insert(employees).values(employeeData).returning();
+      const [newEmployee] = await db.insert(employees).values(employeeData as any).returning();
       logger.info({ employeeId: newEmployee.id, name: `${newEmployee.first_name} ${newEmployee.last_name}` }, 'Employee created successfully');
       
       // Don't return the hashed password
@@ -428,7 +461,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      const updateData = { ...req.body, updated_at: new Date() };
+      const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
       
       // Generate name field from first_name and last_name (legacy field requirement)
       if (updateData.first_name && updateData.last_name) {
@@ -448,10 +481,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(employees.id, id))
         .returning();
 
-      // NOTE: Employee access is now managed entirely via has_system_access flag
-      // No separate user accounts needed
-
-      res.json(updatedEmployee);
+      res.json(stripSensitiveFields(updatedEmployee));
     } catch (error) {
       logger.error({ error, employeeId: req.params.id }, 'Failed to update employee');
       res.status(500).json({ error: 'Failed to update employee' });
@@ -469,6 +499,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           goal_statement: goal_templates.goal_statement,
           default_mastery_criteria: goal_templates.default_mastery_criteria,
           default_target_date: goal_templates.default_target_date,
+          relative_target_duration: goal_templates.relative_target_duration,
           status: goal_templates.status,
           created_at: goal_templates.created_at,
           updated_at: goal_templates.updated_at,
@@ -479,7 +510,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   'id', ${goal_template_steps.id},
                   'step_order', ${goal_template_steps.step_order},
                   'step_description', ${goal_template_steps.step_description},
-                  'is_required', ${goal_template_steps.is_required}
+                  'is_required', ${goal_template_steps.is_required},
+                  'timer_type', ${goal_template_steps.timer_type}
                 )
                 ORDER BY ${goal_template_steps.step_order}
               ) FILTER (WHERE ${goal_template_steps.id} IS NOT NULL),
@@ -510,7 +542,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           template_id: newTemplate.id,
           step_order: index + 1,
           step_description: step.stepDescription,
-          is_required: step.isRequired
+          is_required: step.isRequired,
+          timer_type: step.timerType || 'none'
         }));
         await db.insert(goal_template_steps).values(stepInserts);
       }
@@ -550,7 +583,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             template_id: templateId,
             step_order: index + 1,
             step_description: step.stepDescription,
-            is_required: step.isRequired
+            is_required: step.isRequired,
+            timer_type: step.timerType || 'none'
           }));
           await db.insert(goal_template_steps).values(stepInserts);
         }
@@ -626,8 +660,54 @@ export async function registerRoutes(app: Express): Promise<Server> {
         goalsWithSteps = await query.groupBy(development_goals.id);
       }
       
-      logger.info({ count: goalsWithSteps.length }, 'Development goals fetched efficiently');
-      res.json(goalsWithSteps);
+      // Enrich each goal with the last 5 assessment sessions and their aggregate outcomes
+      let enrichedGoals: any[] = goalsWithSteps;
+      if (goalsWithSteps.length > 0) {
+        const goalIds = goalsWithSteps.map(g => g.id);
+        const recentSessionsRows = await db.execute(sql`
+          SELECT development_goal_id, assessment_session_id, session_date, outcome
+          FROM (
+            SELECT
+              sp.development_goal_id,
+              sp.assessment_session_id,
+              sp.date AS session_date,
+              CASE
+                WHEN bool_or(sp.outcome = 'incorrect') THEN 'incorrect'
+                WHEN bool_or(sp.outcome = 'verbal_prompt') THEN 'verbal_prompt'
+                WHEN bool_and(sp.outcome IN ('correct','na')) AND bool_or(sp.outcome = 'correct') THEN 'all_correct'
+                ELSE 'na'
+              END AS outcome,
+              ROW_NUMBER() OVER (
+                PARTITION BY sp.development_goal_id
+                ORDER BY sp.date DESC, MAX(sp.created_at) DESC
+              ) AS rn
+            FROM step_progress sp
+            WHERE sp.development_goal_id IN (${sql.join(goalIds.map(id => sql`${id}`), sql`, `)})
+              AND sp.status = 'submitted'
+              AND sp.assessment_session_id IS NOT NULL
+            GROUP BY sp.development_goal_id, sp.assessment_session_id, sp.date
+          ) ranked
+          WHERE rn <= 5
+          ORDER BY development_goal_id, rn
+        `);
+
+        const sessionsByGoal: Record<string, Array<{ date: string; outcome: string }>> = {};
+        for (const row of recentSessionsRows.rows as any[]) {
+          if (!sessionsByGoal[row.development_goal_id]) sessionsByGoal[row.development_goal_id] = [];
+          sessionsByGoal[row.development_goal_id].push({
+            date: row.session_date,
+            outcome: row.outcome,
+          });
+        }
+
+        enrichedGoals = goalsWithSteps.map(g => ({
+          ...g,
+          recentSessions: sessionsByGoal[g.id] ?? [],
+        }));
+      }
+
+      logger.info({ count: enrichedGoals.length }, 'Development goals fetched efficiently');
+      res.json(enrichedGoals);
     } catch (error) {
       logger.error({ error }, 'Failed to fetch development goals');
       res.status(500).json({ error: 'Failed to fetch development goals' });
@@ -712,7 +792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get user-specific drafts
-  app.get("/api/step-progress/drafts/:documenterId", async (req: Request, res: Response) => {
+  app.get("/api/step-progress/drafts/:documenterId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { documenterId } = req.params;
       
@@ -885,52 +965,77 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const goalSteps = await db.select().from(goal_steps)
             .where(eq(goal_steps.goal_id, goalId));
 
-          // Get all submitted progress for this goal/employee
+          // Get only TODAY's submitted progress for this goal/employee
           const submittedProgress = await db.select().from(step_progress)
             .where(and(
               eq(step_progress.development_goal_id, goalId),
               eq(step_progress.employee_id, employee_id),
+              eq(step_progress.date, date),
               eq(step_progress.status, 'submitted')
             ));
 
-          // Check if all required steps are completed with "correct" outcome
+          // Check outcomes for required steps in today's session
           const requiredSteps = goalSteps.filter(step => step.is_required);
-          const correctSubmissions = submittedProgress.filter(p => 
-            p.outcome === 'correct' && 
-            requiredSteps.some(step => step.id === p.goal_step_id)
-          );
 
-          // If all required steps are correct, increment consecutive count
-          if (correctSubmissions.length === requiredSteps.length) {
-            const [goal] = await db.select().from(development_goals)
-              .where(eq(development_goals.id, goalId))
-              .limit(1);
-
-            if (goal) {
-              const newConsecutive = (goal.consecutive_all_correct || 0) + 1;
-              const masteryAchieved = newConsecutive >= 3; // Default mastery criteria
-
-              await db.update(development_goals)
-                .set({
-                  consecutive_all_correct: newConsecutive,
-                  mastery_achieved: masteryAchieved,
-                  mastery_date: masteryAchieved ? new Date().toISOString().split('T')[0] : null,
-                  status: masteryAchieved ? 'completed' : 'active',
-                  updated_at: new Date()
-                })
-                .where(eq(development_goals.id, goalId));
-
-              logger.info({ 
-                goalId, 
-                employeeId: employee_id, 
-                sessionId: assessment_session_id,
-                documenterId: documenter_user_id,
-                consecutive: newConsecutive,
-                masteryAchieved,
-                requiredStepsCount: requiredSteps.length,
-                correctStepsCount: correctSubmissions.length
-              }, masteryAchieved ? 'MASTERY ACHIEVED - Goal completed!' : 'Goal progress updated after submission');
+          // Build a map of goal_step_id → outcome for today's submitted records
+          const requiredStepOutcomes = new Map<string | null, string>();
+          for (const p of submittedProgress) {
+            if (requiredSteps.some(s => s.id === p.goal_step_id)) {
+              requiredStepOutcomes.set(p.goal_step_id, p.outcome);
             }
+          }
+
+          // Increment: all required steps documented AND all are 'correct'
+          const allRequiredCorrectToday = requiredSteps.length > 0 &&
+            requiredSteps.every(s => requiredStepOutcomes.get(s.id) === 'correct');
+
+          // Reset: at least one required step explicitly marked incorrect or verbal_prompt
+          const anyRequiredFailed = requiredSteps.some(s => {
+            const outcome = requiredStepOutcomes.get(s.id);
+            return outcome === 'incorrect' || outcome === 'verbal_prompt';
+          });
+
+          const [goal] = await db.select().from(development_goals)
+            .where(eq(development_goals.id, goalId))
+            .limit(1);
+
+          if (goal) {
+            let newConsecutive: number;
+            if (allRequiredCorrectToday) {
+              newConsecutive = (goal.consecutive_all_correct || 0) + 1;
+            } else if (anyRequiredFailed) {
+              newConsecutive = 0;
+            } else {
+              // Steps were skipped/na or not all documented — leave counter unchanged
+              newConsecutive = goal.consecutive_all_correct || 0;
+            }
+
+            const masteryAchieved = newConsecutive >= 3;
+
+            await db.update(development_goals)
+              .set({
+                consecutive_all_correct: newConsecutive,
+                mastery_achieved: masteryAchieved,
+                mastery_date: masteryAchieved && !goal.mastery_achieved
+                  ? new Date().toISOString().split('T')[0]
+                  : goal.mastery_date,
+                status: masteryAchieved ? 'completed' : 'active',
+                updated_at: new Date()
+              })
+              .where(eq(development_goals.id, goalId));
+
+            logger.info({ 
+              goalId,
+              employeeId: employee_id,
+              sessionId: assessment_session_id,
+              documenterId: documenter_user_id,
+              allRequiredCorrectToday,
+              anyRequiredFailed,
+              consecutive: newConsecutive,
+              masteryAchieved,
+              requiredStepsCount: requiredSteps.length,
+              documentedRequiredCount: requiredStepOutcomes.size
+            }, masteryAchieved ? 'MASTERY ACHIEVED - Goal completed!' : 'Goal progress updated after submission');
           }
         }
       }
@@ -973,6 +1078,104 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/employees/:employeeId/assessment-history", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const sessions = await db.select({
+        id: assessment_sessions.id,
+        manager_id: assessment_sessions.manager_id,
+        date: assessment_sessions.date,
+        location: assessment_sessions.location,
+        status: assessment_sessions.status,
+        created_at: assessment_sessions.created_at,
+        updated_at: assessment_sessions.updated_at,
+        managerFirstName: employees.first_name,
+        managerLastName: employees.last_name,
+      })
+        .from(assessment_sessions)
+        .leftJoin(employees, eq(assessment_sessions.manager_id, employees.id))
+        .where(sql`${assessment_sessions.employee_ids}::jsonb @> ${JSON.stringify([employeeId])}::jsonb AND ${assessment_sessions.status} = 'completed'`)
+        .orderBy(desc(assessment_sessions.date), desc(assessment_sessions.created_at))
+        .limit(20);
+      res.json(sessions);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch assessment history');
+      res.status(500).json({ error: 'Failed to fetch assessment history' });
+    }
+  });
+
+  app.get("/api/assessment-sessions/:sessionId/details", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { sessionId } = req.params;
+      const employeeId = req.query.employeeId as string;
+      if (!employeeId) {
+        return res.status(400).json({ error: 'employeeId query parameter is required' });
+      }
+
+      const [progressRows, summaryRows] = await Promise.all([
+        db.select({
+          id: step_progress.id,
+          developmentGoalId: step_progress.development_goal_id,
+          goalStepId: step_progress.goal_step_id,
+          outcome: step_progress.outcome,
+          notes: step_progress.notes,
+          completionTimeSeconds: step_progress.completion_time_seconds,
+          timerManuallyEntered: step_progress.timer_manually_entered,
+          date: step_progress.date,
+          goalTitle: development_goals.title,
+          stepOrder: goal_steps.step_order,
+          stepDescription: goal_steps.step_description,
+        })
+          .from(step_progress)
+          .leftJoin(development_goals, eq(step_progress.development_goal_id, development_goals.id))
+          .leftJoin(goal_steps, eq(step_progress.goal_step_id, goal_steps.id))
+          .where(
+            and(
+              eq(step_progress.assessment_session_id, sessionId),
+              eq(step_progress.employee_id, employeeId),
+              eq(step_progress.status, 'submitted')
+            )
+          )
+          .orderBy(development_goals.title, goal_steps.step_order),
+        db.select()
+          .from(assessment_summaries)
+          .where(
+            and(
+              eq(assessment_summaries.assessment_session_id, sessionId),
+              eq(assessment_summaries.employee_id, employeeId)
+            )
+          )
+          .limit(1)
+      ]);
+
+      const goalMap: Record<string, { goalId: string; goalTitle: string; steps: any[] }> = {};
+      for (const row of progressRows) {
+        const gid = row.developmentGoalId || '';
+        if (!goalMap[gid]) {
+          goalMap[gid] = { goalId: gid, goalTitle: row.goalTitle || 'Unknown Goal', steps: [] };
+        }
+        goalMap[gid].steps.push({
+          stepId: row.goalStepId,
+          stepOrder: row.stepOrder,
+          stepDescription: row.stepDescription,
+          outcome: row.outcome,
+          notes: row.notes,
+          completionTimeSeconds: row.completionTimeSeconds,
+          timerManuallyEntered: row.timerManuallyEntered,
+        });
+      }
+
+      res.json({
+        goals: Object.values(goalMap),
+        summary: summaryRows[0]?.summary || null,
+        totalSteps: progressRows.length,
+      });
+    } catch (error) {
+      logger.error({ error, sessionId: req.params.sessionId }, 'Failed to fetch session details');
+      res.status(500).json({ error: 'Failed to fetch session details' });
+    }
+  });
+
   app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
@@ -1009,39 +1212,61 @@ export async function registerRoutes(app: Express): Promise<Server> {
             );
 
           if (activeSessions.length > 0) {
-            // Find which employees are locked
-            const lockedEmployees: string[] = [];
-            const lockedByManagers: any[] = [];
+            const ownSessions = activeSessions.filter(s => s.locked_by === user.id);
+            const otherSessions = activeSessions.filter(s => s.locked_by !== user.id);
 
-            for (const session of activeSessions) {
-              const sessionEmployeeIds = session.employee_ids as string[];
-              const conflictingIds = employee_ids.filter((id: string) => sessionEmployeeIds.includes(id));
-              lockedEmployees.push(...conflictingIds);
-              
-              if (session.locked_by && !lockedByManagers.find(m => m.id === session.locked_by)) {
-                const manager = await tx.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
-                if (manager.length > 0) {
-                  lockedByManagers.push(manager[0]);
-                }
+            if (ownSessions.length > 0) {
+              logger.info({
+                managerId: user.id,
+                ownSessionIds: ownSessions.map(s => s.id),
+                count: ownSessions.length
+              }, 'Auto-completing own prior sessions before creating new one');
+
+              for (const session of ownSessions) {
+                await tx.update(assessment_sessions)
+                  .set({
+                    status: 'completed',
+                    locked_by: null,
+                    locked_at: null,
+                    updated_at: new Date()
+                  })
+                  .where(eq(assessment_sessions.id, session.id));
               }
             }
 
-            const uniqueLockedEmployees = Array.from(new Set(lockedEmployees));
-            
-            logger.warn({ 
-              managerId: user.id,
-              requestedEmployees: employee_ids,
-              lockedEmployees: uniqueLockedEmployees,
-              lockingManagers: lockedByManagers.map(m => ({ id: m.id, name: `${m.first_name} ${m.last_name}` })),
-              conflictingSessions: activeSessions.map(s => s.id)
-            }, 'Session creation blocked - employees locked by other managers');
+            if (otherSessions.length > 0) {
+              const lockedEmployees: string[] = [];
+              const lockedByManagers: any[] = [];
 
-            // Throw error with conflict details - Drizzle automatically rolls back transaction on error
-            const error: any = new Error('Some employees are currently being assessed by another manager');
-            error.statusCode = 409;
-            error.lockedEmployees = uniqueLockedEmployees;
-            error.lockedByManagers = lockedByManagers;
-            throw error;
+              for (const session of otherSessions) {
+                const sessionEmployeeIds = session.employee_ids as string[];
+                const conflictingIds = employee_ids.filter((id: string) => sessionEmployeeIds.includes(id));
+                lockedEmployees.push(...conflictingIds);
+                
+                if (session.locked_by && !lockedByManagers.find(m => m.id === session.locked_by)) {
+                  const manager = await tx.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
+                  if (manager.length > 0) {
+                    lockedByManagers.push(manager[0]);
+                  }
+                }
+              }
+
+              const uniqueLockedEmployees = Array.from(new Set(lockedEmployees));
+              
+              logger.warn({ 
+                managerId: user.id,
+                requestedEmployees: employee_ids,
+                lockedEmployees: uniqueLockedEmployees,
+                lockingManagers: lockedByManagers.map(m => ({ id: m.id, name: `${m.first_name} ${m.last_name}` })),
+                conflictingSessions: otherSessions.map(s => s.id)
+              }, 'Session creation blocked - employees locked by other managers');
+
+              const error: any = new Error('Some employees are currently being assessed by another manager');
+              error.statusCode = 409;
+              error.lockedEmployees = uniqueLockedEmployees;
+              error.lockedByManagers = lockedByManagers;
+              throw error;
+            }
           }
         }
 
@@ -2339,6 +2564,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  const photoUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Only image files are allowed'));
+      }
+    },
+  });
+
+  app.post("/api/employees/photo", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), photoUpload.single('photo'), async (req: Request, res: Response) => {
+    try {
+      const file = req.file;
+      if (!file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      if (!privateDir) {
+        return res.status(503).json({ error: 'Object storage not configured' });
+      }
+      const fileId = crypto.randomUUID();
+      const ext = (file.originalname.split('.').pop() || 'jpg').toLowerCase();
+      const objectPath = `${privateDir}/profile-photos/${fileId}.${ext}`;
+      const { bucketName, objectName } = parseCoachFilePath(objectPath);
+      const bucket = objectStorageClient.bucket(bucketName);
+      const blob = bucket.file(objectName);
+      await blob.save(file.buffer, { contentType: file.mimetype });
+      res.json({ path: `/objects/profile-photos/${fileId}.${ext}` });
+    } catch (error) {
+      logger.error({ error }, 'Failed to upload employee photo');
+      res.status(500).json({ error: 'Failed to upload photo' });
+    }
+  });
+
   app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
@@ -2578,6 +2840,192 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete coach assignment');
       res.status(500).json({ error: 'Failed to delete coach assignment' });
+    }
+  });
+
+  // Employee Contacts Routes
+  app.get("/api/employees/:employeeId/contacts", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user;
+      if (user.role === 'Guardian') {
+        const rels = await db.select().from(guardian_relationships).where(eq(guardian_relationships.guardian_id, user.id));
+        const scooperIds = rels.map(r => r.scooper_id);
+        if (!scooperIds.includes(employeeId)) {
+          return res.status(403).json({ error: 'Access denied' });
+        }
+      }
+      const contacts = await db.select().from(employee_contacts)
+        .where(eq(employee_contacts.employee_id, employeeId))
+        .orderBy(employee_contacts.created_at);
+      res.json(contacts);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch employee contacts');
+      res.status(500).json({ error: 'Failed to fetch contacts' });
+    }
+  });
+
+  app.post("/api/employees/:employeeId/contacts", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user;
+      const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
+
+      if (!first_name || !last_name) {
+        return res.status(400).json({ error: 'First name and last name are required' });
+      }
+      if (is_emergency_contact && (!phone || phone.trim() === '')) {
+        return res.status(400).json({ error: 'Phone number is required for emergency contacts' });
+      }
+
+      const [contact] = await db.insert(employee_contacts).values({
+        employee_id: employeeId,
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
+        relationship_type: relationship_type || 'Parent/Guardian',
+        phone: phone?.trim() || null,
+        email: email?.trim() || null,
+        is_emergency_contact: is_emergency_contact || false,
+        has_app_access: false,
+        created_by: user.id,
+      }).returning();
+
+      logger.info({ contactId: contact.id, employeeId }, 'Employee contact created');
+      res.json(contact);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to create employee contact');
+      res.status(500).json({ error: 'Failed to create contact' });
+    }
+  });
+
+  app.patch("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
+
+      if (is_emergency_contact && (!phone || phone.trim() === '')) {
+        return res.status(400).json({ error: 'Phone number is required for emergency contacts' });
+      }
+
+      const updateData: any = { updated_at: new Date() };
+      if (first_name !== undefined) updateData.first_name = first_name.trim();
+      if (last_name !== undefined) updateData.last_name = last_name.trim();
+      if (relationship_type !== undefined) updateData.relationship_type = relationship_type;
+      if (phone !== undefined) updateData.phone = phone?.trim() || null;
+      if (email !== undefined) updateData.email = email?.trim() || null;
+      if (is_emergency_contact !== undefined) updateData.is_emergency_contact = is_emergency_contact;
+
+      const [updated] = await db.update(employee_contacts)
+        .set(updateData)
+        .where(eq(employee_contacts.id, contactId))
+        .returning();
+
+      if (!updated) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      logger.info({ contactId }, 'Employee contact updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to update contact');
+      res.status(500).json({ error: 'Failed to update contact' });
+    }
+  });
+
+  app.delete("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      await db.delete(employee_contacts).where(eq(employee_contacts.id, contactId));
+      logger.info({ contactId, employeeId: contact.employee_id }, 'Employee contact deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to delete contact');
+      res.status(500).json({ error: 'Failed to delete contact' });
+    }
+  });
+
+  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const { contactId } = req.params;
+      const user = (req as any).user;
+
+      const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      if (!['Parent/Guardian', 'Parent'].includes(contact.relationship_type)) {
+        return res.status(400).json({ error: 'App access can only be granted to Parent/Guardian or Parent relationships' });
+      }
+
+      if (!contact.email || contact.email.trim() === '') {
+        return res.status(400).json({ error: 'Email is required to grant app access' });
+      }
+
+      if (contact.linked_guardian_id) {
+        return res.status(400).json({ error: 'App access already granted for this contact' });
+      }
+
+      const existingEmail = await db.select().from(employees).where(eq(employees.email, contact.email)).limit(1);
+      if (existingEmail.length > 0) {
+        return res.status(409).json({ error: 'An account with this email already exists' });
+      }
+
+      const [newGuardian] = await db.insert(employees).values({
+        first_name: contact.first_name,
+        last_name: contact.last_name,
+        name: `${contact.first_name} ${contact.last_name}`,
+        email: contact.email,
+        role: 'Guardian',
+        is_active: true,
+        has_system_access: true,
+      }).returning();
+
+      await db.insert(guardian_relationships).values({
+        guardian_id: newGuardian.id,
+        scooper_id: contact.employee_id,
+        relationship_type: contact.relationship_type,
+        assigned_by: user.id,
+      });
+
+      const token = crypto.randomBytes(32).toString('hex');
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      await db.insert(account_invitations).values({
+        employee_id: newGuardian.id,
+        email: contact.email,
+        token,
+        expires_at: expiresAt,
+        created_by: user.id,
+      });
+
+      const [updatedContact] = await db.update(employee_contacts)
+        .set({
+          has_app_access: true,
+          linked_guardian_id: newGuardian.id,
+          invite_token: token,
+          invite_status: 'invited',
+          updated_at: new Date(),
+        })
+        .where(eq(employee_contacts.id, contactId))
+        .returning();
+
+      const setupUrl = `${req.protocol}://${req.get('host')}?setup=${token}`;
+
+      logger.info({ contactId, guardianId: newGuardian.id, employeeId: contact.employee_id }, 'App access granted to contact');
+      res.json({ contact: updatedContact, setupUrl });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'This guardian relationship already exists' });
+      }
+      logger.error({ error, contactId: req.params.contactId }, 'Failed to grant app access');
+      res.status(500).json({ error: 'Failed to grant app access' });
     }
   });
 
@@ -3404,6 +3852,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, id: req.params.id }, 'Failed to delete coach note');
       res.status(500).json({ error: 'Failed to delete note' });
+    }
+  });
+
+  // ===== Permission Management Routes =====
+
+  // GET /api/permissions - fetch all role permissions (admin only)
+  app.get("/api/permissions", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const allPerms = await db.select().from(role_permissions);
+      res.json(allPerms);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch permissions');
+      res.status(500).json({ error: 'Failed to fetch permissions' });
+    }
+  });
+
+  // GET /api/permissions/me - fetch permissions for current user's role
+  app.get("/api/permissions/me", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      if (user.role === 'Administrator') {
+        const allFeaturePerms = PERMISSION_FEATURES.map(f => ({ role: 'Administrator', feature: f, can_view: true, can_modify: true, can_delete: true }));
+        return res.json(allFeaturePerms);
+      }
+      const myPerms = await db.select().from(role_permissions).where(eq(role_permissions.role, user.role));
+      res.json(myPerms);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch user permissions');
+      res.status(500).json({ error: 'Failed to fetch permissions' });
+    }
+  });
+
+  // PUT /api/permissions - bulk save permissions (admin only)
+  app.put("/api/permissions", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { permissions } = req.body;
+      if (!Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'permissions must be an array' });
+      }
+
+      for (const perm of permissions) {
+        if (!perm.role || !perm.feature) continue;
+        if (perm.role === 'Administrator') continue;
+        if (!CONFIGURABLE_ROLES.includes(perm.role as any)) continue;
+        if (!PERMISSION_FEATURES.includes(perm.feature as any)) continue;
+
+        const canView = perm.can_view ?? false;
+        const canModify = canView ? (perm.can_modify ?? false) : false;
+        const canDelete = canView ? (perm.can_delete ?? false) : false;
+
+        const [existing] = await db.select().from(role_permissions)
+          .where(and(eq(role_permissions.role, perm.role), eq(role_permissions.feature, perm.feature)));
+
+        if (existing) {
+          await db.update(role_permissions)
+            .set({ can_view: canView, can_modify: canModify, can_delete: canDelete, updated_at: new Date(), updated_by: user.id })
+            .where(eq(role_permissions.id, existing.id));
+        } else {
+          await db.insert(role_permissions).values({
+            role: perm.role,
+            feature: perm.feature,
+            can_view: canView,
+            can_modify: canModify,
+            can_delete: canDelete,
+            updated_by: user.id,
+          });
+        }
+      }
+
+      const allPerms = await db.select().from(role_permissions);
+      res.json({ success: true, permissions: allPerms });
+    } catch (error) {
+      logger.error({ error }, 'Failed to save permissions');
+      res.status(500).json({ error: 'Failed to save permissions' });
+    }
+  });
+
+  // POST /api/permissions/seed - seed default permissions (admin only)
+  app.post("/api/permissions/seed", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const existing = await db.select().from(role_permissions);
+      if (existing.length > 0) {
+        return res.json({ message: 'Permissions already seeded', count: existing.length });
+      }
+
+      const defaults: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
+
+      for (const feature of PERMISSION_FEATURES) {
+        // Shift Lead - broad access
+        defaults.push({ role: 'Shift Lead', feature, can_view: true,
+          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
+          can_delete: false });
+        // Assistant Manager - similar to Shift Lead
+        defaults.push({ role: 'Assistant Manager', feature, can_view: true,
+          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
+          can_delete: false });
+        // Job Coach - limited access
+        defaults.push({ role: 'Job Coach', feature,
+          can_view: ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature),
+          can_modify: ['coach_notes', 'coach_files'].includes(feature),
+          can_delete: ['coach_notes', 'coach_files'].includes(feature) });
+        // Guardian - most restricted
+        defaults.push({ role: 'Guardian', feature,
+          can_view: ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature),
+          can_modify: ['guardian_notes'].includes(feature),
+          can_delete: false });
+      }
+
+      for (const d of defaults) {
+        await db.insert(role_permissions).values({ ...d, updated_by: user.id });
+      }
+
+      const allPerms = await db.select().from(role_permissions);
+      res.json({ success: true, count: allPerms.length, permissions: allPerms });
+    } catch (error) {
+      logger.error({ error }, 'Failed to seed permissions');
+      res.status(500).json({ error: 'Failed to seed permissions' });
     }
   });
 

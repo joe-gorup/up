@@ -12,7 +12,7 @@ export interface Employee {
   profileImageUrl?: string;
   isActive: boolean;
   hasSystemAccess: boolean;
-  password?: string; // Only for employees with system access
+  // password field removed — API no longer returns it for security
   allergies: string[];
   emergencyContacts: Array<{
     name: string;
@@ -24,6 +24,7 @@ export interface Employee {
   regulationStrategies: string[];
   hasServiceProvider: boolean;
   serviceProviders: Array<{ name: string; type: string }>;
+  date_of_birth?: string | null;
   last_login: string | null;
   roi_status: boolean;
   createdAt: string;
@@ -35,6 +36,11 @@ export interface GoalStep {
   stepOrder: number;
   stepDescription: string;
   isRequired: boolean;
+}
+
+export interface RecentSession {
+  date: string;
+  outcome: 'all_correct' | 'verbal_prompt' | 'incorrect' | 'na';
 }
 
 export interface DevelopmentGoal {
@@ -49,6 +55,7 @@ export interface DevelopmentGoal {
   masteryDate?: string;
   consecutiveAllCorrect: number;
   steps: GoalStep[];
+  recentSessions: RecentSession[];
 }
 
 export interface AssessmentSession {
@@ -143,9 +150,9 @@ interface DataContextType {
   certifications: PromotionCertification[];
   guardianNotes: GuardianNote[];
   loadUserDrafts: (userId: string) => Promise<void>;
-  addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
-  createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
+  createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
   endAssessmentSession: () => void;
   completeAssessmentSession: (sessionId: string) => Promise<void>;
   renewAssessmentSession: (sessionId: string) => Promise<void>;
@@ -214,6 +221,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: emp.regulation_strategies || [],
           hasServiceProvider: emp.has_service_provider || false,
           serviceProviders: emp.service_providers || [],
+          date_of_birth: emp.date_of_birth || null,
           last_login: emp.last_login || null,
           roi_status: emp.roi_status || false,
           createdAt: emp.created_at,
@@ -238,12 +246,14 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStatement: template.goal_statement,
           defaultMasteryCriteria: template.default_mastery_criteria,
           defaultTargetDate: template.default_target_date,
+          relativeTargetDuration: template.relative_target_duration || '90 days',
           status: template.status,
           steps: template.steps.map((step: any) => ({
             id: step.id,
             stepOrder: step.step_order,
             stepDescription: step.step_description,
-            isRequired: step.is_required
+            isRequired: step.is_required,
+            timerType: step.timer_type || 'none'
           }))
         }));
         setGoalTemplates(mappedTemplates);
@@ -269,7 +279,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             stepOrder: step.step_order,
             stepDescription: step.step_description,
             isRequired: step.is_required
-          }))
+          })),
+          recentSessions: (goal.recent_sessions ?? goal.recentSessions ?? []).map((s: any) => ({
+            date: s.date,
+            outcome: s.outcome,
+          })),
         }));
         setDevelopmentGoals(mappedGoals);
       }
@@ -284,10 +298,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStepId: progress.goal_step_id,
           employeeId: progress.employee_id,
           assessmentSessionId: progress.assessment_session_id,
-
           date: progress.date,
           outcome: progress.outcome,
           notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
           status: progress.status || 'submitted'
         }));
         setStepProgress(mappedProgress);
@@ -311,18 +326,16 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       }
 
 
-      // Load assessment sessions to check for active session
       const assessmentSessionsResponse = await apiRequest('/api/assessment-sessions');
       if (assessmentSessionsResponse.ok) {
         const sessionsData = await assessmentSessionsResponse.json();
-        // For now, consider the most recent session as "active" for the current day
-        // Only load sessions that are draft or in_progress (not completed or abandoned)
         const today = new Date().toISOString().split('T')[0];
-        const todaySessions = sessionsData.filter((session: any) => 
+        const myActiveSessions = sessionsData.filter((session: any) => 
           session.date === today && 
-          (session.status === 'draft' || session.status === 'in_progress')
+          (session.status === 'draft' || session.status === 'in_progress') &&
+          session.locked_by === user?.id
         );
-        const activeSession = todaySessions.length > 0 ? todaySessions[0] : null;
+        const activeSession = myActiveSessions.length > 0 ? myActiveSessions[0] : null;
         
         if (activeSession) {
           setActiveAssessmentSession({
@@ -463,6 +476,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         status: 'active',
         masteryAchieved: false,
         consecutiveAllCorrect: 1,
+        recentSessions: [],
         steps: [
           {
             id: '1',
@@ -487,7 +501,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     console.log('Demo data loaded successfully');
   };
 
-  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => {
     try {
       const response = await apiRequest('/api/employees', {
         method: 'POST',
@@ -510,6 +524,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulation_strategies: employeeData.regulationStrategies,
           has_service_provider: employeeData.hasServiceProvider,
           service_providers: employeeData.serviceProviders,
+          ...(employeeData.date_of_birth && { date_of_birth: employeeData.date_of_birth }),
         }),
       });
 
@@ -531,6 +546,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: newEmployee.regulation_strategies || [],
           hasServiceProvider: newEmployee.has_service_provider || false,
           serviceProviders: newEmployee.service_providers || [],
+          date_of_birth: newEmployee.date_of_birth || null,
           last_login: newEmployee.last_login || null,
           roi_status: newEmployee.roi_status || false,
           createdAt: newEmployee.created_at,
@@ -554,8 +570,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       const updateData: any = {};
       if (updates.first_name) updateData.first_name = updates.first_name;
       if (updates.last_name) updateData.last_name = updates.last_name;
-      if (updates.email) updateData.email = updates.email;
+      if (updates.email !== undefined) updateData.email = updates.email;
       if (updates.role) updateData.role = updates.role;
+      if (updates.password) updateData.password = updates.password;
       if (updates.profileImageUrl !== undefined) updateData.profile_image_url = updates.profileImageUrl;
       if (updates.isActive !== undefined) updateData.is_active = updates.isActive;
       if (updates.hasSystemAccess !== undefined) updateData.has_system_access = updates.hasSystemAccess;
@@ -566,6 +583,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
       if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
       if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
+      if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
 
       const response = await apiRequest(`/api/employees/${id}`, {
         method: 'PUT',
@@ -593,6 +611,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           regulationStrategies: updatedEmployee.regulation_strategies || [],
           hasServiceProvider: updatedEmployee.has_service_provider || false,
           serviceProviders: updatedEmployee.service_providers || [],
+          date_of_birth: updatedEmployee.date_of_birth || null,
           last_login: updatedEmployee.last_login || null,
           roi_status: updatedEmployee.roi_status || false,
           createdAt: updatedEmployee.created_at,
@@ -606,7 +625,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   };
 
   // NEW ASSESSMENT SESSION FUNCTIONS
-  const createAssessmentSession = async (employeeIds: string[], location?: string): Promise<{ success: boolean; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }> => {
+  const createAssessmentSession = async (employeeIds: string[], location?: string): Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }> => {
     try {
       console.log('Creating assessment session with employees:', employeeIds, 'location:', location);
       
@@ -650,7 +669,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         });
         
         console.log('Active assessment session updated successfully');
-        return { success: true };
+        return { success: true, sessionId: newSession.id };
       } else if (response.status === 409) {
         // Conflict - employees are locked
         const errorData = await response.json();
@@ -886,11 +905,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goal_step_id: progress.goalStepId,
           employee_id: progress.employeeId,
           assessment_session_id: progress.assessmentSessionId,
-
           documenter_user_id: documenterUserId,
           date: today,
           outcome: progress.outcome,
-          notes: progress.notes
+          notes: progress.notes,
+          completionTimeSeconds: progress.completionTimeSeconds,
+          timerManuallyEntered: progress.timerManuallyEntered
         }),
       });
 
@@ -905,6 +925,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           date: newProgress.date,
           outcome: newProgress.outcome,
           notes: newProgress.notes,
+          completionTimeSeconds: newProgress.completion_time_seconds,
+          timerManuallyEntered: newProgress.timer_manually_entered,
           status: newProgress.status
         };
         
@@ -970,10 +992,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           goalStepId: progress.goal_step_id,
           employeeId: progress.employee_id,
           assessmentSessionId: progress.assessment_session_id,
-
           date: progress.date,
           outcome: progress.outcome,
           notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
           status: progress.status || 'draft'
         }));
 
@@ -1137,7 +1160,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           status: templateData.status,
           steps: templateData.steps.map(step => ({
             stepDescription: step.stepDescription,
-            isRequired: step.isRequired
+            isRequired: step.isRequired,
+            timerType: step.timerType || 'none'
           }))
         }),
       });
@@ -1168,7 +1192,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           status: templateData.status,
           steps: templateData.steps.map(step => ({
             stepDescription: step.stepDescription,
-            isRequired: step.isRequired
+            isRequired: step.isRequired,
+            timerType: step.timerType || 'none'
           }))
         }),
       });
@@ -1443,8 +1468,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading Golden Scoop...</p>
-          <p className="text-sm text-gray-500 mt-2">Setting up demo data</p>
+          <p className="text-gray-600">Loading Unique Pathway...</p>
+          <p className="text-sm text-gray-500 mt-2">Preparing your workspace</p>
         </div>
       </div>
     );

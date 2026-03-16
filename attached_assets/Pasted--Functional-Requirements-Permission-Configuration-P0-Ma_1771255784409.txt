@@ -1,0 +1,33 @@
+
+Functional Requirements
+Permission Configuration (P0)
+Matrix View: Display all roles (Shift Manager, Job Coach, Guardian, Admin) as columns and features as rows.
+Per-Feature Toggles: For each role/feature combination, independently toggle View, Modify, and Delete permissions.
+Admin Role Lock: Admin column appears, but all toggles are locked to full access with a greyed-out UI and lock icon.
+Supported Features: Matrix includes 15+ features (e.g., My Shift, My Scoopers, My Loved Ones, Employee Profiles, Goal Assessment/Documentation, Goal Assignment, Goal Templates, Employee Management, User Management, Promotion Certifications, ROI Compliance, Coach Notes, Coach Files, Guardian Notes, Contacts, Past Assessments).
+UI/UX (P0)
+Matrix or card-based layout, search/filter by role or feature.
+Visual distinction between editable and locked permissions.
+Bulk action controls for copying role permissions (P2).
+Validation (P0)
+Prevent enabling Modify or Delete unless View is enabled.
+Block attempts to change Admin role permissions and show explanation.
+Confirmation (P1)
+Show success toast/message upon save.
+Warn before removing permissions that could impact active users.
+Change Log (P1)
+Audit log tracking who changed what permission, when, and the before/after values.
+Bulk Actions (P2)
+Copy all permissions from one role to another for quick setup.
+User Experience
+Entry Point & First-Time Experience
+Admin accesses the tool via the admin dashboard's navigation.
+First load displays the full permission matrix with all roles and all features.
+Admin role appears locked; editable roles (Shift Manager, Job Coach, Guardian) are interactive.
+If no features exist (rare), show an empty state message.
+Core Experience
+View Matrix: The admin sees all features (rows) and roles (columns) in a grid.
+Select Permissions: For any editable cell, three toggle switches appear (View, Modify, Delete). Locked toggles in the Admin column are visibly disabled.
+Adjust Permissions: Toggling a permission updates state immediately (auto-save) or requires an explicit Save (with confirmation toast); validation ensures dependencies (e.g., Delete requires View).
+Quick Search/Filter: Admin can filter or search features/roles to find cells quickly.
+Change Log: Admin reviews recent permission changes for audit, accessible from top navigation or matrix context menu.

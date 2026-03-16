@@ -12,7 +12,7 @@ interface GoalDocumentationProps {
 }
 
 export default function GoalDocumentation({ onNavigateToEmployee }: GoalDocumentationProps = {}) {
-  const { employees, activeAssessmentSession, createAssessmentSession, endAssessmentSession, updateAssessmentSessionEmployees, developmentGoals, checkEmployeeLocks } = useData();
+  const { employees, activeAssessmentSession, createAssessmentSession, endAssessmentSession, updateAssessmentSessionEmployees, developmentGoals, stepProgress, checkEmployeeLocks } = useData();
   const { user } = useAuth();
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState('9540 Nall Avenue');
@@ -557,7 +557,19 @@ export default function GoalDocumentation({ onNavigateToEmployee }: GoalDocument
                     </td>
                     
                     <td className="py-4 px-4 text-sm text-gray-600 hidden lg:table-cell">
-                      Yesterday
+                      {(() => {
+                        const empProgress = stepProgress.filter(p => p.employeeId === employee.id);
+                        if (empProgress.length === 0) return 'No assessments';
+                        const latest = empProgress.reduce((a, b) => new Date(a.date) > new Date(b.date) ? a : b);
+                        const date = new Date(latest.date);
+                        const now = new Date();
+                        const diffMs = now.getTime() - date.getTime();
+                        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                        if (diffDays === 0) return 'Today';
+                        if (diffDays === 1) return 'Yesterday';
+                        if (diffDays < 7) return `${diffDays} days ago`;
+                        return date.toLocaleDateString();
+                      })()}
                     </td>
                   </tr>
                 );

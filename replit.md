@@ -36,17 +36,18 @@ Preferred communication style: Simple, everyday language.
 -   **ORM**: Drizzle ORM for type-safe database queries and schema management.
 -   **Database**: PostgreSQL, specifically configured for Neon Database for serverless hosting and connection pooling.
 -   **Schema**: Normalized relational design for users, employees, goal templates, development goals, progress tracking, and assessment sessions.
--   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `guardian_notes`, `guardian_relationships`, `coach_assignments`, `account_invitations` for storing check-in notes, certification details, rich-text coach notes, file attachments, guardian notes, and relationship/assignment linking respectively.
+-   **New Tables**: `coach_checkins`, `promotion_certifications`, `coach_notes`, `coach_files`, `employee_contacts`, `role_permissions` for storing check-in notes, certification details, rich-text coach notes, file attachments, unified contact management, and configurable role-based permissions respectively.
 
 ## Key Features & Implementations
 -   **Goal Management**: Creation of goal templates, employee-specific goal instances, and step-by-step progress tracking with mastery criteria.
 -   **Assessment Sessions**: User-specific locking mechanism prevents concurrent documentation conflicts, with automatic lock expiry and release.
 -   **User Management**: Role-based access, account invitation system, and a dedicated setup page for new users.
 -   **Employee Features**: Comprehensive employee profiles, promotion certifications (Mentor, Shift Lead), and ROI compliance flow with legal text, consent toggles, and signature capture.
--   **Coach & Guardian Experience**: Dedicated "My Scoopers" and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
--   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities (PDF, TXT, DOC, DOCX, RTF) with access control.
--   **Guardian Notes**: Guardians can leave and manage notes about their linked super scoopers via the "My Loved Ones" page.
--   **Service Provider Tracking**: Employee profiles for Super Scoopers include an optional service provider section to record external service provider information.
+-   **My Shift Workflow**: Shift Leads and Admins use a "My Shift" page to search, pin, and build a working list of employees for the day (persisted in session). Assessments are conducted from individual employee profiles.
+-   **Coach & Guardian Experience**: Dedicated "My Scoopers" (fixed assigned list, no search) and "My Loved Ones" pages with scoped data views for Job Coaches and Guardians, respectively.
+-   **Profile-Based Assessments**: Goal assessment (EmployeeProgress) is embedded directly in EmployeeDetail profiles with location selection. Old Goal Documentation page remains available during transition.
+-   **Coach Notes & Files**: Rich text editing for coach notes and file upload/download capabilities with access control.
+-   **Configurable Permissions**: Admin-only Permission Settings page with matrix grid (features × roles). Toggle View/Modify/Delete per feature per role (Shift Lead, Assistant Manager, Job Coach, Guardian). Administrator always has full access (locked). Explicit Save with validation (Modify/Delete require View). Backend `requirePermission` middleware and frontend `usePermissions` hook available for enforcement. Search/filter features supported.
 
 # External Dependencies
 

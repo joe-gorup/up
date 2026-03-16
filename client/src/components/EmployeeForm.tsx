@@ -3,6 +3,7 @@ import { INPUT_BASE_CLASSES } from './ui/FormInput';
 import { ArrowLeft, X, Upload, Key, Mail, CheckCircle, Lock, Link, Copy, Check, AlertTriangle } from 'lucide-react';
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../hooks/use-toast';
 import { apiRequest } from '../lib/auth';
 import EmployeeAvatar from './EmployeeAvatar';
 
@@ -14,8 +15,11 @@ interface EmployeeFormProps {
 export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps) {
   const { employees, addEmployee, updateEmployee } = useData();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoError, setPhotoError] = useState('');
 
   const [invitationEmail, setInvitationEmail] = useState('');
   const [invitationLink, setInvitationLink] = useState('');
@@ -26,6 +30,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
   const [formData, setFormData] = useState({
     firstName: '',
     lastName: '',
+    dateOfBirth: '',
     username: '',
     role: 'Super Scooper',
     profileImageUrl: '',
@@ -51,6 +56,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         setFormData({
           firstName: employee.first_name || '',
           lastName: employee.last_name || '',
+          dateOfBirth: employee.date_of_birth ? new Date(employee.date_of_birth).toISOString().split('T')[0] : '',
           username: employee.email || '',
           role: employee.role,
           profileImageUrl: employee.profileImageUrl || '',
@@ -118,23 +124,23 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
     try {
       if (formData.hasSystemAccess) {
         if (!employeeId && !formData.password) {
-          alert('Password is required for roles with system access');
+          toast({ type: 'error', title: 'Password is required for roles with system access' });
           setLoading(false);
           return;
         }
         if (employeeId && showPasswordFields && !formData.password) {
-          alert('Please enter a new password or uncheck the Reset Password option');
+          toast({ type: 'error', title: 'Please enter a new password or uncheck the Reset Password option' });
           setLoading(false);
           return;
         }
         if (formData.password) {
           if (formData.password !== formData.confirmPassword) {
-            alert('Password and confirmation must match');
+            toast({ type: 'error', title: 'Password and confirmation must match' });
             setLoading(false);
             return;
           }
           if (formData.password.length < 8) {
-            alert('Password must be at least 8 characters');
+            toast({ type: 'error', title: 'Password must be at least 8 characters' });
             setLoading(false);
             return;
           }
@@ -149,25 +155,25 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
         profileImageUrl: formData.profileImageUrl,
         isActive: formData.isActive,
         hasSystemAccess: formData.hasSystemAccess,
+        ...(formData.dateOfBirth && { date_of_birth: formData.dateOfBirth }),
         ...(formData.hasSystemAccess && formData.password && { password: formData.password })
       };
 
       if (employeeId) {
         await updateEmployee(employeeId, cleanData);
+        toast({ type: 'success', title: 'Employee updated successfully' });
       } else {
         await addEmployee(cleanData);
+        toast({ type: 'success', title: 'Employee created successfully' });
       }
 
-      if (formData.hasSystemAccess && formData.password) {
-      }
-      
       onClose();
     } catch (error) {
       console.error('Error saving employee:', error);
       if (error instanceof Error && error.message.includes('already exists')) {
-        alert('An employee with this username already exists. Please use a different username.');
+        toast({ type: 'error', title: 'An employee with this username already exists' });
       } else {
-        alert('An error occurred while saving the employee. Please try again.');
+        toast({ type: 'error', title: 'Failed to save employee. Please try again.' });
       }
     } finally {
       setLoading(false);
@@ -213,7 +219,7 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                 value={formData.firstName}
                 onChange={(e) => setFormData(prev => ({ ...prev, firstName: e.target.value }))}
                 className={`w-full ${INPUT_BASE_CLASSES}`}
-                placeholder="J"
+                placeholder="First name"
                 data-testid="input-first-name"
               />
             </div>
@@ -229,11 +235,24 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                 value={formData.lastName}
                 onChange={(e) => setFormData(prev => ({ ...prev, lastName: e.target.value }))}
                 className={`w-full ${INPUT_BASE_CLASSES}`}
-                placeholder="Group"
+                placeholder="Last name"
                 data-testid="input-last-name"
               />
             </div>
 
+            <div>
+              <label htmlFor="dateOfBirth" className="block text-sm font-medium text-gray-700 mb-2">
+                Date of Birth
+              </label>
+              <input
+                type="date"
+                id="dateOfBirth"
+                value={formData.dateOfBirth}
+                onChange={(e) => setFormData(prev => ({ ...prev, dateOfBirth: e.target.value }))}
+                className={`w-full ${INPUT_BASE_CLASSES}`}
+                data-testid="input-date-of-birth"
+              />
+            </div>
 
             <div>
               <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
@@ -286,22 +305,40 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                     accept="image/*"
                     className="hidden"
                     id="photo-upload"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const file = e.target.files?.[0];
-                      if (file) {
-                        const placeholderUrl = `https://via.placeholder.com/150x150.png?text=${encodeURIComponent(formData.firstName + ' ' + formData.lastName)}`;
-                        setFormData(prev => ({ ...prev, profileImageUrl: placeholderUrl }));
+                      if (!file) return;
+                      setPhotoError('');
+                      setUploadingPhoto(true);
+                      try {
+                        const form = new FormData();
+                        form.append('photo', file);
+                        const res = await apiRequest('/api/employees/photo', {
+                          method: 'POST',
+                          body: form,
+                        });
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          throw new Error(err.error || 'Upload failed');
+                        }
+                        const { path } = await res.json();
+                        setFormData(prev => ({ ...prev, profileImageUrl: path }));
+                      } catch (err: any) {
+                        setPhotoError(err.message || 'Failed to upload photo');
+                      } finally {
+                        setUploadingPhoto(false);
+                        e.target.value = '';
                       }
                     }}
                   />
                   <label
                     htmlFor="photo-upload"
-                    className="inline-flex items-center px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl cursor-pointer transition-colors font-medium"
+                    className={`inline-flex items-center px-6 py-2 rounded-xl cursor-pointer transition-colors font-medium ${uploadingPhoto ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white`}
                   >
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Photo
+                    {uploadingPhoto ? 'Uploading...' : 'Upload Photo'}
                   </label>
-                  {formData.profileImageUrl && (
+                  {formData.profileImageUrl && !uploadingPhoto && (
                     <button
                       type="button"
                       onClick={() => setFormData(prev => ({ ...prev, profileImageUrl: '' }))}
@@ -311,6 +348,9 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
                     >
                       <X className="h-4 w-4" />
                     </button>
+                  )}
+                  {photoError && (
+                    <p className="text-xs text-red-600 mt-1">{photoError}</p>
                   )}
                 </div>
               </div>

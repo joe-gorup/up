@@ -2,12 +2,18 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import type { Request, Response, NextFunction } from 'express';
 import { logger } from './logger';
+import { db } from './db';
+import { role_permissions } from '@shared/schema';
+import { eq, and } from 'drizzle-orm';
 
 // Salt rounds for bcrypt (12 is secure and reasonable performance)
 const SALT_ROUNDS = 12;
 
-// JWT secret - in production this should be a strong secret from environment
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
+// JWT secret - must be set via environment variable
+if (!process.env.JWT_SECRET) {
+  throw new Error('JWT_SECRET environment variable is required. Set it to a strong random string (at least 32 characters).');
+}
+const JWT_SECRET: string = process.env.JWT_SECRET;
 const JWT_EXPIRES_IN = '8h'; // Match session timeout
 
 export interface AuthUser {
@@ -123,5 +129,32 @@ export function requireRole(...roles: string[]) {
     }
 
     next();
+  };
+}
+
+export function requirePermission(feature: string, level: 'can_view' | 'can_modify' | 'can_delete') {
+  return async (req: Request, res: Response, next: NextFunction) => {
+    const user = (req as any).user as AuthUser;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    if (user.role === 'Administrator') {
+      return next();
+    }
+
+    try {
+      const [perm] = await db.select().from(role_permissions)
+        .where(and(eq(role_permissions.role, user.role), eq(role_permissions.feature, feature)));
+
+      if (!perm || !perm[level]) {
+        return res.status(403).json({ error: 'Insufficient permissions for this feature' });
+      }
+
+      next();
+    } catch (error) {
+      logger.error({ error, feature, level, role: user.role }, 'Permission check failed');
+      return res.status(500).json({ error: 'Permission check failed' });
+    }
   };
 }
