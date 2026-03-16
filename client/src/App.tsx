@@ -158,14 +158,14 @@ function AppContent() {
       />
       
       <div className={`flex flex-col h-full flex-1 transition-all duration-300 ${
-        !sidebarCollapsed ? 'md:ml-64 ml-0' : 'ml-0'
+        !sidebarCollapsed ? 'md:ml-64 ml-0' : 'md:ml-16 ml-0'
       }`}>
         <header className="bg-white shadow-sm border-b px-3 sm:px-6 py-3 sm:py-4 relative z-20">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
               <button
                 onClick={() => setSidebarCollapsed(false)}
-                className={`p-2 rounded-md hover:bg-gray-100 transition-all duration-200 flex-shrink-0 ${
+                className={`p-2 rounded-md hover:bg-gray-100 transition-all duration-200 flex-shrink-0 md:hidden ${
                   !sidebarCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
                 }`}
               >
