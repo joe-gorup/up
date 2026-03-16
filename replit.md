@@ -29,7 +29,7 @@ Preferred communication style: Simple, everyday language.
 -   **Technology Stack**: Express.js REST API with Node.js and TypeScript.
 -   **Structure**: Monolithic server architecture.
 -   **Authentication**: Session-less authentication (demo credentials for development), with a token-based invitation system for user onboarding.
--   **Authorization**: Role-Based Access Control (RBAC) with roles including Administrator, Shift Manager, Job Coach, and Guardian, enforcing read-only access for Job Coach and Guardian roles on specific endpoints.
+-   **Authorization**: Role-Based Access Control (RBAC) with roles including Administrator, Shift Lead, Assistant Manager, Job Coach, Guardian, and Super Scooper, enforcing scoped access for Job Coach and Guardian roles on specific endpoints.
 -   **Concurrency Control**: PostgreSQL Advisory Locks prevent race conditions during assessment session creation and ensure data integrity.
 
 ## Database Layer
