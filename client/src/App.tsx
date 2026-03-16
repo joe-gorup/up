@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { User, Users, Calendar, Target, Settings, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
+import { Router, Route, Switch, useLocation, useRoute } from 'wouter';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { DataProvider } from './contexts/DataContext';
 import { ToastProvider } from './components/ToastProvider';
@@ -19,10 +20,49 @@ import SessionWarning from './components/SessionWarning';
 import PermissionsManager from './components/PermissionsManager';
 import HelpGuide from './components/HelpGuide';
 
+// Map route paths to section IDs for sidebar active state
+const routeToSection: Record<string, string> = {
+  '/': 'my-shift',
+  '/my-shift': 'my-shift',
+  '/dashboard': 'dashboard',
+  '/employees': 'employees',
+  '/goal-templates': 'goal-templates',
+  '/bulk-upload': 'bulk-upload',
+  '/permissions': 'permissions',
+  '/employee-dashboard': 'employee-dashboard',
+  '/my-profile': 'my-profile',
+  '/my-scoopers': 'my-scoopers',
+  '/help': 'help-guide',
+  '/my-loved-ones': 'my-scooper',
+};
+
+const sectionToRoute: Record<string, string> = {
+  'my-shift': '/my-shift',
+  'dashboard': '/dashboard',
+  'employees': '/employees',
+  'goal-templates': '/goal-templates',
+  'bulk-upload': '/bulk-upload',
+  'permissions': '/permissions',
+  'employee-dashboard': '/employee-dashboard',
+  'my-profile': '/my-profile',
+  'my-scoopers': '/my-scoopers',
+  'help-guide': '/help',
+  'my-scooper': '/my-loved-ones',
+};
+
+function getDefaultRoute(role?: string): string {
+  const r = role?.toLowerCase();
+  if (r === 'employee' || r === 'super scooper') return '/employee-dashboard';
+  if (r === 'job coach') return '/my-scoopers';
+  if (r === 'guardian') return '/my-loved-ones';
+  return '/my-shift';
+}
+
 function AppContent() {
   const { user, isAuthenticated, showSessionWarning, timeUntilExpiry, extendSession, logout } = useAuth();
-  const [activeSection, setActiveSection] = useState('');
+  const [location, setLocation] = useLocation();
   const [setupToken, setSetupToken] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -32,33 +72,23 @@ function AppContent() {
     }
   }, []);
 
-  // Set default active section based on user role
+  // Redirect to default route based on role when on root
   useEffect(() => {
-    // Check if there's a saved section from before a page reload
-    const savedSection = localStorage.getItem('currentSection');
-    const savedUser = localStorage.getItem('currentUser');
-    const currentUserId = user?.id || '';
-    if (savedSection && savedUser === currentUserId) {
-      setActiveSection(savedSection);
-    } else if (user?.role === 'employee' || user?.role === 'Super Scooper') {
-      setActiveSection('employee-dashboard');
-    } else if (user?.role === 'Job Coach') {
-      setActiveSection('my-scoopers');
-    } else if (user?.role === 'Guardian') {
-      setActiveSection('my-scooper');
-    } else {
-      setActiveSection('my-shift');
+    if (isAuthenticated && user?.role && (location === '/' || location === '')) {
+      setLocation(getDefaultRoute(user.role));
     }
-  }, [user?.role]);
+  }, [isAuthenticated, user?.role, location]);
 
-  // Save current section to localStorage whenever it changes
-  useEffect(() => {
-    if (activeSection && user?.id) {
-      localStorage.setItem('currentSection', activeSection);
-      localStorage.setItem('currentUser', user.id);
+  // Derive active section from current route
+  const activeSection = routeToSection[location] || 'my-shift';
+
+  // Navigation handler for sidebar
+  const handleSetActiveSection = (section: string) => {
+    const route = sectionToRoute[section];
+    if (route) {
+      setLocation(route);
     }
-  }, [activeSection, user?.id]);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  };
 
   const getPageTitle = () => {
     switch (activeSection) {
@@ -115,57 +145,24 @@ function AppContent() {
     return <OnboardingVerify />;
   }
 
-  const renderContent = () => {
-    switch (activeSection) {
-      case 'my-shift':
-        return <MyShift />;
-      case 'dashboard':
-        return <Dashboard />;
-      case 'employees':
-        return <EmployeeManagement />;
-      case 'goal-templates':
-        return user?.role === 'Administrator' ? <GoalTemplates /> : <Dashboard />;
-      case 'bulk-upload':
-        return user?.role === 'Administrator' ? <BulkUpload /> : <Dashboard />;
-      case 'permissions':
-        return user?.role === 'Administrator' ? <PermissionsManager /> : <Dashboard />;
-      case 'employee-dashboard':
-        return <EmployeeDashboard />;
-      case 'my-profile':
-        return <EmployeeDashboard />;
-      case 'my-scoopers':
-        return <MyScoopers />;
-      case 'help-guide':
-        return <HelpGuide />;
-      case 'my-scooper':
-        return <MyLovedOnes />;
-      default:
-        const role = user?.role?.toLowerCase();
-        if (role === 'employee' || role === 'super scooper') return <EmployeeDashboard />;
-        if (role === 'job coach') return <Dashboard />;
-        if (role === 'guardian') return <MyLovedOnes />;
-        return <MyShift />;
-    }
-  };
-
   return (
     <div className="h-screen bg-gray-50 flex">
       <Sidebar 
         activeSection={activeSection}
-        setActiveSection={setActiveSection}
+        setActiveSection={handleSetActiveSection}
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
       />
       
       <div className={`flex flex-col h-full flex-1 transition-all duration-300 ${
-        !sidebarCollapsed ? 'md:ml-64 ml-0' : 'ml-0'
+        !sidebarCollapsed ? 'md:ml-64 ml-0' : 'md:ml-16 ml-0'
       }`}>
         <header className="bg-white shadow-sm border-b px-3 sm:px-6 py-3 sm:py-4 relative z-20">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-2 sm:space-x-4 min-w-0">
               <button
                 onClick={() => setSidebarCollapsed(false)}
-                className={`p-2 rounded-md hover:bg-gray-100 transition-all duration-200 flex-shrink-0 ${
+                className={`p-2 rounded-md hover:bg-gray-100 transition-all duration-200 flex-shrink-0 md:hidden ${
                   !sidebarCollapsed ? 'opacity-0 pointer-events-none' : 'opacity-100'
                 }`}
               >
@@ -183,7 +180,35 @@ function AppContent() {
         </header>
         
         <main className="flex-1 overflow-auto">
-          {renderContent()}
+          <Switch>
+            <Route path="/my-shift" component={MyShift} />
+            <Route path="/dashboard" component={Dashboard} />
+            <Route path="/employees" component={EmployeeManagement} />
+            <Route path="/goal-templates">
+              {user?.role === 'Administrator' ? <GoalTemplates /> : <Dashboard />}
+            </Route>
+            <Route path="/bulk-upload">
+              {user?.role === 'Administrator' ? <BulkUpload /> : <Dashboard />}
+            </Route>
+            <Route path="/permissions">
+              {user?.role === 'Administrator' ? <PermissionsManager /> : <Dashboard />}
+            </Route>
+            <Route path="/employee-dashboard" component={EmployeeDashboard} />
+            <Route path="/my-profile" component={EmployeeDashboard} />
+            <Route path="/my-scoopers" component={MyScoopers} />
+            <Route path="/help" component={HelpGuide} />
+            <Route path="/my-loved-ones" component={MyLovedOnes} />
+            <Route>
+              {/* Fallback — redirect to default based on role */}
+              {(() => {
+                const role = user?.role?.toLowerCase();
+                if (role === 'employee' || role === 'super scooper') return <EmployeeDashboard />;
+                if (role === 'job coach') return <MyScoopers />;
+                if (role === 'guardian') return <MyLovedOnes />;
+                return <MyShift />;
+              })()}
+            </Route>
+          </Switch>
         </main>
       </div>
 
@@ -199,13 +224,15 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <DataProvider>
-        <ToastProvider>
-          <AppContent />
-        </ToastProvider>
-      </DataProvider>
-    </AuthProvider>
+    <Router>
+      <AuthProvider>
+        <DataProvider>
+          <ToastProvider>
+            <AppContent />
+          </ToastProvider>
+        </DataProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 

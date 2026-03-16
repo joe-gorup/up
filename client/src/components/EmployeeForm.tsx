@@ -3,6 +3,7 @@ import { INPUT_BASE_CLASSES } from './ui/FormInput';
 import { ArrowLeft, X, Upload, Key, Mail, CheckCircle, Lock, Link, Copy, Check, AlertTriangle } from 'lucide-react';
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../hooks/use-toast';
 import { apiRequest } from '../lib/auth';
 import EmployeeAvatar from './EmployeeAvatar';
 
@@ -14,6 +15,7 @@ interface EmployeeFormProps {
 export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps) {
   const { employees, addEmployee, updateEmployee } = useData();
   const { user } = useAuth();
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [showPasswordFields, setShowPasswordFields] = useState(false);
 
@@ -120,23 +122,23 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
     try {
       if (formData.hasSystemAccess) {
         if (!employeeId && !formData.password) {
-          alert('Password is required for roles with system access');
+          toast({ type: 'error', title: 'Password is required for roles with system access' });
           setLoading(false);
           return;
         }
         if (employeeId && showPasswordFields && !formData.password) {
-          alert('Please enter a new password or uncheck the Reset Password option');
+          toast({ type: 'error', title: 'Please enter a new password or uncheck the Reset Password option' });
           setLoading(false);
           return;
         }
         if (formData.password) {
           if (formData.password !== formData.confirmPassword) {
-            alert('Password and confirmation must match');
+            toast({ type: 'error', title: 'Password and confirmation must match' });
             setLoading(false);
             return;
           }
           if (formData.password.length < 8) {
-            alert('Password must be at least 8 characters');
+            toast({ type: 'error', title: 'Password must be at least 8 characters' });
             setLoading(false);
             return;
           }
@@ -157,20 +159,19 @@ export default function EmployeeForm({ employeeId, onClose }: EmployeeFormProps)
 
       if (employeeId) {
         await updateEmployee(employeeId, cleanData);
+        toast({ type: 'success', title: 'Employee updated successfully' });
       } else {
         await addEmployee(cleanData);
+        toast({ type: 'success', title: 'Employee created successfully' });
       }
 
-      if (formData.hasSystemAccess && formData.password) {
-      }
-      
       onClose();
     } catch (error) {
       console.error('Error saving employee:', error);
       if (error instanceof Error && error.message.includes('already exists')) {
-        alert('An employee with this username already exists. Please use a different username.');
+        toast({ type: 'error', title: 'An employee with this username already exists' });
       } else {
-        alert('An error occurred while saving the employee. Please try again.');
+        toast({ type: 'error', title: 'Failed to save employee. Please try again.' });
       }
     } finally {
       setLoading(false);
