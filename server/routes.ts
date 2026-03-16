@@ -446,7 +446,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         employeeData.password = await hashPassword(employeeData.password);
       }
       
-      const [newEmployee] = await db.insert(employees).values(employeeData).returning();
+      const [newEmployee] = await db.insert(employees).values(employeeData as any).returning();
       logger.info({ employeeId: newEmployee.id, name: `${newEmployee.first_name} ${newEmployee.last_name}` }, 'Employee created successfully');
       
       // Don't return the hashed password

@@ -144,7 +144,7 @@ interface DataContextType {
   certifications: PromotionCertification[];
   guardianNotes: GuardianNote[];
   loadUserDrafts: (userId: string) => Promise<void>;
-  addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
   createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
   endAssessmentSession: () => void;
@@ -487,7 +487,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     console.log('Demo data loaded successfully');
   };
 
-  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addEmployee = async (employeeData: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => {
     try {
       const response = await apiRequest('/api/employees', {
         method: 'POST',
