@@ -48,7 +48,9 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [assignedCoaches, setAssignedCoaches] = useState<any[]>([]);
   const [coachNotes, setCoachNotes] = useState<Array<{ id: string; employee_id: string; coach_id: string; title: string; content: string; created_at: string; updated_at: string; coach_name?: string }>>([]);
   const [loadingCoachNotes, setLoadingCoachNotes] = useState(false);
-  const [activeGoalsExpanded, setActiveGoalsExpanded] = useState(true);
+  const [activeGoalsExpanded, setActiveGoalsExpanded] = useState(() =>
+    developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'active').length > 0
+  );
 
   // Inline editing states
   const [editingSafety, setEditingSafety] = useState(false);
@@ -94,10 +96,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   }>>([]);
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
   const [pastAssessmentsExpanded, setPastAssessmentsExpanded] = useState(false);
-  const [menteesExpanded, setMenteesExpanded] = useState(true);
-  const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(true);
-  const [coachNotesExpanded, setCoachNotesExpanded] = useState(true);
-  const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(true);
+  const [menteesExpanded, setMenteesExpanded] = useState(false);
+  const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(false);
+  const [coachNotesExpanded, setCoachNotesExpanded] = useState(false);
+  const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(() =>
+    developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'maintenance').length > 0
+  );
   const [archivedGoalsExpanded, setArchivedGoalsExpanded] = useState(false);
   const [pastAssessmentsVisible, setPastAssessmentsVisible] = useState(3);
   const [sessionDetails, setSessionDetails] = useState<Record<string, { goals: Array<{ goalId: string; goalTitle: string; steps: Array<{ stepId: string; stepOrder: number; stepDescription: string; outcome: string; notes: string | null; completionTimeSeconds: number | null; timerManuallyEntered: boolean | null }>}>; summary: string | null; totalSteps: number }>>({});
@@ -269,6 +273,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
           if (menteeRes.ok) {
             const data = await menteeRes.json();
             setCoachMentees(data);
+            if (data.length > 0) setMenteesExpanded(true);
           }
         } else {
           const [guardianRes, coachRes, contactsRes] = await Promise.all([
@@ -307,6 +312,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   }, [employeeId, user?.role, employee?.role]);
 
+  // Auto-expand guardian notes section once notes load from context
+  useEffect(() => {
+    const notes = guardianNotes.filter(n => n.scooperId === employeeId);
+    if (notes.length > 0) setGuardianNotesExpanded(true);
+  }, [guardianNotes, employeeId]);
+
   // Load coach notes for this employee
   useEffect(() => {
     const canViewCoachNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
@@ -314,7 +325,10 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
       setLoadingCoachNotes(true);
       apiRequest(`/api/coach-notes/${employeeId}`)
         .then(res => res.ok ? res.json() : [])
-        .then(notes => setCoachNotes(notes))
+        .then(notes => {
+          setCoachNotes(notes);
+          if (notes.length > 0) setCoachNotesExpanded(true);
+        })
         .catch(() => setCoachNotes([]))
         .finally(() => setLoadingCoachNotes(false));
     }
