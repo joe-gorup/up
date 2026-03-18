@@ -4,6 +4,7 @@ import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
+import AddToHomeScreenBanner from './AddToHomeScreenBanner';
 
 export default function MyLovedOnes() {
   const { employees, developmentGoals, stepProgress, guardianNotes, saveGuardianNote, loadGuardianNotesForScooper } = useData();
@@ -82,6 +83,7 @@ export default function MyLovedOnes() {
 
   return (
     <div className="p-3 sm:p-6 max-w-6xl mx-auto">
+      <AddToHomeScreenBanner />
       <div className="flex flex-col sm:flex-row gap-3 mb-6">
         <div className="flex-1">
           <div className="relative">
