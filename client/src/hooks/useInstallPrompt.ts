@@ -5,6 +5,19 @@ interface BeforeInstallPromptEvent extends Event {
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+// Capture the event at module-load time so we never miss it, regardless of
+// when the consuming component mounts relative to the browser firing it.
+let _capturedPrompt: BeforeInstallPromptEvent | null = null;
+const _listeners = new Set<() => void>();
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    _capturedPrompt = e as BeforeInstallPromptEvent;
+    _listeners.forEach((fn) => fn());
+  });
+}
+
 interface InstallPromptResult {
   isIOS: boolean;
   isAndroid: boolean;
@@ -14,7 +27,7 @@ interface InstallPromptResult {
 }
 
 export function useInstallPrompt(): InstallPromptResult {
-  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [, forceUpdate] = useState(0);
 
   const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
   const isIOS = /iphone|ipad|ipod/i.test(ua);
@@ -27,22 +40,21 @@ export function useInstallPrompt(): InstallPromptResult {
       (navigator as Navigator & { standalone?: boolean }).standalone === true);
 
   useEffect(() => {
-    if (!isAndroid) return;
-
-    const handler = (e: Event) => {
-      e.preventDefault();
-      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    // If the event fires after mount, re-render the component so promptInstall becomes available.
+    const notify = () => forceUpdate((n) => n + 1);
+    _listeners.add(notify);
+    return () => {
+      _listeners.delete(notify);
     };
+  }, []);
 
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [isAndroid]);
-
-  const promptInstall = deferredPrompt
+  const promptInstall = _capturedPrompt
     ? async () => {
-        await deferredPrompt.prompt();
-        await deferredPrompt.userChoice;
-        setDeferredPrompt(null);
+        if (!_capturedPrompt) return;
+        await _capturedPrompt.prompt();
+        await _capturedPrompt.userChoice;
+        _capturedPrompt = null;
+        forceUpdate((n) => n + 1);
       }
     : null;
 
