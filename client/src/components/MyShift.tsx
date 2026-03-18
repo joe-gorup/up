@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Users, Target, CheckCircle, Clock, Search, ChevronRight, PinOff, X, ClipboardList, AlertTriangle, Phone, Heart, Brain } from 'lucide-react';
+import { Users, Target, CheckCircle, Clock, Search, ClipboardList, AlertTriangle, Phone, Heart, Brain } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -39,11 +39,6 @@ export default function MyShift() {
   const savePinned = (ids: string[]) => {
     setPinnedIds(ids);
     sessionStorage.setItem(`myshift-pinned-${user?.id}`, JSON.stringify(ids));
-  };
-
-  const unpinEmployee = (id: string) => {
-    const updated = pinnedIds.filter(pid => pid !== id);
-    savePinned(updated);
   };
 
   const clearAll = () => {
@@ -388,61 +383,46 @@ export default function MyShift() {
             return (
               <div
                 key={emp.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 transition-all group relative"
+                onClick={() => setSelectedEmployeeId(emp.id)}
+                className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 hover:shadow-md hover:border-blue-300 transition-all cursor-pointer"
               >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    unpinEmployee(emp.id);
-                  }}
-                  className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                  title="Remove from shift list"
-                >
-                  <PinOff className="h-4 w-4" />
-                </button>
-
-                <button
-                  onClick={() => setSelectedEmployeeId(emp.id)}
-                  className="w-full text-left"
-                >
-                  <div className="flex items-center space-x-4 mb-4">
-                    <EmployeeAvatar
-                      name={`${emp.first_name} ${emp.last_name}`}
-                      imageUrl={emp.profileImageUrl}
-                      size="lg"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 truncate">
-                        {emp.first_name} {emp.last_name}
-                      </h3>
-                      <p className="text-sm text-gray-500">{emp.role}</p>
-                    </div>
+                <div className="flex items-center space-x-4 mb-4">
+                  <EmployeeAvatar
+                    name={`${emp.first_name} ${emp.last_name}`}
+                    imageUrl={emp.profileImageUrl}
+                    size="lg"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 truncate">
+                      {emp.first_name} {emp.last_name}
+                    </h3>
+                    <p className="text-sm text-gray-500">{emp.role}</p>
                   </div>
+                </div>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-blue-50 rounded-lg p-2 text-center">
-                      <div className="flex items-center justify-center mb-1">
-                        <Target className="h-3.5 w-3.5 text-blue-600" />
-                      </div>
-                      <div className="text-lg font-bold text-blue-600">{stats.activeGoals}</div>
-                      <div className="text-xs text-gray-500">Active</div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-blue-50 rounded-lg p-2 text-center">
+                    <div className="flex items-center justify-center mb-1">
+                      <Target className="h-3.5 w-3.5 text-blue-600" />
                     </div>
-                    <div className="bg-green-50 rounded-lg p-2 text-center">
-                      <div className="flex items-center justify-center mb-1">
-                        <CheckCircle className="h-3.5 w-3.5 text-green-600" />
-                      </div>
-                      <div className="text-lg font-bold text-green-600">{stats.masteredGoals}</div>
-                      <div className="text-xs text-gray-500">Mastered</div>
-                    </div>
-                    <div className="bg-purple-50 rounded-lg p-2 text-center">
-                      <div className="flex items-center justify-center mb-1">
-                        <Clock className="h-3.5 w-3.5 text-purple-600" />
-                      </div>
-                      <div className="text-lg font-bold text-purple-600">{stats.successRate}%</div>
-                      <div className="text-xs text-gray-500">Success</div>
-                    </div>
+                    <div className="text-lg font-bold text-blue-600">{stats.activeGoals}</div>
+                    <div className="text-xs text-gray-500">Active</div>
                   </div>
-                </button>
+                  <div className="bg-green-50 rounded-lg p-2 text-center">
+                    <div className="flex items-center justify-center mb-1">
+                      <CheckCircle className="h-3.5 w-3.5 text-green-600" />
+                    </div>
+                    <div className="text-lg font-bold text-green-600">{stats.masteredGoals}</div>
+                    <div className="text-xs text-gray-500">Mastered</div>
+                  </div>
+                  <div className="bg-purple-50 rounded-lg p-2 text-center">
+                    <div className="flex items-center justify-center mb-1">
+                      <Clock className="h-3.5 w-3.5 text-purple-600" />
+                    </div>
+                    <div className="text-lg font-bold text-purple-600">{stats.successRate}%</div>
+                    <div className="text-xs text-gray-500">Success</div>
+                  </div>
+                </div>
               </div>
             );
           })}
