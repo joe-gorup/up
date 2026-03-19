@@ -28,16 +28,16 @@ const GUIDE_SECTIONS: Section[] = [
       {
         page: 'My Shift',
         icon: ClipboardList,
-        description: 'Build a working list of employees for your current shift. Search, pin, and access employee profiles for assessments.',
+        description: 'Build a working list of employees for your current shift. Search, select, and access employee profiles for assessments.',
         steps: [
           'Open "My Shift" from the sidebar.',
-          'Use the search bar to find employees by name.',
-          'Click the pin icon next to an employee to add them to your shift list.',
-          'Pinned employees appear at the top for quick access throughout the day.',
-          'Click on a pinned employee to open their full profile.',
+          'Click "Add Employees" to open the employee search panel.',
+          'Use the search bar to find employees by name, then check the box next to each employee you\'ll be working with today.',
+          'Click "Add Selected" to add them to your shift list.',
+          'Click anywhere on an employee\'s card to open their full profile.',
           'From their profile, select a location and click "Start Assessment" to begin documenting goals.',
           'During an assessment, mark each step as correct or incorrect, then end the session when finished.',
-          'Remove employees from your shift list by clicking the unpin icon.'
+          'To remove everyone from your shift list at once, click "Clear All" at the top of the page.'
         ]
       },
       {
@@ -125,16 +125,16 @@ const GUIDE_SECTIONS: Section[] = [
         description: 'Your primary workspace. Build a list of employees you\'re working with today, then access their profiles for goal assessments.',
         steps: [
           'Open "My Shift" from the sidebar — this is your default landing page.',
-          'Use the search bar to find employees by name.',
-          'Click the pin icon next to an employee to add them to your shift list for the day.',
-          'Your pinned list is saved for the session so you can navigate away and come back.',
-          'Click on a pinned employee to open their full profile.',
+          'Click "Add Employees" to open the employee search panel.',
+          'Use the search bar to find employees by name, then check the box next to each person you\'ll be working with today.',
+          'Click "Add Selected" to add them to your shift list. Your list is saved for the session so you can navigate away and come back.',
+          'Click anywhere on an employee\'s card to open their full profile.',
           'From a Super Scooper\'s profile, select a location and click "Start Assessment" to begin an assessment session.',
           'During an assessment, mark each goal step as correct or incorrect. The system tracks consecutive correct responses automatically.',
           'Click "End Assessment" when you\'re done. The progress is saved immediately.',
           'Review past assessments in the employee\'s profile to see their history.',
           'You can also view Guardian Notes and Coach Notes from the employee profile.',
-          'Remove an employee from your shift by clicking the unpin icon.'
+          'To clear your entire shift list, click "Clear All" at the top of the page.'
         ]
       },
       {
@@ -198,7 +198,8 @@ const GUIDE_SECTIONS: Section[] = [
           'From their profile, you can see their active development goals, progress toward mastery, and assessment history.',
           'Click the notes icon to leave a Guardian Note — share observations, updates, or anything the team should know.',
           'Your notes are visible to Shift Leads, Administrators, and Job Coaches to help coordinate care.',
-          'If you have multiple family members in the program, they will all appear on your page.'
+          'If you have multiple family members in the program, they will all appear on your page.',
+          'On mobile, look for the "Add to Home Screen" banner at the top — tap it to install the app on your phone for quick access without opening a browser.'
         ]
       }
     ]
@@ -236,6 +237,30 @@ const GUIDE_SECTIONS: Section[] = [
 
 const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
   {
+    date: 'March 19, 2026',
+    groups: [
+      {
+        area: 'My Shift',
+        notes: [
+          'Employee cards on the My Shift page are now fully clickable — tap anywhere on the card to open their profile. There is no longer a separate unpin button on each card.',
+          'To remove all employees from your shift list at once, use the "Clear All" button at the top of the page.',
+        ]
+      },
+      {
+        area: 'Employee Profiles',
+        notes: [
+          'Profile sections with no data now start collapsed by default, keeping profiles cleaner and easier to scan. Sections with content still open automatically.',
+        ]
+      },
+      {
+        area: 'Guardian',
+        notes: [
+          'Guardians visiting on a mobile device will see an "Add to Home Screen" prompt, making it easy to install the app for quick access without opening a browser each time.',
+        ]
+      }
+    ]
+  },
+  {
     date: 'March 6, 2026',
     groups: [
       {
@@ -272,6 +297,8 @@ const AREA_COLORS: Record<string, string> = {
   'Assessments': 'bg-blue-50 text-blue-700 border-blue-200',
   'Employee Profiles': 'bg-amber-50 text-amber-700 border-amber-200',
   'Help Guide': 'bg-purple-50 text-purple-700 border-purple-200',
+  'My Shift': 'bg-cyan-50 text-cyan-700 border-cyan-200',
+  'Guardian': 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
 function ReleaseNotesSection() {
