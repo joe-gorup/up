@@ -1,0 +1,109 @@
+workflows:
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # iOS — builds IPA and pushes to TestFlight
+  # ─────────────────────────────────────────────────────────────────────────────
+  ios-release:
+    name: Golden Scoop iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+
+    environment:
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.goldenscoop.app
+      vars:
+        # Set CAPACITOR_APP_URL in Codemagic Environment Variables (Team settings)
+        # to your live Replit deployment URL, e.g.:
+        #   https://your-repl-name.your-username.replit.app
+        CAPACITOR_APP_URL: $CAPACITOR_APP_URL
+        XCODE_PROJECT: ios/App/App.xcodeproj
+        XCODE_SCHEME: App
+
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+        # Vite outputs to dist/public — required by Capacitor before sync
+
+      - name: Sync Capacitor
+        script: npx cap sync ios
+        # Copies web assets + plugins into the Xcode project.
+        # When CAPACITOR_APP_URL is set, the app loads from the remote URL
+        # instead of bundled assets, so dist/public is only a fallback.
+
+      - name: Set bundle ID and version
+        script: |
+          agvtool new-marketing-version 1.0.0
+          agvtool new-version -all $(($(agvtool what-version -terse) + 1))
+        working_directory: ios/App
+
+      - name: Build IPA
+        script: |
+          xcode-project build-ipa \
+            --project "$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+
+    publishing:
+      app_store_connect:
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
+        submit_to_testflight: true
+
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Android — builds signed APK/AAB and uploads to Play Store internal track
+  # ─────────────────────────────────────────────────────────────────────────────
+  android-release:
+    name: Golden Scoop Android
+    max_build_duration: 60
+    instance_type: linux_x2
+
+    environment:
+      android_signing:
+        - golden_scoop_keystore  # keystore name as configured in Codemagic
+      vars:
+        CAPACITOR_APP_URL: $CAPACITOR_APP_URL
+        PACKAGE_NAME: com.goldenscoop.app
+
+    scripts:
+      - name: Install dependencies
+        script: npm ci
+
+      - name: Build web assets
+        script: npm run build
+
+      - name: Sync Capacitor
+        script: npx cap sync android
+
+      - name: Build Android release AAB
+        script: |
+          cd android
+          ./gradlew bundleRelease
+
+      - name: Sign AAB
+        script: |
+          jarsigner \
+            -keystore $CM_KEYSTORE_PATH \
+            -storepass $CM_KEYSTORE_PASSWORD \
+            -keypass $CM_KEY_PASSWORD \
+            -signedjar android/app/build/outputs/bundle/release/app-release-signed.aab \
+            android/app/build/outputs/bundle/release/app-release.aab \
+            $CM_KEY_ALIAS
+
+    artifacts:
+      - android/app/build/outputs/bundle/release/*.aab
+      - android/app/build/outputs/apk/release/*.apk
+
+    publishing:
+      google_play:
+        credentials: $GCLOUD_SERVICE_ACCOUNT_CREDENTIALS
+        track: internal   # internal → alpha → beta → production
+        submit_as_draft: true

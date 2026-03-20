@@ -59,6 +59,26 @@ function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): 
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Android TWA Digital Asset Links verification
+  // The SHA-256 cert fingerprint below is a placeholder — replace it with the
+  // actual fingerprint from your Android signing keystore once generated.
+  // To get the fingerprint: keytool -list -v -keystore release.keystore
+  app.get("/.well-known/assetlinks.json", (_req: Request, res: Response) => {
+    res.json([
+      {
+        relation: ["delegate_permission/common.handle_all_urls"],
+        target: {
+          namespace: "android_app",
+          package_name: "com.goldenscoop.app",
+          sha256_cert_fingerprints: [
+            // REPLACE THIS with your actual signing key fingerprint before Play Store submission
+            "PLACEHOLDER:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00"
+          ]
+        }
+      }
+    ]);
+  });
+
   // Authentication endpoints
   app.post("/api/login", async (req: Request, res: Response) => {
     try {
