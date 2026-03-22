@@ -96,7 +96,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   }>>([]);
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
   const [pastAssessmentsExpanded, setPastAssessmentsExpanded] = useState(false);
-  const [menteesExpanded, setMenteesExpanded] = useState(false);
+  const [menteesExpanded, setMenteesExpanded] = useState(user?.role === 'Administrator');
   const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(false);
   const [coachNotesExpanded, setCoachNotesExpanded] = useState(false);
   const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(() =>
