@@ -88,6 +88,9 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [coachMentees, setCoachMentees] = useState<any[]>([]);
   const [selectedMenteeId, setSelectedMenteeId] = useState('');
   const [menteeError, setMenteeError] = useState('');
+  const [editingCoaches, setEditingCoaches] = useState(false);
+  const [selectedCoachId, setSelectedCoachId] = useState('');
+  const [coachAssignError, setCoachAssignError] = useState('');
   const [showCheckins, setShowCheckins] = useState(false);
   const [pastAssessments, setPastAssessments] = useState<Array<{
     id: string; manager_id: string; date: string; location: string;
@@ -845,6 +848,37 @@ const handleGenerateInvitation = async () => {
     }
   };
 
+  const handleAssignCoach = async () => {
+    if (!selectedCoachId) return;
+    setCoachAssignError('');
+    try {
+      const res = await apiRequest('/api/coach-assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coach_id: selectedCoachId, scooper_id: employeeId }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setCoachAssignError(data.error || 'Failed to assign coach');
+        return;
+      }
+      setSelectedCoachId('');
+      const refreshed = await apiRequest(`/api/coach-assignments/scooper/${employeeId}`);
+      if (refreshed.ok) setAssignedCoaches(await refreshed.json());
+    } catch (err) {
+      setCoachAssignError('Failed to assign coach');
+    }
+  };
+
+  const handleRemoveCoach = async (assignmentId: string) => {
+    if (!window.confirm('Remove this job coach assignment?')) return;
+    try {
+      await apiRequest(`/api/coach-assignments/${assignmentId}`, { method: 'DELETE' });
+      setAssignedCoaches(prev => prev.filter(a => a.id !== assignmentId));
+    } catch (err) {
+      console.error('Failed to remove coach:', err);
+    }
+  };
 
   const getGoalProgress = (goal: any) => {
     const requiredSteps = goal.steps.filter((step: any) => step.isRequired);
@@ -1333,20 +1367,80 @@ const handleGenerateInvitation = async () => {
                 {/* Job Coaches */}
                 {employee.role === 'Super Scooper' && (
                 <div>
-                  <div className="flex items-center space-x-2 mb-3">
-                    <UserCheck className="h-4 w-4 text-green-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h3>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-2">
+                      <UserCheck className="h-4 w-4 text-green-500" />
+                      <h3 className="text-sm font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h3>
+                    </div>
+                    {canEdit && !editingCoaches && (
+                      <button
+                        onClick={() => { setEditingCoaches(true); setCoachAssignError(''); }}
+                        className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                        title="Edit job coaches"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
+                  {editingCoaches && (
+                    <div className="mb-3">
+                      {coachAssignError && (
+                        <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg mb-2">{coachAssignError}</div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={selectedCoachId}
+                          onChange={e => setSelectedCoachId(e.target.value)}
+                          className="flex-1 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-green-500 focus:border-green-500"
+                        >
+                          <option value="">Select a job coach...</option>
+                          {employees
+                            .filter(e => e.isActive && e.role === 'Job Coach' && !assignedCoaches.some(a => a.coach_id === e.id))
+                            .sort((a, b) => `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`))
+                            .map(e => (
+                              <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                            ))
+                          }
+                        </select>
+                        <button
+                          onClick={handleAssignCoach}
+                          disabled={!selectedCoachId}
+                          className="bg-green-600 text-white px-3 py-2 rounded-xl text-sm font-medium hover:bg-green-700 disabled:opacity-50 whitespace-nowrap"
+                        >
+                          Assign
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {assignedCoaches.length > 0 ? (
                     <div className="space-y-2">
                       {assignedCoaches.map((assignment: any) => (
-                        <div key={assignment.id} className="text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
-                          {getPersonName(assignment.coach_id)}
+                        <div key={assignment.id} className="flex items-center justify-between text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
+                          <span>{getPersonName(assignment.coach_id)}</span>
+                          {editingCoaches && (
+                            <button
+                              onClick={() => handleRemoveCoach(assignment.id)}
+                              className="text-red-400 hover:text-red-600 p-1 ml-2"
+                              title="Remove coach"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
                   ) : (
                     <p className="text-xs text-gray-400 italic">No job coaches assigned</p>
+                  )}
+                  {editingCoaches && (
+                    <div className="flex justify-end mt-3">
+                      <button
+                        onClick={() => { setEditingCoaches(false); setSelectedCoachId(''); setCoachAssignError(''); }}
+                        className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors"
+                      >
+                        Done
+                      </button>
+                    </div>
                   )}
                 </div>
                 )}
