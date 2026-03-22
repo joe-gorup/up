@@ -304,6 +304,10 @@ const AREA_COLORS: Record<string, string> = {
 function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
   const [expanded, setExpanded] = useState(autoExpand);
 
+  useEffect(() => {
+    if (autoExpand) setExpanded(true);
+  }, [autoExpand]);
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-green-200 ring-1 ring-green-100">
       <button
