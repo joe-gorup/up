@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   HelpCircle, ChevronDown, ChevronUp, Shield, ClipboardList, LayoutDashboard, 
   Users, FolderOpen, Upload, Heart, CheckCircle, Award, UserCheck, Star, Info, Megaphone
@@ -301,8 +301,8 @@ const AREA_COLORS: Record<string, string> = {
   'Guardian': 'bg-rose-50 text-rose-700 border-rose-200',
 };
 
-function ReleaseNotesSection() {
-  const [expanded, setExpanded] = useState(false);
+function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
+  const [expanded, setExpanded] = useState(autoExpand);
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-green-200 ring-1 ring-green-100">
@@ -485,6 +485,19 @@ export default function HelpGuide() {
   const { user } = useAuth();
   const [expandedRole, setExpandedRole] = useState<string | null>(user?.role || null);
   const [expandedPages, setExpandedPages] = useState<Record<string, boolean>>({});
+  const [focusRelease, setFocusRelease] = useState(false);
+  const releaseNotesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const flag = sessionStorage.getItem('gs-focus-release');
+    if (flag) {
+      sessionStorage.removeItem('gs-focus-release');
+      setFocusRelease(true);
+      setTimeout(() => {
+        releaseNotesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 100);
+    }
+  }, []);
 
   const toggleRole = (role: string) => {
     setExpandedRole(prev => prev === role ? null : role);
@@ -522,7 +535,7 @@ export default function HelpGuide() {
         </div>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6" ref={releaseNotesRef} id="release-notes-section">
         <div className="flex items-center gap-3 mb-3">
           <div className="flex items-center gap-1.5 text-green-700">
             <Megaphone className="h-4 w-4" />
@@ -530,7 +543,7 @@ export default function HelpGuide() {
           </div>
           <div className="flex-1 border-t border-green-200" />
         </div>
-        <ReleaseNotesSection />
+        <ReleaseNotesSection autoExpand={focusRelease} />
       </div>
 
       <div className="mb-2">

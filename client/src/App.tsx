@@ -19,6 +19,7 @@ import Sidebar from './components/Sidebar';
 import SessionWarning from './components/SessionWarning';
 import PermissionsManager from './components/PermissionsManager';
 import HelpGuide from './components/HelpGuide';
+import ReleaseIndicator from './components/ReleaseIndicator';
 
 // Map route paths to section IDs for sidebar active state
 const routeToSection: Record<string, string> = {
@@ -211,6 +212,8 @@ function AppContent() {
           </Switch>
         </main>
       </div>
+
+      <ReleaseIndicator />
 
       <SessionWarning
         show={showSessionWarning}
