@@ -22,6 +22,12 @@ interface EmployeeDetailProps {
 export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
   const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useData();
   const { user } = useAuth();
+  const { canModify, canView } = usePermissions();
+  const canEdit = canModify('employee_profiles');
+  const canAssignGoal = canModify('goal_assignment');
+  const canAssess = canModify('goal_assessment');
+  const canViewGuardianNotes = canView('guardian_notes');
+  const canViewCoachNotes = canView('coach_notes');
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [assessmentMode, setAssessmentMode] = useState(false);
   const [showSupportExpanded, setShowSupportExpanded] = useState(user?.role === 'Administrator');
@@ -310,11 +316,10 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
   // Load guardian notes for this employee
   useEffect(() => {
-    const canViewNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
-    if (canViewNotes && employee?.role === 'Super Scooper') {
+    if (canViewGuardianNotes && employee?.role === 'Super Scooper') {
       loadGuardianNotesForScooper(employeeId);
     }
-  }, [employeeId, user?.role, employee?.role]);
+  }, [employeeId, canViewGuardianNotes, employee?.role]);
 
   // Auto-expand guardian notes section once notes load from context
   useEffect(() => {
@@ -324,7 +329,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
   // Load coach notes for this employee
   useEffect(() => {
-    const canViewCoachNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
     if (canViewCoachNotes && employee?.role === 'Super Scooper') {
       setLoadingCoachNotes(true);
       apiRequest(`/api/coach-notes/${employeeId}`)
@@ -336,7 +340,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         .catch(() => setCoachNotes([]))
         .finally(() => setLoadingCoachNotes(false));
     }
-  }, [employeeId, user?.role, employee?.role]);
+  }, [employeeId, canViewCoachNotes, employee?.role]);
 
   useEffect(() => {
     async function fetchPastAssessments() {
@@ -451,10 +455,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
       );
     }
   }, [employee?.id]);
-
-  const { canModify } = usePermissions();
-  const canEdit = canModify('employee_profiles');
-  const canAssignGoal = canModify('goal_assignment');
 
   // Helper functions for array form fields
   const addArrayItem = (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
@@ -571,7 +571,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     setEditingServiceProvider(false);
   };
 
-  const canAssess = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
   const isAssessable = ['Super Scooper', 'Assistant Manager'].includes(employees.find(e => e.id === employeeId)?.role || '');
 
   const handleStartAssessment = async () => {
@@ -1181,7 +1180,7 @@ const handleGenerateInvitation = async () => {
                       <Users className="h-4 w-4 text-purple-500" />
                       <h3 className="text-sm font-semibold text-gray-900">Contacts</h3>
                     </div>
-                    {canEdit && !editingContacts && (
+                    {canModify('contacts') && !editingContacts && (
                       <button
                         onClick={startEditingContacts}
                         className="p-1.5 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -1508,7 +1507,7 @@ const handleGenerateInvitation = async () => {
                 )}
               </div>
 
-              {canEdit && (
+              {canModify('promotion_certifications') && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
@@ -2032,8 +2031,7 @@ const handleGenerateInvitation = async () => {
           )}
 
           {/* Guardian Notes Card - in left column for Super Scoopers */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
+          {canViewGuardianNotes && employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => setGuardianNotesExpanded(!guardianNotesExpanded)}
@@ -2079,8 +2077,7 @@ const handleGenerateInvitation = async () => {
           )}
 
           {/* Job Coach Notes Card - in left column for Super Scoopers */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
+          {canViewCoachNotes && employee.role === 'Super Scooper' && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
               <button
                 onClick={() => setCoachNotesExpanded(!coachNotesExpanded)}
