@@ -237,6 +237,31 @@ const GUIDE_SECTIONS: Section[] = [
 
 const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
   {
+    date: 'March 28, 2026',
+    groups: [
+      {
+        area: 'Permissions',
+        notes: [
+          'Permission settings now fully take effect across the entire app. Changes made in the Permission Settings page are now enforced when saving data — not just in the interface.',
+          'Goal edit and archive buttons on employee profiles now appear for Shift Leads and Assistant Managers when they have the Goal Assignment permission, instead of being limited to Administrators.',
+          'The "Add Employee" button on the Employee Management page now respects the Employee Profiles permission setting.',
+        ]
+      },
+      {
+        area: 'My Shift',
+        notes: [
+          'Fixed an issue where Shift Leads and Assistant Managers received an error when trying to add a goal to an employee from My Shift or an employee profile.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          'Fixed an issue where a high volume of login attempts could temporarily lock all users out of the app instead of only affecting the source of the attempts.',
+        ]
+      }
+    ]
+  },
+  {
     date: 'March 19, 2026',
     groups: [
       {
@@ -299,6 +324,8 @@ const AREA_COLORS: Record<string, string> = {
   'Help Guide': 'bg-purple-50 text-purple-700 border-purple-200',
   'My Shift': 'bg-cyan-50 text-cyan-700 border-cyan-200',
   'Guardian': 'bg-rose-50 text-rose-700 border-rose-200',
+  'Permissions': 'bg-green-50 text-green-700 border-green-200',
+  'System': 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
 function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
