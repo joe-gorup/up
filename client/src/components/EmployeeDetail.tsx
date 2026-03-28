@@ -452,8 +452,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   }, [employee?.id]);
 
-  const canEdit = user?.role === 'Administrator';
   const { canModify } = usePermissions();
+  const canEdit = canModify('employee_profiles');
   const canAssignGoal = canModify('goal_assignment');
 
   // Helper functions for array form fields
@@ -973,7 +973,7 @@ const handleGenerateInvitation = async () => {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {user?.role === 'Administrator' && (
+              {canEdit && (
                 <button
                   onClick={() => onEdit(employeeId)}
                   className="flex items-center space-x-2 bg-gray-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors text-sm"
