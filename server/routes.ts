@@ -714,7 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/development-goals", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/development-goals", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
     try {
       const { steps, ...goalData } = req.body;
       const [newGoal] = await db.insert(development_goals).values(goalData).returning();
