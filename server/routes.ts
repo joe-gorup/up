@@ -22,7 +22,7 @@ function parseCoachFilePath(path: string): { bucketName: string; objectName: str
 import multer from "multer";
 import csvParser from "csv-parser";
 import { 
-  hashPassword, comparePassword, generateToken, authenticateToken, requireRole,
+  hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
 
@@ -410,7 +410,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/employees", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       // Check for existing employee with same email to prevent duplicates (only if email provided)
       if (req.body.email && req.body.email.trim() !== '') {
@@ -458,7 +458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employees/:id", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
@@ -714,7 +714,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/development-goals", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/development-goals", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { steps, ...goalData } = req.body;
       const [newGoal] = await db.insert(development_goals).values(goalData).returning();
@@ -736,7 +736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/development-goals/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.put("/api/development-goals/:id", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const [updatedGoal] = await db
@@ -835,7 +835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mapped;
   };
 
-  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb(req.body);
       const [newProgress] = await db.insert(step_progress).values(mappedData).returning();
@@ -847,7 +847,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save step progress as draft
-  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/draft", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb({ ...req.body, status: 'draft' });
       
@@ -905,7 +905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Submit step progress (convert draft to submitted or create new submitted)
-  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/submit", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employee_id, assessment_session_id, date, documenter_user_id } = req.body;
       
@@ -1176,7 +1176,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { employee_ids, location, date } = req.body;
@@ -1323,7 +1323,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/assessment-sessions/:id", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1401,7 +1401,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete/end an assessment session (releases lock)
-  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1447,7 +1447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Renew session lock (extends expiry time)
-  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1617,7 +1617,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-summaries", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const [newSummary] = await db.insert(assessment_summaries).values(req.body).returning();
       res.json(newSummary);
@@ -2576,7 +2576,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
-  app.post("/api/employees/photo", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), photoUpload.single('photo'), async (req: Request, res: Response) => {
+  app.post("/api/employees/photo", authenticateToken, requirePermission('employee_profiles', 'can_modify'), photoUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -2601,7 +2601,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employee-images", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
       if (!imageURL) {
@@ -2865,7 +2865,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees/:employeeId/contacts", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/employees/:employeeId/contacts", authenticateToken, requirePermission('contacts', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
       const user = (req as any).user;
@@ -2898,7 +2898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.patch("/api/contacts/:contactId", authenticateToken, requirePermission('contacts', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
@@ -2932,7 +2932,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.delete("/api/contacts/:contactId", authenticateToken, requirePermission('contacts', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
@@ -3207,7 +3207,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/certifications", authenticateToken, requirePermission('promotion_certifications', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const parsed = insertPromotionCertificationSchema.parse(req.body);
       const [cert] = await db.insert(promotion_certifications).values(parsed).returning();
@@ -3222,7 +3222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/certifications/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.delete("/api/certifications/:id", authenticateToken, requirePermission('promotion_certifications', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       await db.delete(promotion_certifications).where(eq(promotion_certifications.id, id));
@@ -3294,7 +3294,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create or update a guardian note (upsert - one note per guardian-scooper pair)
-  app.post("/api/guardian-notes", authenticateToken, async (req: Request, res: Response) => {
+  app.post("/api/guardian-notes", authenticateToken, requirePermission('guardian_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       
@@ -3356,7 +3356,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update a guardian note
-  app.put("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/guardian-notes/:id", authenticateToken, requirePermission('guardian_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { id } = req.params;
@@ -3390,7 +3390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a guardian note
-  app.delete("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/guardian-notes/:id", authenticateToken, requirePermission('guardian_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { id } = req.params;
@@ -3458,7 +3458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/checkins", authenticateToken, async (req: Request, res: Response) => {
+  app.post("/api/checkins", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
@@ -3485,7 +3485,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/checkins/:id", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
@@ -3518,7 +3518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/checkins/:id", authenticateToken, requirePermission('coach_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
@@ -3596,7 +3596,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/coach-files/:employeeId", authenticateToken, fileUpload.single('file'), async (req: Request, res: Response) => {
+  app.post("/api/coach-files/:employeeId", authenticateToken, requirePermission('coach_files', 'can_modify'), fileUpload.single('file'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { employeeId } = req.params;
@@ -3709,7 +3709,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/coach-files/:fileId", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/coach-files/:fileId", authenticateToken, requirePermission('coach_files', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { fileId } = req.params;
@@ -3785,7 +3785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/coach-notes", authenticateToken, async (req: Request, res: Response) => {
+  app.post("/api/coach-notes", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
@@ -3812,7 +3812,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/coach-notes/:id", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
@@ -3836,7 +3836,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/coach-notes/:id", authenticateToken, requirePermission('coach_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
