@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { apiRequest } from '../lib/auth';
 import GoalAssignment from './GoalAssignment';
 import CoachCheckin from './CoachCheckin';
@@ -452,6 +453,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   }, [employee?.id]);
 
   const canEdit = user?.role === 'Administrator';
+  const { canModify } = usePermissions();
+  const canAssignGoal = canModify('goal_assignment');
 
   // Helper functions for array form fields
   const addArrayItem = (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
@@ -2315,7 +2318,7 @@ const handleGenerateInvitation = async () => {
                   {activeGoals.length}/2
                 </span>
               </button>
-              {canEdit && activeGoals.length < 2 && (
+              {canAssignGoal && activeGoals.length < 2 && (
                 <button
                   onClick={() => setShowGoalAssignment(true)}
                   className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium"
@@ -2555,7 +2558,16 @@ const handleGenerateInvitation = async () => {
               <div className="text-center py-8 mt-4">
                 <Target className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Goals</h3>
-                <p className="text-gray-600">No development goals have been assigned yet</p>
+                <p className="text-gray-600 mb-4">No development goals have been assigned yet</p>
+                {canAssignGoal && (
+                  <button
+                    onClick={() => setShowGoalAssignment(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add First Goal
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
