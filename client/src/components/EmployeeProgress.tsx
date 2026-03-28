@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X } from 'lucide-react';
 import { useData, Employee } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
 import Timer from './Timer';
 
@@ -97,6 +98,8 @@ interface EmployeeProgressProps {
 
 export default function EmployeeProgress({ employee, assessmentSessionId, shiftId, onViewProfile, onEditEmployee, onComplete }: EmployeeProgressProps) {
   const { user } = useAuth();
+  const { canModify } = usePermissions();
+  const canAssignGoal = canModify('goal_assignment');
   const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useData();
   const { toast } = useToast();
   const [outcomes, setOutcomes] = useState<Record<string, { outcome: 'correct' | 'verbal_prompt' | 'na' | 'incorrect'; notes: string }>>({});
@@ -688,7 +691,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                 </div>
                               </div>
                               <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2">
-                                {user?.role === 'Administrator' && (
+                                {canAssignGoal && (
                                   <div className="flex space-x-2">
                                     <button
                                       onClick={() => handleEditGoal(goal)}

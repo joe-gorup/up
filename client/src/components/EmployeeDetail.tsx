@@ -2404,7 +2404,7 @@ const handleGenerateInvitation = async () => {
                                 <div className="text-xs text-gray-500">consecutive correct</div>
                               </div>
                               
-                              {user?.role === 'Administrator' && (
+                              {canAssignGoal && (
                                 <div className="flex flex-col space-y-1">
                                   <button
                                     onClick={() => handleEditGoal(goal)}
@@ -2600,7 +2600,7 @@ const handleGenerateInvitation = async () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <CheckCircle className="h-6 w-6 text-green-500" />
-                        {user?.role === 'Administrator' && (
+                        {canAssignGoal && (
                           <button
                             onClick={() => handleArchiveGoal(goal.id, goal.title)}
                             className="p-2 text-gray-600 hover:bg-white hover:bg-opacity-50 rounded-xl transition-colors"
