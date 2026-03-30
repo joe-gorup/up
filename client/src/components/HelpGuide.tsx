@@ -242,9 +242,20 @@ const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[]
       {
         area: 'Permissions',
         notes: [
-          'Permission settings now fully take effect across the entire app. Changes made in the Permission Settings page are now enforced when saving data — not just in the interface.',
-          'Goal edit and archive buttons on employee profiles now appear for Shift Leads and Assistant Managers when they have the Goal Assignment permission, instead of being limited to Administrators.',
+          'Permission settings now fully take effect across the entire app — changes made in Permission Settings are enforced on both the interface and when saving data.',
+          'The "Edit" button on employee profiles now follows the Employee Profiles permission setting, rather than being limited to Administrators.',
+          'Goal edit and archive buttons now follow the Goal Assignment permission setting for Shift Leads and Assistant Managers.',
+          'The "Start Assessment" button now follows the Goal Assessment permission setting.',
+          'The Guardian Notes and Job Coach Notes sections on employee profiles now show or hide based on each role\'s Guardian Notes and Coach Notes permission settings.',
+          'The Contacts edit button now follows the Contacts permission setting.',
+          'The Promotion Certifications section now follows the Promotion Certifications permission setting.',
           'The "Add Employee" button on the Employee Management page now respects the Employee Profiles permission setting.',
+        ]
+      },
+      {
+        area: 'Employee Profiles',
+        notes: [
+          '"Allergies & Dietary" has been renamed to "Health Conditions" throughout employee profiles for clearer, more inclusive language.',
         ]
       },
       {
