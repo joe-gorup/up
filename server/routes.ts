@@ -26,6 +26,51 @@ import {
   type AuthUser 
 } from "./auth";
 
+// Auto-fill any missing role_permissions rows so new features never block existing users
+async function ensureDefaultPermissions() {
+  try {
+    const existing = await db.select({ role: role_permissions.role, feature: role_permissions.feature }).from(role_permissions);
+    const existingSet = new Set(existing.map(r => `${r.role}|${r.feature}`));
+
+    const toInsert: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
+
+    for (const feature of PERMISSION_FEATURES) {
+      for (const role of CONFIGURABLE_ROLES) {
+        if (existingSet.has(`${role}|${feature}`)) continue;
+
+        let can_view = false;
+        let can_modify = false;
+        let can_delete = false;
+
+        if (role === 'Shift Lead' || role === 'Assistant Manager') {
+          can_view = true;
+          can_modify = ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature);
+          can_delete = false;
+        } else if (role === 'Job Coach') {
+          can_view = ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature);
+          can_modify = ['coach_notes', 'coach_files'].includes(feature);
+          can_delete = ['coach_notes', 'coach_files'].includes(feature);
+        } else if (role === 'Guardian') {
+          can_view = ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature);
+          can_modify = ['guardian_notes'].includes(feature);
+          can_delete = false;
+        }
+
+        toInsert.push({ role, feature, can_view, can_modify, can_delete });
+      }
+    }
+
+    if (toInsert.length > 0) {
+      for (const row of toInsert) {
+        await db.insert(role_permissions).values(row);
+      }
+      logger.info({ count: toInsert.length }, 'Auto-filled missing default permission rows');
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to auto-fill default permissions — non-fatal, continuing startup');
+  }
+}
+
 // Helper to strip sensitive fields from employee objects before sending to clients
 function stripSensitiveFields<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
   const { password, ...safe } = obj;
@@ -3930,49 +3975,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/permissions/seed - seed default permissions (admin only)
+  // POST /api/permissions/seed - seed missing default permissions (admin only)
   app.post("/api/permissions/seed", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user as AuthUser;
-      const existing = await db.select().from(role_permissions);
-      if (existing.length > 0) {
-        return res.json({ message: 'Permissions already seeded', count: existing.length });
-      }
-
-      const defaults: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
-
-      for (const feature of PERMISSION_FEATURES) {
-        // Shift Lead - broad access
-        defaults.push({ role: 'Shift Lead', feature, can_view: true,
-          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
-          can_delete: false });
-        // Assistant Manager - similar to Shift Lead
-        defaults.push({ role: 'Assistant Manager', feature, can_view: true,
-          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
-          can_delete: false });
-        // Job Coach - limited access
-        defaults.push({ role: 'Job Coach', feature,
-          can_view: ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature),
-          can_modify: ['coach_notes', 'coach_files'].includes(feature),
-          can_delete: ['coach_notes', 'coach_files'].includes(feature) });
-        // Guardian - most restricted
-        defaults.push({ role: 'Guardian', feature,
-          can_view: ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature),
-          can_modify: ['guardian_notes'].includes(feature),
-          can_delete: false });
-      }
-
-      for (const d of defaults) {
-        await db.insert(role_permissions).values({ ...d, updated_by: user.id });
-      }
-
+      await ensureDefaultPermissions();
       const allPerms = await db.select().from(role_permissions);
-      res.json({ success: true, count: allPerms.length, permissions: allPerms });
+      res.json({ success: true, count: allPerms.length });
     } catch (error) {
       logger.error({ error }, 'Failed to seed permissions');
       res.status(500).json({ error: 'Failed to seed permissions' });
     }
   });
+
+  await ensureDefaultPermissions();
 
   const httpServer = createServer(app);
   return httpServer;
