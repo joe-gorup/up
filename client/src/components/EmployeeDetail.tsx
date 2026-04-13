@@ -1641,57 +1641,73 @@ const handleGenerateInvitation = async () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
-                    <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-xl">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Checklist</label>
+                      <span className={`text-sm font-semibold ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-500'}`}>
+                        {calculateScore()}%
+                        <span className="text-xs font-normal text-gray-400 ml-1">(passing: {getPassingScore()}%)</span>
+                      </span>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
                       {certType === 'mentor' ? (
                         mentorChecklistItems.map((item, idx) => (
-                          <label
-                            key={idx}
-                            className={`flex items-start space-x-3 px-3 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checklistAnswers[idx] || false}
-                              onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [idx]: e.target.checked }))}
-                              className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-800">{item}</span>
-                          </label>
+                          <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                            <div className="flex items-start gap-2 mb-2.5">
+                              <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
+                              <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
+                            </div>
+                            <div className="flex gap-2 ml-7">
+                              <button
+                                type="button"
+                                onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: true }))}
+                                className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[idx] === true ? 'bg-green-50 text-green-700 border-green-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'}`}
+                              >Yes</button>
+                              <button
+                                type="button"
+                                onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: false }))}
+                                className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[idx] === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-red-50'}`}
+                              >No</button>
+                            </div>
+                          </div>
                         ))
                       ) : (
                         (() => {
                           let globalIdx = 0;
                           return shiftManagerCategories.map((category, catIdx) => (
                             <div key={catIdx}>
-                              <div className="px-3 py-1.5 bg-gray-200 font-medium text-sm text-gray-700 sticky top-0">
+                              <div className="px-2 py-1 bg-slate-100 rounded-lg text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 mt-1 sticky top-0">
                                 {category.name}
                               </div>
-                              {category.items.map((item, itemIdx) => {
-                                const currentIdx = globalIdx++;
-                                return (
-                                  <label
-                                    key={currentIdx}
-                                    className={`flex items-start space-x-3 px-3 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors ${currentIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={checklistAnswers[currentIdx] || false}
-                                      onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: e.target.checked }))}
-                                      className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-gray-800">{item}</span>
-                                  </label>
-                                );
-                              })}
+                              <div className="space-y-2">
+                                {category.items.map((item) => {
+                                  const currentIdx = globalIdx++;
+                                  return (
+                                    <div key={currentIdx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                                      <div className="flex items-start gap-2 mb-2.5">
+                                        <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{currentIdx + 1}.</span>
+                                        <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
+                                      </div>
+                                      <div className="flex gap-2 ml-7">
+                                        <button
+                                          type="button"
+                                          onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: true }))}
+                                          className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[currentIdx] === true ? 'bg-green-50 text-green-700 border-green-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'}`}
+                                        >Yes</button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: false }))}
+                                          className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[currentIdx] === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-red-50'}`}
+                                        >No</button>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
                             </div>
                           ));
                         })()
                       )}
                     </div>
-                  </div>
-
-                  <div className={`text-sm font-medium ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-600'}`}>
-                    Score: {calculateScore()}% (Passing: {getPassingScore()}%)
                   </div>
 
                   <div>
@@ -1765,19 +1781,24 @@ const handleGenerateInvitation = async () => {
             {reviewingCert.checklistResults && reviewingCert.checklistResults.length > 0 ? (
               <div>
                 <p className="text-sm font-semibold text-gray-700 mb-2">
-                  Checklist Answers ({reviewingCert.checklistResults.filter((r: any) => r.answer).length} / {reviewingCert.checklistResults.length} passed)
+                  Checklist ({reviewingCert.checklistResults.filter((r: any) => r.answer).length} / {reviewingCert.checklistResults.length} Yes)
                 </p>
                 <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
                   {reviewingCert.checklistResults.map((item: any, idx: number) => (
-                    <div key={idx} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${item.answer ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                      <span className="mt-0.5 shrink-0">
-                        {item.answer ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <X className="h-4 w-4 text-red-500" />
-                        )}
-                      </span>
-                      <p className="text-xs text-gray-800 leading-snug">{item.question}</p>
+                    <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                      <div className="flex items-start gap-2 mb-2">
+                        <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
+                        <p className="text-xs text-gray-800 leading-snug flex-1">{item.question}</p>
+                      </div>
+                      <div className="ml-7">
+                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border ${item.answer ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
+                          {item.answer ? (
+                            <><CheckCircle2 className="h-3 w-3" /> Yes</>
+                          ) : (
+                            <><XCircle className="h-3 w-3" /> No</>
+                          )}
+                        </span>
+                      </div>
                     </div>
                   ))}
                 </div>
