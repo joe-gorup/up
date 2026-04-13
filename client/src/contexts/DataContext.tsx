@@ -892,57 +892,56 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Save step progress as draft
   const saveStepProgressDraft = async (progress: Omit<StepProgress, 'id' | 'date'>, documenterUserId: string) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      const response = await apiRequest('/api/step-progress/draft', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          development_goal_id: progress.developmentGoalId,
-          goal_step_id: progress.goalStepId,
-          employee_id: progress.employeeId,
-          assessment_session_id: progress.assessmentSessionId,
-          documenter_user_id: documenterUserId,
-          date: today,
-          outcome: progress.outcome,
-          notes: progress.notes,
-          completionTimeSeconds: progress.completionTimeSeconds,
-          timerManuallyEntered: progress.timerManuallyEntered
-        }),
-      });
+    const today = new Date().toISOString().split('T')[0];
+    
+    const response = await apiRequest('/api/step-progress/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        development_goal_id: progress.developmentGoalId,
+        goal_step_id: progress.goalStepId,
+        employee_id: progress.employeeId,
+        assessment_session_id: progress.assessmentSessionId,
+        documenter_user_id: documenterUserId,
+        date: today,
+        outcome: progress.outcome,
+        notes: progress.notes,
+        completionTimeSeconds: progress.completionTimeSeconds,
+        timerManuallyEntered: progress.timerManuallyEntered
+      }),
+    });
 
-      if (response.ok) {
-        const newProgress = await response.json();
-        const mappedProgress = {
-          id: newProgress.id,
-          developmentGoalId: newProgress.development_goal_id,
-          goalStepId: newProgress.goal_step_id,
-          employeeId: newProgress.employee_id,
-          assessmentSessionId: newProgress.assessment_session_id,
-          date: newProgress.date,
-          outcome: newProgress.outcome,
-          notes: newProgress.notes,
-          completionTimeSeconds: newProgress.completion_time_seconds,
-          timerManuallyEntered: newProgress.timer_manually_entered,
-          status: newProgress.status
-        };
-        
-        setStepProgress(prev => {
-          const filtered = prev.filter(p => 
-            !(p.developmentGoalId === progress.developmentGoalId &&
-              p.goalStepId === progress.goalStepId &&
-              p.employeeId === progress.employeeId &&
-              p.date === today)
-          );
-          return [...filtered, mappedProgress];
-        });
-      }
-    } catch (error) {
-      console.error('Error saving step progress draft:', error);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to save draft' }));
+      throw new Error(errorData.error || 'Failed to save step progress draft');
     }
+
+    const newProgress = await response.json();
+    const mappedProgress = {
+      id: newProgress.id,
+      developmentGoalId: newProgress.development_goal_id,
+      goalStepId: newProgress.goal_step_id,
+      employeeId: newProgress.employee_id,
+      assessmentSessionId: newProgress.assessment_session_id,
+      date: newProgress.date,
+      outcome: newProgress.outcome,
+      notes: newProgress.notes,
+      completionTimeSeconds: newProgress.completion_time_seconds,
+      timerManuallyEntered: newProgress.timer_manually_entered,
+      status: newProgress.status
+    };
+    
+    setStepProgress(prev => {
+      const filtered = prev.filter(p => 
+        !(p.developmentGoalId === progress.developmentGoalId &&
+          p.goalStepId === progress.goalStepId &&
+          p.employeeId === progress.employeeId &&
+          p.date === today)
+      );
+      return [...filtered, mappedProgress];
+    });
   };
 
   // Submit all draft progress for an employee

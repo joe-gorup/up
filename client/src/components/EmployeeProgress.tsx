@@ -417,11 +417,58 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const handleSubmit = async () => {
     try {
       setIsSaving(true);
-      
-      // First save all changes as drafts
-      await handleSaveDraft();
-      
-      // Then submit all drafts
+
+      const includedEmployeeGoals = employeeGoals.filter(goal => includedGoals[goal.id] !== false);
+      const allStepProgressData: Array<{
+        developmentGoalId: string;
+        goalStepId: string;
+        employeeId: string;
+        assessmentSessionId?: string;
+        outcome: string;
+        notes: string;
+        completionTimeSeconds?: number;
+        timerManuallyEntered: boolean;
+      }> = [];
+
+      for (const goal of includedEmployeeGoals) {
+        for (const step of goal.steps) {
+          const outcome = outcomes[step.id];
+          const notes = localNotes[step.id] || '';
+          const timer = timerData[step.id];
+
+          if (outcome || notes.trim() || timer) {
+            allStepProgressData.push({
+              developmentGoalId: goal.id,
+              goalStepId: step.id,
+              employeeId: employee.id,
+              assessmentSessionId: assessmentSessionId,
+              outcome: outcome?.outcome || 'na',
+              notes,
+              completionTimeSeconds: timer?.seconds || undefined,
+              timerManuallyEntered: timer?.manuallyEntered || false
+            });
+          }
+        }
+      }
+
+      if (allStepProgressData.length === 0) {
+        toast({
+          type: 'error',
+          title: 'Nothing to Submit',
+          description: 'Please document at least one step outcome before submitting.',
+          duration: 5000
+        });
+        return;
+      }
+
+      for (const data of allStepProgressData) {
+        await saveStepProgressDraft(data, user?.id || '');
+      }
+
+      if (shiftSummary.trim() && assessmentSessionId) {
+        await saveAssessmentSummary(employee.id, shiftSummary.trim());
+      }
+
       const result = await submitStepProgress(employee.id, user?.id || '', assessmentSessionId);
       
       toast({
@@ -433,7 +480,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       
       setHasUnsavedChanges(false);
 
-      // Exit assessment mode after a brief moment so the toast is visible
       setTimeout(() => {
         if (onComplete) onComplete();
       }, 1500);
@@ -442,7 +488,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       toast({
         type: 'error',
         title: 'Submission Failed',
-        description: 'Error submitting assessment. Please try again.',
+        description: error instanceof Error ? error.message : 'Error submitting assessment. Please try again.',
         duration: 5000
       });
     } finally {
