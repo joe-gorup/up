@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -2436,82 +2436,71 @@ const handleGenerateInvitation = async () => {
                             </div>
                           </div>
 
-                          {/* Goal Steps */}
-                          {/* Goal Steps - Collapsible */}
-                          <div className="mb-4">
-                            <button
-                              onClick={() => {
-                                const newExpanded = { ...expandedGoals };
-                                newExpanded[goal.id] = !newExpanded[goal.id];
-                                setExpandedGoals(newExpanded);
-                              }}
-                              className="flex items-center space-x-2 text-left w-full hover:bg-gray-50 p-2 rounded-xl transition-colors"
-                            >
-                              {expandedGoals[goal.id] ? (
-                                <ChevronDown className="h-4 w-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-500" />
-                              )}
-                              <h4 className="font-medium text-gray-900">Steps ({progress.totalRequired}) - Click to expand</h4>
-                            </button>
-                            
-                            {expandedGoals[goal.id] && (
-                              <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
-                                {goal.steps.map((step: any) => (
-                                  <div
-                                    key={step.id}
-                                    className="flex items-center space-x-2 text-sm p-3 rounded-xl bg-white border border-gray-200 shadow-sm"
-                                  >
-                                    <span className="font-medium text-gray-700">
-                                      {step.stepOrder}.
-                                    </span>
-                                    <span className="flex-1 text-gray-900">{step.stepDescription}</span>
-                                  </div>
-                                ))}
-                              </div>
-                            )}
+                          {/* Goal Steps — always visible with last outcome */}
+                          <div className="border-t border-slate-100 divide-y divide-slate-50 -mx-4 mb-3">
+                            {goal.steps.map((step: any) => {
+                              const lastEntry = stepProgress
+                                .filter(p => p.goalStepId === step.id && p.status === 'submitted')
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+                              const outcome = lastEntry?.outcome ?? 'na';
+                              const OutcomeIcon =
+                                outcome === 'correct' ? CheckCircle2 :
+                                outcome === 'incorrect' ? XCircle :
+                                outcome === 'verbal_prompt' ? AlertCircle :
+                                MinusCircle;
+                              const iconClass =
+                                outcome === 'correct' ? 'text-emerald-500' :
+                                outcome === 'incorrect' ? 'text-red-400' :
+                                outcome === 'verbal_prompt' ? 'text-amber-400' :
+                                'text-slate-300';
+                              const labelClass =
+                                outcome === 'correct' ? 'text-emerald-600' :
+                                outcome === 'incorrect' ? 'text-red-500' :
+                                outcome === 'verbal_prompt' ? 'text-amber-600' :
+                                'text-slate-400';
+                              const label =
+                                outcome === 'correct' ? 'Correct' :
+                                outcome === 'incorrect' ? 'Incorrect' :
+                                outcome === 'verbal_prompt' ? 'Verbal' : 'N/A';
+                              return (
+                                <div key={step.id} className="flex items-center gap-3 px-4 py-2.5">
+                                  <OutcomeIcon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
+                                  <span className="text-[11px] text-slate-400 font-medium w-4 shrink-0">{step.stepOrder}.</span>
+                                  <span className="text-xs text-slate-700 leading-snug flex-1">{step.stepDescription}</span>
+                                  <span className={`text-[10px] font-medium shrink-0 ${labelClass}`}>{label}</span>
+                                </div>
+                              );
+                            })}
                           </div>
 
-                          {/* Recent Assessments at a Glance */}
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Recent Assessments</h4>
-                            <div className="flex items-center space-x-1.5">
+                          {/* Recent Sessions — small colored dots */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-medium">Recent:</span>
+                            <div className="flex items-center gap-1">
                               {(() => {
                                 const sessions = goal.recentSessions ?? [];
                                 const slots = Array.from({ length: 5 }, (_, i) => {
-                                  const sessionIdx = sessions.length - 5 + i;
-                                  return sessionIdx >= 0 ? sessions[sessionIdx] : null;
+                                  const idx = sessions.length - 5 + i;
+                                  return idx >= 0 ? sessions[idx] : null;
                                 });
                                 return slots.map((session, i) => {
-                                  if (!session) {
-                                    return (
-                                      <div
-                                        key={i}
-                                        className="w-8 h-8 rounded-full border-2 border-dashed border-gray-200 bg-gray-50"
-                                        title="No assessment yet"
-                                      />
-                                    );
-                                  }
-                                  const dateLabel = new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                  const config = {
-                                    all_correct:  { bg: 'bg-green-100',  border: 'border-green-400',  text: 'text-green-700',  symbol: '✓', label: 'All correct' },
-                                    verbal_prompt:{ bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700', symbol: '~', label: 'Verbal prompts' },
-                                    incorrect:    { bg: 'bg-red-100',    border: 'border-red-400',    text: 'text-red-700',    symbol: '✗', label: 'Incorrect' },
-                                    na:           { bg: 'bg-gray-100',   border: 'border-gray-300',   text: 'text-gray-400',   symbol: '—', label: 'N/A' },
-                                  }[session.outcome] ?? { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-400', symbol: '?', label: 'Unknown' };
+                                  const dotColor = !session ? 'bg-slate-200' :
+                                    session.outcome === 'all_correct' ? 'bg-emerald-400' :
+                                    session.outcome === 'verbal_prompt' ? 'bg-amber-400' :
+                                    session.outcome === 'incorrect' ? 'bg-red-400' : 'bg-slate-300';
+                                  const title = !session ? 'No assessment yet' :
+                                    new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                                   return (
-                                    <div
+                                    <span
                                       key={i}
-                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 cursor-default ${config.bg} ${config.border} ${config.text}`}
-                                      title={`${dateLabel}: ${config.label}`}
-                                    >
-                                      {config.symbol}
-                                    </div>
+                                      className={`inline-block w-2 h-2 rounded-full ${dotColor}`}
+                                      title={title}
+                                    />
                                   );
                                 });
                               })()}
                               {(goal.recentSessions ?? []).length === 0 && (
-                                <span className="text-xs text-gray-400 ml-1">No assessments yet</span>
+                                <span className="text-xs text-slate-400 ml-1">No assessments yet</span>
                               )}
                             </div>
                           </div>
