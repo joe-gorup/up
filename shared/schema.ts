@@ -117,6 +117,7 @@ export const goal_steps = pgTable("goal_steps", {
   step_order: integer("step_order").notNull(),
   step_description: text("step_description").notNull(),
   is_required: boolean("is_required").default(true),
+  timer_type: varchar("timer_type").default("none"),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 }, (table) => ({
   // Performance indexes for JOIN optimization

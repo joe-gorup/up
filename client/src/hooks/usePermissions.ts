@@ -2,34 +2,42 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import type { PermissionFeature } from '@shared/schema';
+import { permissionCache, CACHE_TTL, getCacheKey, invalidatePermissionsCache } from '../lib/permissionsCache';
 
-interface PermissionState {
-  can_view: boolean;
-  can_modify: boolean;
-  can_delete: boolean;
-}
+export { invalidatePermissionsCache };
 
-type PermissionsMap = Record<string, PermissionState>;
-
-let cachedPermissions: PermissionsMap | null = null;
-let cacheTimestamp = 0;
-const CACHE_TTL = 60000;
+type PermissionsMap = Record<string, { can_view: boolean; can_modify: boolean; can_delete: boolean }>;
 
 export function usePermissions() {
   const { user } = useAuth();
-  const [permissions, setPermissions] = useState<PermissionsMap>(cachedPermissions || {});
-  const [loading, setLoading] = useState(!cachedPermissions);
+
+  const getCached = (): PermissionsMap | null => {
+    if (!user) return null;
+    const key = getCacheKey(user.id, user.role);
+    const entry = permissionCache.get(key);
+    if (entry && Date.now() - entry.timestamp < CACHE_TTL) {
+      return entry.permissions;
+    }
+    return null;
+  };
+
+  const [permissions, setPermissions] = useState<PermissionsMap>(() => getCached() || {});
+  const [loading, setLoading] = useState(() => !getCached());
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setPermissions({});
+      return;
+    }
 
     if (user.role === 'Administrator') {
       setLoading(false);
       return;
     }
 
-    if (cachedPermissions && Date.now() - cacheTimestamp < CACHE_TTL) {
-      setPermissions(cachedPermissions);
+    const cached = getCached();
+    if (cached) {
+      setPermissions(cached);
       setLoading(false);
       return;
     }
@@ -38,13 +46,14 @@ export function usePermissions() {
   }, [user?.id, user?.role]);
 
   const loadPermissions = async () => {
+    if (!user) return;
     try {
       const res = await apiRequest('/api/permissions/me');
       if (!res.ok) return;
       const data = await res.json();
 
       const map: PermissionsMap = {};
-      const userRole = user?.role || '';
+      const userRole = user.role;
 
       for (const perm of data) {
         if (perm.role === userRole) {
@@ -56,8 +65,8 @@ export function usePermissions() {
         }
       }
 
-      cachedPermissions = map;
-      cacheTimestamp = Date.now();
+      const key = getCacheKey(user.id, userRole);
+      permissionCache.set(key, { permissions: map, timestamp: Date.now() });
       setPermissions(map);
     } catch (error) {
       console.error('Failed to load permissions:', error);
@@ -84,15 +93,10 @@ export function usePermissions() {
   }, [user, permissions]);
 
   const refreshPermissions = useCallback(() => {
-    cachedPermissions = null;
-    cacheTimestamp = 0;
+    if (!user) return;
+    permissionCache.delete(getCacheKey(user.id, user.role));
     loadPermissions();
-  }, [user?.id]);
+  }, [user?.id, user?.role]);
 
   return { canView, canModify, canDelete, loading, refreshPermissions };
-}
-
-export function invalidatePermissionsCache() {
-  cachedPermissions = null;
-  cacheTimestamp = 0;
 }

@@ -1996,6 +1996,14 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
+          {/* Informational note: assessment permission granted but no active goals */}
+          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length === 0 && !assessmentMode && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-800">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" /></svg>
+              <span>Assign an active goal to enable assessments for this employee.</span>
+            </div>
+          )}
+
           {/* Past Assessments card - always separate in left column for Super Scoopers (not in assessment mode) */}
           {employee.role === 'Super Scooper' && !assessmentMode && pastAssessments.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
@@ -2264,6 +2272,14 @@ const handleGenerateInvitation = async () => {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Informational note: assessment permission granted but no active goals (non-Super Scooper) */}
+          {employee.role !== 'Super Scooper' && canAssess && isAssessable && activeGoals.length === 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-800">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" /></svg>
+              <span>Assign an active goal to enable assessments for this employee.</span>
             </div>
           )}
 

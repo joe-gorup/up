@@ -685,7 +685,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                   'id', ${goal_steps.id},
                   'step_order', ${goal_steps.step_order},
                   'step_description', ${goal_steps.step_description},
-                  'is_required', ${goal_steps.is_required}
+                  'is_required', ${goal_steps.is_required},
+                  'timer_type', ${goal_steps.timer_type}
                 )
                 ORDER BY ${goal_steps.step_order}
               ) FILTER (WHERE ${goal_steps.id} IS NOT NULL),
@@ -769,7 +770,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           goal_id: newGoal.id,
           step_order: step.step_order || step.stepOrder,
           step_description: step.step_description || step.stepDescription,
-          is_required: step.is_required !== undefined ? step.is_required : step.isRequired
+          is_required: step.is_required !== undefined ? step.is_required : step.isRequired,
+          timer_type: step.timer_type || step.timerType || 'none'
         }));
         await db.insert(goal_steps).values(stepInserts);
       }
@@ -2263,7 +2265,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
                 goal_id: newGoal.id,
                 step_order: step.step_order,
                 step_description: step.step_description,
-                is_required: step.is_required
+                is_required: step.is_required,
+                timer_type: step.timer_type || 'none'
               }));
               await db.insert(goal_steps).values(goalSteps);
             }
@@ -2530,7 +2533,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
               goal_id: newGoal.id,
               step_order: step.step_order,
               step_description: step.step_description,
-              is_required: step.is_required
+              is_required: step.is_required,
+              timer_type: step.timer_type || 'none'
             }));
             await db.insert(goal_steps).values(goalSteps);
           }
