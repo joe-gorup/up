@@ -1151,6 +1151,116 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/employees/:employeeId/assessment-history-details", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+
+      const sessions = await db.select({
+        id: assessment_sessions.id,
+        manager_id: assessment_sessions.manager_id,
+        date: assessment_sessions.date,
+        location: assessment_sessions.location,
+        status: assessment_sessions.status,
+        created_at: assessment_sessions.created_at,
+        updated_at: assessment_sessions.updated_at,
+        managerFirstName: employees.first_name,
+        managerLastName: employees.last_name,
+      })
+        .from(assessment_sessions)
+        .leftJoin(employees, eq(assessment_sessions.manager_id, employees.id))
+        .where(sql`${assessment_sessions.employee_ids}::jsonb @> ${JSON.stringify([employeeId])}::jsonb AND ${assessment_sessions.status} = 'completed'`)
+        .orderBy(desc(assessment_sessions.date), desc(assessment_sessions.created_at))
+        .limit(20);
+
+      if (sessions.length === 0) {
+        return res.json([]);
+      }
+
+      const sessionIds = sessions.map(s => s.id);
+
+      const [allProgress, allSummaries] = await Promise.all([
+        db.select({
+          assessmentSessionId: step_progress.assessment_session_id,
+          developmentGoalId: step_progress.development_goal_id,
+          goalStepId: step_progress.goal_step_id,
+          outcome: step_progress.outcome,
+          notes: step_progress.notes,
+          completionTimeSeconds: step_progress.completion_time_seconds,
+          timerManuallyEntered: step_progress.timer_manually_entered,
+          date: step_progress.date,
+          goalTitle: development_goals.title,
+          stepOrder: goal_steps.step_order,
+          stepDescription: goal_steps.step_description,
+        })
+          .from(step_progress)
+          .leftJoin(development_goals, eq(step_progress.development_goal_id, development_goals.id))
+          .leftJoin(goal_steps, eq(step_progress.goal_step_id, goal_steps.id))
+          .where(
+            and(
+              inArray(step_progress.assessment_session_id, sessionIds),
+              eq(step_progress.employee_id, employeeId),
+              eq(step_progress.status, 'submitted')
+            )
+          )
+          .orderBy(development_goals.title, goal_steps.step_order),
+        db.select()
+          .from(assessment_summaries)
+          .where(
+            and(
+              inArray(assessment_summaries.assessment_session_id, sessionIds),
+              eq(assessment_summaries.employee_id, employeeId)
+            )
+          )
+      ]);
+
+      const progressBySession: Record<string, typeof allProgress> = {};
+      for (const row of allProgress) {
+        const sid = row.assessmentSessionId || '';
+        if (!progressBySession[sid]) progressBySession[sid] = [];
+        progressBySession[sid].push(row);
+      }
+
+      const summaryBySession: Record<string, string | null> = {};
+      for (const row of allSummaries) {
+        summaryBySession[row.assessment_session_id] = row.summary;
+      }
+
+      const result = sessions.map(session => {
+        const progressRows = progressBySession[session.id] || [];
+        const goalMap: Record<string, { goalId: string; goalTitle: string; steps: any[] }> = {};
+        for (const row of progressRows) {
+          const gid = row.developmentGoalId || '';
+          if (!goalMap[gid]) {
+            goalMap[gid] = { goalId: gid, goalTitle: row.goalTitle || 'Unknown Goal', steps: [] };
+          }
+          goalMap[gid].steps.push({
+            stepId: row.goalStepId,
+            stepOrder: row.stepOrder,
+            stepDescription: row.stepDescription,
+            outcome: row.outcome,
+            notes: row.notes,
+            completionTimeSeconds: row.completionTimeSeconds,
+            timerManuallyEntered: row.timerManuallyEntered,
+          });
+        }
+
+        return {
+          ...session,
+          details: {
+            goals: Object.values(goalMap),
+            summary: summaryBySession[session.id] || null,
+            totalSteps: progressRows.length,
+          }
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch assessment history details');
+      res.status(500).json({ error: 'Failed to fetch assessment history details' });
+    }
+  });
+
   app.get("/api/assessment-sessions/:sessionId/details", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;

@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { Users, Target, CheckCircle, Clock, ChevronRight, ClipboardCheck } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
 import CoachCheckin from './CoachCheckin';
 
 export default function MyScoopers() {
-  const { employees, developmentGoals, stepProgress } = useData();
+  const { employees, developmentGoals, stepProgress } = useProgressData();
   const { user } = useAuth();
   const [selectedScooperId, setSelectedScooperId] = useState<string | null>(null);
   const [checkinScooper, setCheckinScooper] = useState<{ id: string; name: string } | null>(null);

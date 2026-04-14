@@ -1,11 +1,11 @@
 import React, { useMemo } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { Target, Clock, CheckCircle, BarChart3, User, Star } from 'lucide-react';
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
-  const { employees, developmentGoals, stepProgress } = useData();
+  const { employees, developmentGoals, stepProgress } = useProgressData();
 
   // Find the current employee's data
   const currentEmployee = useMemo(() => {

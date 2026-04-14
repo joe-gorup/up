@@ -1,9 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
-import { useData, PromotionCertification } from '../contexts/DataContext';
+import { PromotionCertification } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { apiRequest } from '../lib/auth';
+import { cachedApiRequest, getCachedProfileData, setCachedProfileData, invalidateProfileCache } from '../lib/apiCache';
 import GoalAssignment from './GoalAssignment';
 import CoachCheckin from './CoachCheckin';
 import EmployeeProgress from './EmployeeProgress';
@@ -20,7 +22,7 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
@@ -275,30 +277,43 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     async function fetchRelationships() {
       const isManager = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
       if (!isManager) return;
+
+      const cacheKey = `relationships:${employeeId}`;
+      const cached = getCachedProfileData<{ contacts: any[]; coaches: any[]; mentees: any[] }>(cacheKey);
+      if (cached) {
+        setEmployeeContacts(cached.contacts);
+        setAssignedCoaches(cached.coaches);
+        setCoachMentees(cached.mentees);
+        if (cached.mentees.length > 0) setMenteesExpanded(true);
+        return;
+      }
+
       try {
         const employee = employees.find(e => e.id === employeeId);
+        const result = { contacts: [] as any[], coaches: [] as any[], mentees: [] as any[] };
 
         if (employee?.role === 'Job Coach') {
-          const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+          const menteeRes = await cachedApiRequest(`/api/coach-assignments/coach/${employeeId}`);
           if (menteeRes.ok) {
-            const data = await menteeRes.json();
-            setCoachMentees(data);
-            if (data.length > 0) setMenteesExpanded(true);
+            result.mentees = await menteeRes.json();
+            setCoachMentees(result.mentees);
+            if (result.mentees.length > 0) setMenteesExpanded(true);
           }
         } else {
-          const [guardianRes, coachRes, contactsRes] = await Promise.all([
-            apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
-            apiRequest(`/api/coach-assignments/scooper/${employeeId}`),
-            apiRequest(`/api/employees/${employeeId}/contacts`)
+          const [coachRes, contactsRes] = await Promise.all([
+            cachedApiRequest(`/api/coach-assignments/scooper/${employeeId}`),
+            cachedApiRequest(`/api/employees/${employeeId}/contacts`)
           ]);
           if (contactsRes.ok) {
-            setEmployeeContacts(await contactsRes.json());
+            result.contacts = await contactsRes.json();
+            setEmployeeContacts(result.contacts);
           }
           if (coachRes.ok) {
-            const data = await coachRes.json();
-            setAssignedCoaches(data);
+            result.coaches = await coachRes.json();
+            setAssignedCoaches(result.coaches);
           }
         }
+        setCachedProfileData(cacheKey, result);
       } catch (err) {
       }
     }
@@ -314,51 +329,70 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const employee = employees.find(emp => emp.id === employeeId);
   const employeeGoals = developmentGoals.filter(goal => goal.employeeId === employeeId);
 
-  // Load guardian notes for this employee
+  const guardianNotesLoadedRef = useRef(false);
   useEffect(() => {
-    if (canViewGuardianNotes && employee?.role === 'Super Scooper') {
+    if (guardianNotesExpanded && canViewGuardianNotes && employee?.role === 'Super Scooper' && !guardianNotesLoadedRef.current) {
+      guardianNotesLoadedRef.current = true;
       loadGuardianNotesForScooper(employeeId);
     }
-  }, [employeeId, canViewGuardianNotes, employee?.role]);
+  }, [guardianNotesExpanded, employeeId, canViewGuardianNotes, employee?.role]);
 
-  // Auto-expand guardian notes section once notes load from context
   useEffect(() => {
-    const notes = guardianNotes.filter(n => n.scooperId === employeeId);
-    if (notes.length > 0) setGuardianNotesExpanded(true);
-  }, [guardianNotes, employeeId]);
+    guardianNotesLoadedRef.current = false;
+  }, [employeeId]);
 
-  // Load coach notes for this employee
+  const coachNotesLoadedRef = useRef(false);
   useEffect(() => {
-    if (canViewCoachNotes && employee?.role === 'Super Scooper') {
-      setLoadingCoachNotes(true);
-      apiRequest(`/api/coach-notes/${employeeId}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(notes => {
-          setCoachNotes(notes);
-          if (notes.length > 0) setCoachNotesExpanded(true);
-        })
-        .catch(() => setCoachNotes([]))
-        .finally(() => setLoadingCoachNotes(false));
+    if (!coachNotesExpanded || !canViewCoachNotes || employee?.role !== 'Super Scooper' || coachNotesLoadedRef.current) return;
+    coachNotesLoadedRef.current = true;
+    const cacheKey = `coachNotes:${employeeId}`;
+    const cached = getCachedProfileData<any[]>(cacheKey);
+    if (cached) {
+      setCoachNotes(cached);
+      return;
     }
-  }, [employeeId, canViewCoachNotes, employee?.role]);
+    setLoadingCoachNotes(true);
+    cachedApiRequest(`/api/coach-notes/${employeeId}`)
+      .then(res => res.ok ? res.json() : [])
+      .then(notes => {
+        setCoachNotes(notes);
+        setCachedProfileData(cacheKey, notes);
+      })
+      .catch(() => setCoachNotes([]))
+      .finally(() => setLoadingCoachNotes(false));
+  }, [coachNotesExpanded, employeeId, canViewCoachNotes, employee?.role]);
+
+  useEffect(() => {
+    coachNotesLoadedRef.current = false;
+  }, [employeeId]);
 
   useEffect(() => {
     async function fetchPastAssessments() {
+      const cacheKey = `assessmentHistory:${employeeId}`;
+      const cached = getCachedProfileData<{ sessions: typeof pastAssessments; details: typeof sessionDetails }>(cacheKey);
+      if (cached) {
+        setPastAssessments(cached.sessions);
+        setSessionDetails(cached.details);
+        return;
+      }
+
       setLoadingPastAssessments(true);
       try {
-        const res = await apiRequest(`/api/employees/${employeeId}/assessment-history`);
+        const res = await cachedApiRequest(`/api/employees/${employeeId}/assessment-history-details`);
         if (res.ok) {
-          const sessions = await res.json();
-          setPastAssessments(sessions);
-          for (const session of sessions) {
-            try {
-              const detailRes = await apiRequest(`/api/assessment-sessions/${session.id}/details?employeeId=${employeeId}`);
-              if (detailRes.ok) {
-                const data = await detailRes.json();
-                setSessionDetails(prev => ({ ...prev, [session.id]: data }));
-              }
-            } catch (err) {}
+          const sessionsWithDetails = await res.json();
+          const sessions = sessionsWithDetails.map((s: any) => ({
+            id: s.id, manager_id: s.manager_id, date: s.date, location: s.location,
+            status: s.status, created_at: s.created_at, updated_at: s.updated_at,
+            managerFirstName: s.managerFirstName, managerLastName: s.managerLastName,
+          }));
+          const details: Record<string, any> = {};
+          for (const s of sessionsWithDetails) {
+            details[s.id] = s.details;
           }
+          setPastAssessments(sessions);
+          setSessionDetails(details);
+          setCachedProfileData(cacheKey, { sessions, details });
         }
       } catch (err) {
       }
@@ -756,6 +790,7 @@ const handleGenerateInvitation = async () => {
         }
       }
       setEmployeeContacts(updatedContacts.filter(Boolean));
+      invalidateProfileCache(`relationships:${employeeId}`);
       setEditingContacts(false);
       setContactsEditForm([]);
     } catch (err) {

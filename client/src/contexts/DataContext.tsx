@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { apiRequest } from '../lib/auth';
+import { clearAllProfileCache, invalidateProfileCache } from '../lib/apiCache';
 import { calculateDateFromRelativeDuration } from '../../../shared/schema';
 
 export interface Employee {
@@ -149,6 +150,7 @@ interface DataContextType {
   stepProgress: StepProgress[];
   certifications: PromotionCertification[];
   guardianNotes: GuardianNote[];
+  ensureProgressLoaded: () => void;
   loadUserDrafts: (userId: string) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => void;
   updateEmployee: (id: string, updates: Partial<Employee>) => void;
@@ -188,6 +190,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [certifications, setCertifications] = useState<PromotionCertification[]>([]);
   const [guardianNotes, setGuardianNotes] = useState<GuardianNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const progressLoadedRef = React.useRef(false);
+  const progressLoadingRef = React.useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -197,12 +201,79 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      progressLoadedRef.current = false;
+      progressLoadingRef.current = null;
+      clearAllProfileCache();
+    }
+  }, [isAuthenticated]);
+
+  const loadProgressAndSummaries = async () => {
+    try {
+      const [progressResponse, summariesResponse] = await Promise.all([
+        apiRequest('/api/step-progress'),
+        apiRequest('/api/assessment-summaries'),
+      ]);
+
+      if (progressResponse.ok) {
+        const progressData = await progressResponse.json();
+        const mappedProgress = progressData.map((progress: any) => ({
+          id: progress.id,
+          developmentGoalId: progress.development_goal_id,
+          goalStepId: progress.goal_step_id,
+          employeeId: progress.employee_id,
+          assessmentSessionId: progress.assessment_session_id,
+          date: progress.date,
+          outcome: progress.outcome,
+          notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
+          status: progress.status || 'submitted'
+        }));
+        setStepProgress(mappedProgress);
+      }
+
+      if (summariesResponse.ok) {
+        const summariesData = await summariesResponse.json();
+        const mappedSummaries = summariesData.map((summary: any) => ({
+          id: summary.id,
+          employeeId: summary.employee_id,
+          assessmentSessionId: summary.assessment_session_id,
+          date: summary.date,
+          summary: summary.summary,
+          createdAt: summary.created_at,
+          updatedAt: summary.updated_at,
+          managerId: summary.manager_id
+        }));
+        setAssessmentSummaries(mappedSummaries);
+      }
+      progressLoadedRef.current = true;
+    } catch (error) {
+      console.error('Error loading progress data:', error);
+    }
+  };
+
+  const ensureProgressLoaded = useCallback(() => {
+    if (progressLoadedRef.current) return;
+    if (progressLoadingRef.current) return;
+    progressLoadingRef.current = loadProgressAndSummaries().finally(() => {
+      progressLoadingRef.current = null;
+    });
+  }, []);
+
   const loadData = async () => {
     try {
       setLoading(true);
+
+      const [employeesResponse, templatesResponse, goalsResponse, assessmentSessionsResponse, certsResponse] = await Promise.all([
+        apiRequest('/api/employees'),
+        apiRequest('/api/goal-templates'),
+        apiRequest('/api/development-goals'),
+        apiRequest('/api/assessment-sessions'),
+        apiRequest('/api/certifications'),
+      ]);
       
-      // Load employees
-      const employeesResponse = await apiRequest('/api/employees');
       if (employeesResponse.ok) {
         const employeesData = await employeesResponse.json();
         const mappedEmployees = employeesData.map((emp: any) => ({
@@ -228,7 +299,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           updatedAt: emp.updated_at
         }));
         
-        // Deduplicate employees by ID (not email, since Super Scoopers may not have emails)
         const uniqueEmployees = mappedEmployees.filter((emp: any, index: number, arr: any[]) => 
           arr.findIndex((e: any) => e.id === emp.id) === index
         );
@@ -236,8 +306,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setEmployees(uniqueEmployees);
       }
 
-      // Load goal templates
-      const templatesResponse = await apiRequest('/api/goal-templates');
       if (templatesResponse.ok) {
         const templatesData = await templatesResponse.json();
         const mappedTemplates = templatesData.map((template: any) => ({
@@ -259,8 +327,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setGoalTemplates(mappedTemplates);
       }
 
-      // Load development goals
-      const goalsResponse = await apiRequest('/api/development-goals');
       if (goalsResponse.ok) {
         const goalsData = await goalsResponse.json();
         const mappedGoals = goalsData.map((goal: any) => ({
@@ -288,45 +354,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setDevelopmentGoals(mappedGoals);
       }
 
-      // Load step progress (submitted only)
-      const progressResponse = await apiRequest('/api/step-progress');
-      if (progressResponse.ok) {
-        const progressData = await progressResponse.json();
-        const mappedProgress = progressData.map((progress: any) => ({
-          id: progress.id,
-          developmentGoalId: progress.development_goal_id,
-          goalStepId: progress.goal_step_id,
-          employeeId: progress.employee_id,
-          assessmentSessionId: progress.assessment_session_id,
-          date: progress.date,
-          outcome: progress.outcome,
-          notes: progress.notes,
-          completionTimeSeconds: progress.completion_time_seconds,
-          timerManuallyEntered: progress.timer_manually_entered,
-          status: progress.status || 'submitted'
-        }));
-        setStepProgress(mappedProgress);
-      }
-
-      // Load assessment summaries
-      const summariesResponse = await apiRequest('/api/assessment-summaries');
-      if (summariesResponse.ok) {
-        const summariesData = await summariesResponse.json();
-        const mappedSummaries = summariesData.map((summary: any) => ({
-          id: summary.id,
-          employeeId: summary.employee_id,
-          assessmentSessionId: summary.assessment_session_id,
-          date: summary.date,
-          summary: summary.summary,
-          createdAt: summary.created_at,
-          updatedAt: summary.updated_at,
-          managerId: summary.manager_id
-        }));
-        setAssessmentSummaries(mappedSummaries);
-      }
-
-
-      const assessmentSessionsResponse = await apiRequest('/api/assessment-sessions');
       if (assessmentSessionsResponse.ok) {
         const sessionsData = await assessmentSessionsResponse.json();
         const today = new Date().toISOString().split('T')[0];
@@ -355,10 +382,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-
-
-      // Load certifications
-      const certsResponse = await apiRequest('/api/certifications');
       if (certsResponse.ok) {
         const certsData = await certsResponse.json();
         const mappedCerts = certsData.map((cert: any) => ({
@@ -379,7 +402,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     } catch (error) {
       console.error('Error loading data:', error);
-      // Fallback to demo data if API fails
       loadDemoData();
     } finally {
       setLoading(false);
@@ -714,6 +736,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       if (!response.ok) {
         console.error('Failed to complete assessment session');
+      } else {
+        invalidateProfileCache('assessmentHistory:');
       }
     } catch (error) {
       console.error('Error completing assessment session:', error);
@@ -1482,6 +1506,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       developmentGoals,
       goalTemplates,
       stepProgress,
+      ensureProgressLoaded,
       addEmployee,
       updateEmployee,
       createAssessmentSession,

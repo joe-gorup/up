@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X } from 'lucide-react';
-import { useData, Employee } from '../contexts/DataContext';
+import { Employee } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
@@ -100,7 +101,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const { user } = useAuth();
   const { canModify } = usePermissions();
   const canAssignGoal = canModify('goal_assignment');
-  const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useData();
+  const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useProgressData();
   const { toast } = useToast();
   const [outcomes, setOutcomes] = useState<Record<string, { outcome: 'correct' | 'verbal_prompt' | 'na' | 'incorrect'; notes: string }>>({});
   const [showNotes, setShowNotes] = useState<Record<string, boolean>>({});

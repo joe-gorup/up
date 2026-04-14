@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
 import { Heart, Target, CheckCircle, Clock, Search, ChevronRight, Users, FileText, X, Save } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
 import AddToHomeScreenBanner from './AddToHomeScreenBanner';
 
 export default function MyLovedOnes() {
-  const { employees, developmentGoals, stepProgress, guardianNotes, saveGuardianNote, loadGuardianNotesForScooper } = useData();
+  const { employees, developmentGoals, stepProgress, guardianNotes, saveGuardianNote, loadGuardianNotesForScooper } = useProgressData();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedScooperId, setSelectedScooperId] = useState<string | null>(null);

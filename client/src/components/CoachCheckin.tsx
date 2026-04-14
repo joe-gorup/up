@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { ClipboardCheck, ChevronLeft, ChevronDown, ChevronRight, Plus, AlertTriangle, FileText, Upload, Download, Trash2, Edit, X, Save, Paperclip, StickyNote } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
+import { invalidateProfileCache } from '../lib/apiCache';
 import RichTextEditor, { RichTextViewer } from './RichTextEditor';
 
 interface CheckinData {
@@ -262,6 +263,7 @@ function NotesTab({ employeeId, isCoachOrAdmin, userId }: { employeeId: string; 
         : await apiRequest('/api/coach-notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
       if (res.ok) {
         setTitle(''); setContent(''); setSelectedNote(null); setView('list');
+        invalidateProfileCache(`coachNotes:${employeeId}`);
         fetchNotes();
       } else {
         const data = await res.json();
@@ -274,6 +276,7 @@ function NotesTab({ employeeId, isCoachOrAdmin, userId }: { employeeId: string; 
     if (!confirm('Delete this note?')) return;
     try {
       await apiRequest(`/api/coach-notes/${id}`, { method: 'DELETE' });
+      invalidateProfileCache(`coachNotes:${employeeId}`);
       fetchNotes();
     } catch { console.error('Failed to delete note'); }
   }

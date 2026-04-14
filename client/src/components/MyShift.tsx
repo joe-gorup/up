@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { Users, Target, CheckCircle, Clock, Search, ClipboardList, AlertTriangle, Phone, Heart, Brain } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
 
 export default function MyShift() {
-  const { employees, developmentGoals, stepProgress } = useData();
+  const { employees, developmentGoals, stepProgress } = useProgressData();
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
