@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
 import { PromotionCertification } from '../contexts/DataContext';
+import { normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
 import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -13,6 +14,54 @@ import EmployeeAvatar from './EmployeeAvatar';
 import Modal from './ui/Modal';
 import AssessmentDetailsModal from './AssessmentDetailsModal';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
+
+function ChecklistOutcomeButton({ value, selected, onClick }: { value: ChecklistAnswer; selected: boolean; onClick: () => void }) {
+  const config = {
+    correct: { label: 'Correct', selBg: 'bg-green-50', selText: 'text-green-700', selBorder: 'border-green-200', hover: 'hover:bg-green-50' },
+    incorrect: { label: 'Incorrect', selBg: 'bg-red-50', selText: 'text-red-600', selBorder: 'border-red-200', hover: 'hover:bg-red-50' },
+    no_opportunity: { label: 'No opportunity', selBg: 'bg-slate-100', selText: 'text-slate-700', selBorder: 'border-slate-300', hover: 'hover:bg-slate-100' },
+  }[value];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${selected ? `${config.selBg} ${config.selText} ${config.selBorder} shadow-sm` : `bg-white text-gray-600 border-gray-300 ${config.hover}`}`}
+    >
+      {config.label}
+    </button>
+  );
+}
+
+function ChecklistAnswerBadge({ answer }: { answer: any }) {
+  const normalized = normalizeChecklistAnswer(answer);
+  if (normalized === 'correct') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-green-50 text-green-700 border-green-200">
+        <CheckCircle2 className="h-3 w-3" /> Correct
+      </span>
+    );
+  }
+  if (normalized === 'incorrect') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-red-50 text-red-600 border-red-200">
+        <XCircle className="h-3 w-3" /> Incorrect
+      </span>
+    );
+  }
+  if (normalized === 'no_opportunity') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-slate-100 text-slate-700 border-slate-300">
+        <MinusCircle className="h-3 w-3" /> No opportunity
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200">
+      Unanswered
+    </span>
+  );
+}
 
 interface EmployeeDetailProps {
   employeeId: string;
@@ -85,7 +134,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
-  const [checklistAnswers, setChecklistAnswers] = useState<Record<number, boolean>>({});
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<number, ChecklistAnswer>>({});
   const [reviewingCert, setReviewingCert] = useState<PromotionCertification | null>(null);
 
   // Invitation and relationship states (from remote)
@@ -237,9 +286,19 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const getChecklistItems = () => certType === 'mentor' ? mentorChecklistItems : shiftManagerCategories.flatMap(c => c.items);
   const getPassingScore = () => certType === 'mentor' ? 84 : 90;
   const calculateScore = () => {
+    const values = Object.values(checklistAnswers);
+    const correct = values.filter(v => v === 'correct').length;
+    const incorrect = values.filter(v => v === 'incorrect').length;
+    const denom = correct + incorrect;
+    if (denom === 0) return 0;
+    return Math.round((correct / denom) * 100);
+  };
+  const allItemsAnswered = () => {
     const items = getChecklistItems();
-    const yesCount = Object.values(checklistAnswers).filter(v => v).length;
-    return Math.round((yesCount / items.length) * 100);
+    for (let i = 0; i < items.length; i++) {
+      if (!checklistAnswers[i]) return false;
+    }
+    return true;
   };
 
   const employeeCerts = certifications.filter(c => c.employeeId === employeeId);
@@ -252,7 +311,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
     const checklistResults = items.map((item, i) => ({
       question: item,
-      answer: checklistAnswers[i] || false
+      answer: checklistAnswers[i]
     }));
 
     await addCertification({
@@ -1691,17 +1750,10 @@ const handleGenerateInvitation = async () => {
                               <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
                               <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
                             </div>
-                            <div className="flex gap-2 ml-7">
-                              <button
-                                type="button"
-                                onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: true }))}
-                                className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[idx] === true ? 'bg-green-50 text-green-700 border-green-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'}`}
-                              >Yes</button>
-                              <button
-                                type="button"
-                                onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: false }))}
-                                className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[idx] === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-red-50'}`}
-                              >No</button>
+                            <div className="flex flex-wrap gap-2 ml-7">
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'correct' }))} />
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'incorrect' }))} />
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'no_opportunity' }))} />
                             </div>
                           </div>
                         ))
@@ -1722,17 +1774,10 @@ const handleGenerateInvitation = async () => {
                                         <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{currentIdx + 1}.</span>
                                         <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
                                       </div>
-                                      <div className="flex gap-2 ml-7">
-                                        <button
-                                          type="button"
-                                          onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: true }))}
-                                          className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[currentIdx] === true ? 'bg-green-50 text-green-700 border-green-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-green-50'}`}
-                                        >Yes</button>
-                                        <button
-                                          type="button"
-                                          onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: false }))}
-                                          className={`px-4 py-1.5 rounded-xl text-sm font-medium border transition-all ${checklistAnswers[currentIdx] === false ? 'bg-red-50 text-red-600 border-red-200 shadow-sm' : 'bg-white text-gray-600 border-gray-300 hover:bg-red-50'}`}
-                                        >No</button>
+                                      <div className="flex flex-wrap gap-2 ml-7">
+                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'correct' }))} />
+                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'incorrect' }))} />
+                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'no_opportunity' }))} />
                                       </div>
                                     </div>
                                   );
@@ -1760,7 +1805,7 @@ const handleGenerateInvitation = async () => {
                     <button
                       type="button"
                       onClick={handleSaveCertification}
-                      disabled={savingCert}
+                      disabled={savingCert || !allItemsAnswered()}
                       className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     >
                       {savingCert ? 'Saving...' : 'Save Certification'}
@@ -1814,30 +1859,38 @@ const handleGenerateInvitation = async () => {
             )}
 
             {reviewingCert.checklistResults && reviewingCert.checklistResults.length > 0 ? (
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">
-                  Checklist ({reviewingCert.checklistResults.filter((r: any) => r.answer).length} / {reviewingCert.checklistResults.length} Yes)
-                </p>
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {reviewingCert.checklistResults.map((item: any, idx: number) => (
-                    <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
-                      <div className="flex items-start gap-2 mb-2">
-                        <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
-                        <p className="text-xs text-gray-800 leading-snug flex-1">{item.question}</p>
-                      </div>
-                      <div className="ml-7">
-                        <span className={`inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border ${item.answer ? 'bg-green-50 text-green-700 border-green-200' : 'bg-red-50 text-red-600 border-red-200'}`}>
-                          {item.answer ? (
-                            <><CheckCircle2 className="h-3 w-3" /> Yes</>
-                          ) : (
-                            <><XCircle className="h-3 w-3" /> No</>
-                          )}
-                        </span>
-                      </div>
+              (() => {
+                const counts = reviewingCert.checklistResults.reduce(
+                  (acc: { correct: number; incorrect: number; no_opportunity: number }, r: any) => {
+                    const n = normalizeChecklistAnswer(r?.answer);
+                    if (n === 'correct') acc.correct++;
+                    else if (n === 'incorrect') acc.incorrect++;
+                    else if (n === 'no_opportunity') acc.no_opportunity++;
+                    return acc;
+                  },
+                  { correct: 0, incorrect: 0, no_opportunity: 0 }
+                );
+                return (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                      Checklist ({counts.correct} Correct · {counts.incorrect} Incorrect · {counts.no_opportunity} No opportunity)
+                    </p>
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {reviewingCert.checklistResults.map((item: any, idx: number) => (
+                        <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                          <div className="flex items-start gap-2 mb-2">
+                            <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
+                            <p className="text-xs text-gray-800 leading-snug flex-1">{item.question}</p>
+                          </div>
+                          <div className="ml-7">
+                            <ChecklistAnswerBadge answer={item.answer} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-sm text-gray-400 italic text-center py-4">No checklist data available for this certification.</p>
             )}

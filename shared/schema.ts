@@ -446,6 +446,18 @@ export const insertPromotionCertificationSchema = createInsertSchema(promotion_c
   created_at: true,
 });
 
+export type ChecklistAnswer = 'correct' | 'incorrect' | 'no_opportunity';
+export type ChecklistResult = { question: string; answer: ChecklistAnswer | boolean };
+
+export function normalizeChecklistAnswer(
+  answer: ChecklistAnswer | boolean | string | null | undefined
+): ChecklistAnswer | undefined {
+  if (answer === true) return 'correct';
+  if (answer === false) return 'incorrect';
+  if (answer === 'correct' || answer === 'incorrect' || answer === 'no_opportunity') return answer;
+  return undefined;
+}
+
 // Coach Check-Ins table
 export const coach_checkins = pgTable("coach_checkins", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
