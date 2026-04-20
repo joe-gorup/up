@@ -10,6 +10,7 @@ import { cachedApiRequest, getCachedProfileData, setCachedProfileData, invalidat
 import GoalAssignment from './GoalAssignment';
 import CoachCheckin from './CoachCheckin';
 import EmployeeProgress from './EmployeeProgress';
+import CertificationHistory from './CertificationHistory';
 import EmployeeAvatar from './EmployeeAvatar';
 import Modal from './ui/Modal';
 import AssessmentDetailsModal from './AssessmentDetailsModal';
@@ -1618,6 +1619,8 @@ const handleGenerateInvitation = async () => {
                     </button>
                   )}
                 </div>
+
+                <CertificationHistory certifications={employeeCerts} />
 
                 {employeeCerts.length > 0 ? (
                   <div className="space-y-2 mb-3">
