@@ -136,6 +136,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
   const [checklistAnswers, setChecklistAnswers] = useState<Record<number, ChecklistAnswer>>({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<number, boolean>>({});
   const [reviewingCert, setReviewingCert] = useState<PromotionCertification | null>(null);
 
   // Invitation and relationship states (from remote)
@@ -301,6 +302,46 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
     return true;
   };
+  const answeredCount = () => {
+    const items = getChecklistItems();
+    let n = 0;
+    for (let i = 0; i < items.length; i++) {
+      if (checklistAnswers[i]) n++;
+    }
+    return n;
+  };
+  const findNextUnansweredIdx = () => {
+    const items = getChecklistItems();
+    for (let i = 0; i < items.length; i++) {
+      if (!checklistAnswers[i]) return i;
+    }
+    return -1;
+  };
+  const jumpToNextUnanswered = () => {
+    const idx = findNextUnansweredIdx();
+    if (idx < 0) return;
+    if (certType === 'shift_lead') {
+      let count = 0;
+      for (let c = 0; c < shiftManagerCategories.length; c++) {
+        const len = shiftManagerCategories[c].items.length;
+        if (idx < count + len) {
+          if (collapsedCategories[c]) {
+            setCollapsedCategories(prev => ({ ...prev, [c]: false }));
+          }
+          break;
+        }
+        count += len;
+      }
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`checklist-item-${idx}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  };
+  const resetChecklistState = () => {
+    setChecklistAnswers({});
+    setCollapsedCategories({});
+  };
 
   const employeeCerts = certifications.filter(c => c.employeeId === employeeId);
 
@@ -328,7 +369,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     });
 
     setShowCertForm(false);
-    setChecklistAnswers({});
+    resetChecklistState();
     setCertNotes('');
     setSavingCert(false);
   };
@@ -1680,7 +1721,7 @@ const handleGenerateInvitation = async () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setChecklistAnswers({});
+                        resetChecklistState();
                         setCertNotes('');
                         setCertDate(new Date().toISOString().split('T')[0]);
                         setCertType('mentor');
@@ -1704,7 +1745,7 @@ const handleGenerateInvitation = async () => {
 
               <Modal
                 isOpen={showCertForm}
-                onClose={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                onClose={() => { setShowCertForm(false); resetChecklistState(); setCertNotes(''); }}
                 title="Record Certification"
                 titleIcon={<Award className="h-5 w-5 text-amber-600" />}
                 size="lg"
@@ -1713,14 +1754,14 @@ const handleGenerateInvitation = async () => {
                   <div className="flex space-x-2">
                     <button
                       type="button"
-                      onClick={() => { setCertType('mentor'); setChecklistAnswers({}); }}
+                      onClick={() => { setCertType('mentor'); resetChecklistState(); }}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'mentor' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                     >
                       Mentor
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
+                      onClick={() => { setCertType('shift_lead'); resetChecklistState(); }}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                     >
                       Shift Lead
@@ -1738,22 +1779,54 @@ const handleGenerateInvitation = async () => {
                   </div>
 
                   <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-medium text-gray-700">Checklist</label>
-                      <span className={`text-sm font-semibold ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-500'}`}>
-                        {calculateScore()}%
-                        <span className="text-xs font-normal text-gray-400 ml-1">(passing: {getPassingScore()}%)</span>
-                      </span>
-                    </div>
-                    <div className="max-h-96 overflow-y-auto space-y-2 pr-1">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
+                    {(() => {
+                      const totalItems = getChecklistItems().length;
+                      const answered = answeredCount();
+                      const score = calculateScore();
+                      const passingScore = getPassingScore();
+                      const pct = totalItems === 0 ? 0 : Math.round((answered / totalItems) * 100);
+                      const nextIdx = findNextUnansweredIdx();
+                      const allDone = nextIdx === -1;
+                      return (
+                        <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 bg-white/95 backdrop-blur border-b border-gray-200 mb-3">
+                          <div className="flex items-center justify-between gap-3 mb-1.5">
+                            <span className="text-sm font-medium text-gray-700">
+                              {answered} <span className="text-gray-400">/</span> {totalItems} answered
+                            </span>
+                            <span className={`text-sm font-semibold ${score >= passingScore ? 'text-green-600' : 'text-red-500'}`}>
+                              {score}%
+                              <span className="text-xs font-normal text-gray-400 ml-1">(pass: {passingScore}%)</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${allDone ? 'bg-green-500' : 'bg-blue-500'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={jumpToNextUnanswered}
+                              disabled={allDone}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                            >
+                              {allDone ? 'All done' : 'Jump to next'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
                       {certType === 'mentor' ? (
                         mentorChecklistItems.map((item, idx) => (
-                          <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                          <div key={idx} id={`checklist-item-${idx}`} className="border border-gray-200 rounded-xl p-3 bg-white">
                             <div className="flex items-start gap-2 mb-2.5">
                               <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
                               <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
                             </div>
-                            <div className="flex flex-wrap gap-2 ml-7">
+                            <div className="grid grid-cols-3 gap-2">
                               <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'correct' }))} />
                               <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'incorrect' }))} />
                               <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'no_opportunity' }))} />
@@ -1763,31 +1836,58 @@ const handleGenerateInvitation = async () => {
                       ) : (
                         (() => {
                           let globalIdx = 0;
-                          return shiftManagerCategories.map((category, catIdx) => (
-                            <div key={catIdx}>
-                              <div className="px-2 py-1 bg-slate-100 rounded-lg text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2 mt-1 sticky top-0">
-                                {category.name}
+                          return shiftManagerCategories.map((category, catIdx) => {
+                            const catStart = globalIdx;
+                            const catEnd = catStart + category.items.length;
+                            const catAnswered = category.items.reduce((acc, _item, i) => acc + (checklistAnswers[catStart + i] ? 1 : 0), 0);
+                            const collapsed = !!collapsedCategories[catIdx];
+                            const allCatDone = catAnswered === category.items.length;
+                            return (
+                              <div key={catIdx} className="border border-slate-200 rounded-xl overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setCollapsedCategories(prev => ({ ...prev, [catIdx]: !prev[catIdx] }))}
+                                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+                                  aria-expanded={!collapsed}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {collapsed ? (
+                                      <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+                                    )}
+                                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide truncate text-left">
+                                      {category.name}
+                                    </span>
+                                  </div>
+                                  <span className={`text-xs font-medium shrink-0 px-2 py-0.5 rounded-full ${allCatDone ? 'bg-green-100 text-green-700' : 'bg-white text-slate-600 border border-slate-200'}`}>
+                                    {catAnswered}/{category.items.length}
+                                  </span>
+                                </button>
+                                {!collapsed && (
+                                  <div className="space-y-2 p-2 bg-white">
+                                    {category.items.map((item) => {
+                                      const currentIdx = globalIdx++;
+                                      return (
+                                        <div key={currentIdx} id={`checklist-item-${currentIdx}`} className="border border-gray-200 rounded-xl p-3 bg-white">
+                                          <div className="flex items-start gap-2 mb-2.5">
+                                            <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{currentIdx + 1}.</span>
+                                            <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2">
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'correct' }))} />
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'incorrect' }))} />
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'no_opportunity' }))} />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {collapsed && (() => { globalIdx = catEnd; return null; })()}
                               </div>
-                              <div className="space-y-2">
-                                {category.items.map((item) => {
-                                  const currentIdx = globalIdx++;
-                                  return (
-                                    <div key={currentIdx} className="border border-gray-200 rounded-xl p-3 bg-white">
-                                      <div className="flex items-start gap-2 mb-2.5">
-                                        <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{currentIdx + 1}.</span>
-                                        <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
-                                      </div>
-                                      <div className="flex flex-wrap gap-2 ml-7">
-                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'correct' }))} />
-                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'incorrect' }))} />
-                                        <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'no_opportunity' }))} />
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          ));
+                            );
+                          });
                         })()
                       )}
                     </div>
@@ -1815,7 +1915,7 @@ const handleGenerateInvitation = async () => {
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                      onClick={() => { setShowCertForm(false); resetChecklistState(); setCertNotes(''); }}
                       className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
                     >
                       Cancel
