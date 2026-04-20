@@ -1030,7 +1030,7 @@ const handleGenerateInvitation = async () => {
   if (showGoalAssignment) {
     return (
       <GoalAssignment
-        employeeId={employeeId}
+        initialEmployeeId={employeeId}
         onClose={() => setShowGoalAssignment(false)}
         onSuccess={() => setShowGoalAssignment(false)}
       />

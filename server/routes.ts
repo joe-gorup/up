@@ -8,7 +8,8 @@ import {
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
   coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
   insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
-  PERMISSION_FEATURES, CONFIGURABLE_ROLES
+  PERMISSION_FEATURES, CONFIGURABLE_ROLES,
+  calculateDateFromRelativeDuration
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -760,26 +761,147 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Shared helper: insert a development goal + its steps for one employee.
+  // Used by both single-goal and bulk-goal endpoints to keep behavior in sync.
+  type GoalStepInput = {
+    step_order?: number | null;
+    stepOrder?: number | null;
+    step_description?: string | null;
+    stepDescription?: string | null;
+    is_required?: boolean | null;
+    isRequired?: boolean | null;
+    timer_type?: string | null;
+    timerType?: string | null;
+  };
+  type DevelopmentGoalInsert = typeof development_goals.$inferInsert;
+  type DevelopmentGoalRow = typeof development_goals.$inferSelect;
+
+  type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
+  async function insertGoalWithSteps(
+    executor: DbExecutor,
+    goalData: DevelopmentGoalInsert,
+    steps: GoalStepInput[],
+  ): Promise<DevelopmentGoalRow> {
+    const [newGoal] = await executor.insert(development_goals).values(goalData).returning();
+    if (steps.length > 0) {
+      const stepInserts = steps.map((step) => ({
+        goal_id: newGoal.id,
+        step_order: (step.step_order ?? step.stepOrder) as number,
+        step_description: (step.step_description ?? step.stepDescription) as string,
+        is_required: step.is_required ?? step.isRequired ?? true,
+        timer_type: step.timer_type ?? step.timerType ?? 'none',
+      }));
+      await executor.insert(goal_steps).values(stepInserts);
+    }
+    return newGoal;
+  }
+
   app.post("/api/development-goals", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
     try {
-      const { steps, ...goalData } = req.body;
-      const [newGoal] = await db.insert(development_goals).values(goalData).returning();
-      
-      if (steps && steps.length > 0) {
-        const stepInserts = steps.map((step: any) => ({
-          goal_id: newGoal.id,
-          step_order: step.step_order || step.stepOrder,
-          step_description: step.step_description || step.stepDescription,
-          is_required: step.is_required !== undefined ? step.is_required : step.isRequired,
-          timer_type: step.timer_type || step.timerType || 'none'
-        }));
-        await db.insert(goal_steps).values(stepInserts);
-      }
-      
+      const { steps, ...goalData } = req.body as { steps?: GoalStepInput[] } & DevelopmentGoalInsert;
+      const newGoal = await insertGoalWithSteps(db, goalData, steps ?? []);
       res.json(newGoal);
     } catch (error) {
       logger.error({ error, goalData: req.body }, 'Failed to create development goal');
       res.status(500).json({ error: 'Failed to create development goal' });
+    }
+  });
+
+  app.post("/api/development-goals/bulk", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { template_id, employee_ids, skip_existing } = req.body as {
+        template_id?: string;
+        employee_ids?: string[];
+        skip_existing?: boolean;
+      };
+
+      if (!template_id || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+        return res.status(400).json({ error: 'template_id and employee_ids are required' });
+      }
+
+      // Deduplicate employee_ids while preserving order; reject empty/non-string entries
+      const seen = new Set<string>();
+      const uniqueEmployeeIds: string[] = [];
+      for (const id of employee_ids) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          return res.status(400).json({ error: 'employee_ids must contain non-empty strings' });
+        }
+        if (!seen.has(id)) {
+          seen.add(id);
+          uniqueEmployeeIds.push(id);
+        }
+      }
+
+      const [template] = await db.select().from(goal_templates).where(eq(goal_templates.id, template_id)).limit(1);
+      if (!template) {
+        return res.status(404).json({ error: 'Goal template not found' });
+      }
+
+      // Validate that all referenced employees exist before creating any goals,
+      // so a malformed payload doesn't leave a partial bulk assignment behind.
+      const existingEmployees = await db
+        .select({ id: employees.id })
+        .from(employees)
+        .where(inArray(employees.id, uniqueEmployeeIds));
+      const existingEmployeeIds = new Set(existingEmployees.map(e => e.id));
+      const unknownEmployeeIds = uniqueEmployeeIds.filter(id => !existingEmployeeIds.has(id));
+      if (unknownEmployeeIds.length > 0) {
+        return res.status(400).json({
+          error: 'Some employee_ids do not exist',
+          unknownEmployeeIds,
+        });
+      }
+
+      const templateSteps = await db.select().from(goal_template_steps)
+        .where(eq(goal_template_steps.template_id, template_id));
+
+      const targetEndDate = calculateDateFromRelativeDuration(template.relative_target_duration || '90 days');
+      const startDate = new Date().toISOString().split('T')[0];
+
+      // Run all inserts in a single transaction so a mid-loop failure rolls back
+      // every goal created in this request — strict all-or-nothing semantics.
+      const { created, skipped } = await db.transaction(async (tx) => {
+        const createdGoals: DevelopmentGoalRow[] = [];
+        const skippedIds: string[] = [];
+
+        for (const employeeId of uniqueEmployeeIds) {
+          if (skip_existing) {
+            const existing = await tx.select({ id: development_goals.id }).from(development_goals)
+              .where(and(
+                eq(development_goals.employee_id, employeeId),
+                eq(development_goals.title, template.name),
+                eq(development_goals.status, 'active')
+              ))
+              .limit(1);
+            if (existing.length > 0) {
+              skippedIds.push(employeeId);
+              continue;
+            }
+          }
+
+          const goalData: DevelopmentGoalInsert = {
+            employee_id: employeeId,
+            title: template.name,
+            description: template.goal_statement,
+            start_date: startDate,
+            target_end_date: targetEndDate,
+            status: 'active',
+            mastery_achieved: false,
+            consecutive_all_correct: 0,
+          };
+          const newGoal = await insertGoalWithSteps(tx, goalData, templateSteps);
+          createdGoals.push(newGoal);
+        }
+
+        return { created: createdGoals, skipped: skippedIds };
+      });
+
+      logger.info({ templateId: template_id, createdCount: created.length, skippedCount: skipped.length }, 'Bulk goal assignment completed');
+      res.json({ created, skipped, createdCount: created.length, skippedCount: skipped.length });
+    } catch (error) {
+      logger.error({ error, body: req.body }, 'Failed bulk goal assignment');
+      res.status(500).json({ error: 'Failed to bulk assign goals' });
     }
   });
 

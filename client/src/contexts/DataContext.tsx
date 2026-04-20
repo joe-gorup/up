@@ -165,6 +165,7 @@ interface DataContextType {
   saveStepProgressDraft: (progress: Omit<StepProgress, 'id' | 'date'>, documenterUserId: string) => void;
   submitStepProgress: (employeeId: string, documenterUserId: string, assessmentSessionId?: string) => Promise<any>;
   createGoalFromTemplate: (templateId: string, employeeId: string) => void;
+  bulkAssignGoal: (templateId: string, employeeIds: string[], skipExisting?: boolean) => Promise<{ createdCount: number; skippedCount: number }>;
   addGoalTemplate: (template: Omit<GoalTemplate, 'id'>) => void;
   updateGoalTemplate: (templateId: string, template: Omit<GoalTemplate, 'id'>) => void;
   archiveGoalTemplate: (templateId: string) => void;
@@ -1168,6 +1169,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const bulkAssignGoal = async (templateId: string, employeeIds: string[], skipExisting: boolean = true) => {
+    const response = await apiRequest('/api/development-goals/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template_id: templateId,
+        employee_ids: employeeIds,
+        skip_existing: skipExisting,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to bulk assign goal');
+    }
+    const result = await response.json();
+    await loadData();
+    return { createdCount: result.createdCount ?? 0, skippedCount: result.skippedCount ?? 0 };
+  };
+
   const addGoalTemplate = async (templateData: Omit<GoalTemplate, 'id'>) => {
     try {
       const response = await apiRequest('/api/goal-templates', {
@@ -1521,6 +1542,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       submitStepProgress,
       loadUserDrafts,
       createGoalFromTemplate,
+      bulkAssignGoal,
       addGoalTemplate,
       updateGoalTemplate,
       archiveGoalTemplate,
