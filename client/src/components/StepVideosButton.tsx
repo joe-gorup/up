@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Video as VideoIcon, X, ExternalLink } from 'lucide-react';
+import { Video as VideoIcon, X, ExternalLink, Link as LinkIcon, Check, Copy } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
+import { useToast } from '../hooks/use-toast';
 
 interface StepVideo {
   id: string;
@@ -24,10 +25,36 @@ function getYouTubeId(url: string): string | null {
 }
 
 export default function StepVideosButton({ templateStepId, stepLabel }: Props) {
+  const { toast } = useToast();
   const [videos, setVideos] = useState<StepVideo[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [copiedOne, setCopiedOne] = useState(false);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const copyText = useCallback(async (text: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }, []);
 
   const load = useCallback(async () => {
     if (!templateStepId) {
@@ -151,6 +178,48 @@ export default function StepVideosButton({ templateStepId, stepLabel }: Props) {
                 >
                   Open on YouTube <ExternalLink className="h-3 w-3" />
                 </a>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!active) return;
+                    const ok = await copyText(active.youtube_url);
+                    if (ok) {
+                      setCopiedOne(true);
+                      setTimeout(() => setCopiedOne(false), 1800);
+                      toast({ type: 'success', title: 'Link copied', description: active.title, duration: 2000 });
+                    } else {
+                      toast({ type: 'error', title: 'Could not copy link' });
+                    }
+                  }}
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                  title="Copy YouTube link to share"
+                  data-testid="button-copy-active-step-video"
+                >
+                  {copiedOne ? <Check className="h-3.5 w-3.5 text-green-600" /> : <LinkIcon className="h-3.5 w-3.5" />}
+                  {copiedOne ? 'Copied' : 'Copy link'}
+                </button>
+                {videos.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const text = videos.map((v) => `${v.title} — ${v.youtube_url}`).join('\n');
+                      const ok = await copyText(text);
+                      if (ok) {
+                        setCopiedAll(true);
+                        setTimeout(() => setCopiedAll(false), 1800);
+                        toast({ type: 'success', title: `Copied ${videos.length} links`, duration: 2000 });
+                      } else {
+                        toast({ type: 'error', title: 'Could not copy links' });
+                      }
+                    }}
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    title="Copy all step video links"
+                    data-testid="button-copy-all-step-videos"
+                  >
+                    {copiedAll ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                    {copiedAll ? 'Copied' : 'Copy all'}
+                  </button>
+                )}
               </div>
 
               {videos.length > 1 && (

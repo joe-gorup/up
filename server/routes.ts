@@ -4289,7 +4289,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // List all videos (optionally filter by source/status)
   app.get("/api/videos", authenticateToken, async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user as AuthUser;
       const { source, status, template_id, template_step_id } = req.query as { source?: string; status?: string; template_id?: string; template_step_id?: string };
+
+      // Guardians may only read videos for templates that one of their linked
+      // scoopers currently has a development goal from.
+      if (user.role === 'Guardian') {
+        if (!template_id && !template_step_id) {
+          return res.status(403).json({ error: 'Guardians may only request videos by template_id or template_step_id' });
+        }
+        let templateIdForCheck: string | null = null;
+        if (template_id) {
+          templateIdForCheck = template_id;
+        } else if (template_step_id) {
+          const [step] = await db
+            .select({ template_id: goal_template_steps.template_id })
+            .from(goal_template_steps)
+            .where(eq(goal_template_steps.id, template_step_id))
+            .limit(1);
+          templateIdForCheck = step?.template_id ?? null;
+        }
+        if (!templateIdForCheck) {
+          return res.json([]);
+        }
+        const rels = await db.select().from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+        const scooperIds = rels.map(r => r.scooper_id);
+        if (scooperIds.length === 0) {
+          return res.json([]);
+        }
+        const matchingGoals = await db
+          .select({ id: development_goals.id })
+          .from(development_goals)
+          .where(and(
+            eq(development_goals.template_id, templateIdForCheck),
+            inArray(development_goals.employee_id, scooperIds)
+          ))
+          .limit(1);
+        if (matchingGoals.length === 0) {
+          return res.json([]);
+        }
+      }
 
       if (template_step_id) {
         const rows = await db

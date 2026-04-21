@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Video as VideoIcon, ExternalLink, X, Pencil, Archive, Save } from 'lucide-react';
+import { Plus, Trash2, Video as VideoIcon, ExternalLink, X, Pencil, Archive, Save, Link as LinkIcon, Check, Copy } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
+import { useToast } from '../hooks/use-toast';
 
 export interface TemplateVideo {
   id: string;
@@ -41,6 +42,7 @@ function getYouTubeId(url: string): string | null {
 
 export default function TemplateVideoManager({ templateId, stepId, mode, compact = false, heading }: Props) {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [videos, setVideos] = useState<TemplateVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -49,6 +51,55 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
   const [form, setForm] = useState({ title: '', description: '', youtube_url: '' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', youtube_url: '' });
+  const [copiedVideoId, setCopiedVideoId] = useState<string | null>(null);
+  const [copiedAll, setCopiedAll] = useState(false);
+
+  const copyToClipboard = useCallback(async (text: string): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch {}
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const handleCopyOne = async (v: TemplateVideo) => {
+    const ok = await copyToClipboard(v.youtube_url);
+    if (ok) {
+      setCopiedVideoId(v.id);
+      setTimeout(() => setCopiedVideoId((id) => (id === v.id ? null : id)), 1800);
+      toast({ type: 'success', title: 'Link copied', description: v.title, duration: 2000 });
+    } else {
+      toast({ type: 'error', title: 'Could not copy link' });
+    }
+  };
+
+  const handleCopyAll = async () => {
+    if (videos.length === 0) return;
+    const text = videos.map((v) => `${v.title} — ${v.youtube_url}`).join('\n');
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedAll(true);
+      setTimeout(() => setCopiedAll(false), 1800);
+      toast({ type: 'success', title: `Copied ${videos.length} link${videos.length === 1 ? '' : 's'}`, duration: 2000 });
+    } else {
+      toast({ type: 'error', title: 'Could not copy links' });
+    }
+  };
 
   const scope: 'template' | 'step' | null = stepId ? 'step' : (templateId ? 'template' : null);
   const scopeId = stepId ?? templateId ?? '';
@@ -195,7 +246,20 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
             {heading ?? 'Training Videos'} {videos.length > 0 && <span className="text-gray-400 font-normal">({videos.length})</span>}
           </h3>
         </div>
-        {canAdd && !showForm && (
+        <div className="flex items-center gap-2">
+          {videos.length > 0 && (
+            <button
+              type="button"
+              onClick={handleCopyAll}
+              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              title="Copy all video links to share"
+              data-testid={`button-copy-all-${scope}-${scopeId}`}
+            >
+              {copiedAll ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+              {copiedAll ? 'Copied' : 'Copy all'}
+            </button>
+          )}
+          {canAdd && !showForm && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
@@ -204,7 +268,8 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
             <Plus className="h-3.5 w-3.5" />
             Add Video
           </button>
-        )}
+          )}
+        </div>
       </div>
 
       {showForm && (
@@ -331,6 +396,15 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
                       {v.description && <p className="text-xs text-gray-600 mt-1">{v.description}</p>}
                     </div>
                     <div className="flex items-center gap-0.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handleCopyOne(v)}
+                        className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="Copy YouTube link to share"
+                        data-testid={`button-copy-link-${v.id}`}
+                      >
+                        {copiedVideoId === v.id ? <Check className="h-4 w-4 text-green-600" /> : <LinkIcon className="h-4 w-4" />}
+                      </button>
                       {canEdit(v) && (
                         <button
                           type="button"
