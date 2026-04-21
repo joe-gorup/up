@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
 import Timer from './Timer';
+import StepVideosButton from './StepVideosButton';
 
 // Move OutcomeSelector outside the main component to prevent recreation on every render
 const OutcomeSelector = ({ 
@@ -798,11 +799,17 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                         >
                                           <div className="flex items-start justify-between mb-3">
                                             <div className="flex-1">
-                                              <div className="flex items-center space-x-2 mb-2">
+                                              <div className="flex items-center space-x-2 mb-2 flex-wrap gap-y-1">
                                                 <span className="font-medium text-gray-900">
                                                   {step.stepOrder}.
                                                 </span>
                                                 <span className="text-gray-700">{step.stepDescription}</span>
+                                                {step.templateStepId && (
+                                                  <StepVideosButton
+                                                    templateStepId={step.templateStepId}
+                                                    stepLabel={`Step ${step.stepOrder}: ${step.stepDescription}`}
+                                                  />
+                                                )}
                                               </div>
                                             </div>
                                           </div>
