@@ -47,6 +47,7 @@ export interface RecentSession {
 export interface DevelopmentGoal {
   id: string;
   employeeId: string;
+  templateId?: string | null;
   title: string;
   description: string;
   startDate: string;
@@ -333,6 +334,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         const mappedGoals = goalsData.map((goal: any) => ({
           id: goal.id,
           employeeId: goal.employee_id,
+          templateId: goal.template_id ?? null,
           title: goal.title,
           description: goal.description,
           startDate: goal.start_date,
@@ -1142,6 +1144,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         },
         body: JSON.stringify({
           employee_id: employeeId,
+          template_id: template.id,
           title: template.name,
           description: template.goalStatement,
           start_date: new Date().toISOString().split('T')[0],

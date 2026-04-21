@@ -8,6 +8,7 @@ import {
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
   coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
   insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
+  videos, goal_template_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration
 } from "@shared/schema";
@@ -882,6 +883,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const goalData: DevelopmentGoalInsert = {
             employee_id: employeeId,
+            template_id: template.id,
             title: template.name,
             description: template.goal_statement,
             start_date: startDate,
@@ -4220,6 +4222,209 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error }, 'Failed to seed permissions');
       res.status(500).json({ error: 'Failed to seed permissions' });
+    }
+  });
+
+  // ============ Video Library Endpoints ============
+
+  // List all videos (optionally filter by source/status)
+  app.get("/api/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { source, status, template_id } = req.query as { source?: string; status?: string; template_id?: string };
+
+      if (template_id) {
+        const rows = await db
+          .select({
+            id: videos.id,
+            title: videos.title,
+            description: videos.description,
+            youtube_url: videos.youtube_url,
+            source: videos.source,
+            status: videos.status,
+            created_by: videos.created_by,
+            created_at: videos.created_at,
+            display_order: goal_template_videos.display_order,
+            link_id: goal_template_videos.id,
+          })
+          .from(goal_template_videos)
+          .innerJoin(videos, eq(goal_template_videos.video_id, videos.id))
+          .where(and(
+            eq(goal_template_videos.template_id, template_id),
+            eq(videos.status, 'active')
+          ))
+          .orderBy(goal_template_videos.display_order, videos.created_at);
+        return res.json(rows);
+      }
+
+      const conditions: any[] = [];
+      if (source) conditions.push(eq(videos.source, source));
+      if (status) conditions.push(eq(videos.status, status));
+
+      const rows = conditions.length
+        ? await db.select().from(videos).where(and(...conditions)).orderBy(desc(videos.created_at))
+        : await db.select().from(videos).orderBy(desc(videos.created_at));
+      res.json(rows);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch videos');
+      res.status(500).json({ error: 'Failed to fetch videos' });
+    }
+  });
+
+  // Create a video. Admins create golden_scoop or employer; coaches create employer only.
+  app.post("/api/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+
+      const parsed = insertVideoSchema.safeParse({
+        ...req.body,
+        created_by: user.id,
+        source: req.body.source || (user.role === 'Administrator' ? 'golden_scoop' : 'employer'),
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid video data', details: parsed.error.errors });
+      }
+
+      // Non-admins cannot create golden_scoop videos
+      if (user.role !== 'Administrator' && parsed.data.source === 'golden_scoop') {
+        return res.status(403).json({ error: 'Only Administrators can add Golden Scoop videos' });
+      }
+
+      const [created] = await db.insert(videos).values(parsed.data).returning();
+
+      // Optionally attach to a template in the same call
+      const { template_id, display_order } = req.body as { template_id?: string; display_order?: number };
+      if (template_id) {
+        await db.insert(goal_template_videos).values({
+          video_id: created.id,
+          template_id,
+          display_order: display_order ?? 0,
+        }).onConflictDoNothing();
+      }
+
+      res.json(created);
+    } catch (error) {
+      logger.error({ error, body: req.body }, 'Failed to create video');
+      res.status(500).json({ error: 'Failed to create video' });
+    }
+  });
+
+  // Update a video
+  app.put("/api/videos/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const id = req.params.id;
+
+      const [existing] = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Video not found' });
+
+      // Authorization: Admin can edit anything; creator can edit their own employer videos
+      if (user.role !== 'Administrator' && existing.created_by !== user.id) {
+        return res.status(403).json({ error: 'Not authorized to edit this video' });
+      }
+
+      const parsed = updateVideoSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid video data', details: parsed.error.flatten() });
+      }
+      const updates: any = {};
+      ['title', 'description', 'youtube_url', 'status'].forEach((f) => {
+        if ((parsed.data as any)[f] !== undefined) updates[f] = (parsed.data as any)[f];
+      });
+      if (user.role === 'Administrator' && (parsed.data as any).source) updates.source = (parsed.data as any).source;
+      updates.updated_at = new Date();
+
+      const [updated] = await db.update(videos).set(updates).where(eq(videos.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update video');
+      res.status(500).json({ error: 'Failed to update video' });
+    }
+  });
+
+  // Archive a video (soft delete)
+  app.delete("/api/videos/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const id = req.params.id;
+      const [existing] = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Video not found' });
+      if (user.role !== 'Administrator' && existing.created_by !== user.id) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      await db.update(videos).set({ status: 'archived', updated_at: new Date() }).where(eq(videos.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to archive video');
+      res.status(500).json({ error: 'Failed to archive video' });
+    }
+  });
+
+  // Attach an existing video to a template
+  app.post("/api/goal-templates/:templateId/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const templateId = req.params.templateId;
+      const { video_id, display_order } = req.body as { video_id: string; display_order?: number };
+      if (!video_id) return res.status(400).json({ error: 'video_id required' });
+
+      // Coaches can only attach employer videos that they created
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, video_id)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'You can only attach your own employer videos' });
+        }
+      }
+
+      const [link] = await db.insert(goal_template_videos).values({
+        template_id: templateId,
+        video_id,
+        display_order: display_order ?? 0,
+      }).onConflictDoNothing().returning();
+      res.json(link ?? { success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to attach video');
+      res.status(500).json({ error: 'Failed to attach video to template' });
+    }
+  });
+
+  // Detach a video from a template
+  app.delete("/api/goal-templates/:templateId/videos/:videoId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const { templateId, videoId } = req.params;
+
+      // Authorization: Admins can detach any link. Non-admins can only detach
+      // employer videos they themselves created — never Golden Scoop or other
+      // coaches' employer videos.
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'Only the video creator can detach employer videos; Golden Scoop videos require an Administrator' });
+        }
+      }
+
+      await db.delete(goal_template_videos).where(and(
+        eq(goal_template_videos.template_id, templateId),
+        eq(goal_template_videos.video_id, videoId),
+      ));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to detach video');
+      res.status(500).json({ error: 'Failed to detach video from template' });
     }
   });
 

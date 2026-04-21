@@ -3,6 +3,7 @@ import { Target, Plus, Edit, Archive, Search, Eye, Copy, X } from 'lucide-react'
 import { useData, GoalTemplate } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './ui/Modal';
+import TemplateVideoManager from './TemplateVideoManager';
 
 export default function GoalTemplates() {
   const { goalTemplates, addGoalTemplate, updateGoalTemplate, archiveGoalTemplate } = useData();
@@ -257,6 +258,8 @@ export default function GoalTemplates() {
               </div>
             </div>
           </div>
+
+          <TemplateVideoManager templateId={viewTemplate.id} mode="admin" />
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Goal Steps ({viewTemplate.steps.length})</h2>

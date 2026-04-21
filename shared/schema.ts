@@ -92,6 +92,7 @@ export const goal_template_steps = pgTable("goal_template_steps", {
 export const development_goals = pgTable("development_goals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }),
+  template_id: varchar("template_id").references(() => goal_templates.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description").notNull(),
   start_date: date("start_date").default(sql`CURRENT_DATE`),
@@ -600,6 +601,62 @@ export const PERMISSION_FEATURE_LABELS: Record<PermissionFeature, string> = {
 };
 
 export const CONFIGURABLE_ROLES = ['Shift Lead', 'Assistant Manager', 'Job Coach', 'Guardian'] as const;
+
+// Videos table - flexible video library (Golden Scoop curated + employer-specific)
+export const videos = pgTable("videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  youtube_url: text("youtube_url").notNull(),
+  source: text("source").notNull().default("golden_scoop"), // 'golden_scoop' | 'employer'
+  status: text("status").notNull().default("active"), // 'active' | 'archived'
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  sourceIdx: index("videos_source_idx").on(table.source),
+  statusIdx: index("videos_status_idx").on(table.status),
+  createdByIdx: index("videos_created_by_idx").on(table.created_by),
+}));
+
+// Goal Template <-> Video join
+export const goal_template_videos = pgTable("goal_template_videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id").notNull().references(() => videos.id, { onDelete: "cascade" }),
+  template_id: varchar("template_id").notNull().references(() => goal_templates.id, { onDelete: "cascade" }),
+  display_order: integer("display_order").default(0),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("goal_template_videos_template_id_idx").on(table.template_id),
+  videoIdIdx: index("goal_template_videos_video_id_idx").on(table.video_id),
+  uniqueVideoTemplate: unique("goal_template_videos_unique").on(table.video_id, table.template_id),
+}));
+
+const youtubeUrlPattern =
+  /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^&]*&)*v=|embed\/|shorts\/|v\/)|youtu\.be\/)[\w-]{11}(?:[?&#].*)?$/;
+
+export const insertVideoSchema = createInsertSchema(videos)
+  .omit({ id: true, created_at: true, updated_at: true })
+  .extend({
+    youtube_url: z
+      .string()
+      .url('YouTube URL must be a valid URL')
+      .regex(youtubeUrlPattern, 'Must be a valid YouTube URL (youtube.com/watch?v=… or youtu.be/…)'),
+  });
+
+export const updateVideoSchema = insertVideoSchema.partial().extend({
+  youtube_url: insertVideoSchema.shape.youtube_url.optional(),
+});
+
+export const insertGoalTemplateVideoSchema = createInsertSchema(goal_template_videos).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertVideo = z.infer<typeof insertVideoSchema>;
+export type Video = typeof videos.$inferSelect;
+export type InsertGoalTemplateVideo = z.infer<typeof insertGoalTemplateVideoSchema>;
+export type GoalTemplateVideo = typeof goal_template_videos.$inferSelect;
 
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;
