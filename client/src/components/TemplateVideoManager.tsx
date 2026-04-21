@@ -90,7 +90,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
 
   const handleCopyAll = async () => {
     if (videos.length === 0) return;
-    const text = videos.map((v) => `${v.title} — ${v.youtube_url}`).join('\n');
+    const text = videos.map((v) => `• ${v.title} — ${v.youtube_url}`).join('\n');
     const ok = await copyToClipboard(text);
     if (ok) {
       setCopiedAll(true);

@@ -198,11 +198,11 @@ export default function StepVideosButton({ templateStepId, stepLabel }: Props) {
                   {copiedOne ? <Check className="h-3.5 w-3.5 text-green-600" /> : <LinkIcon className="h-3.5 w-3.5" />}
                   {copiedOne ? 'Copied' : 'Copy link'}
                 </button>
-                {videos.length > 1 && (
+                {videos.length >= 1 && (
                   <button
                     type="button"
                     onClick={async () => {
-                      const text = videos.map((v) => `${v.title} — ${v.youtube_url}`).join('\n');
+                      const text = videos.map((v) => `• ${v.title} — ${v.youtube_url}`).join('\n');
                       const ok = await copyText(text);
                       if (ok) {
                         setCopiedAll(true);

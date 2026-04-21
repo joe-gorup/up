@@ -4323,7 +4323,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from(development_goals)
           .where(and(
             eq(development_goals.template_id, templateIdForCheck),
-            inArray(development_goals.employee_id, scooperIds)
+            inArray(development_goals.employee_id, scooperIds),
+            eq(development_goals.status, 'active')
           ))
           .limit(1);
         if (matchingGoals.length === 0) {
