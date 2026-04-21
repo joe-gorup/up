@@ -8,7 +8,7 @@ import {
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
   coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
   insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
-  videos, goal_template_videos, insertVideoSchema, updateVideoSchema,
+  videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration
 } from "@shared/schema";
@@ -27,6 +27,36 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
+
+// One-shot backfill: for any goal_steps row that has no template_step_id yet
+// but whose parent development_goal references a template, look up the matching
+// template step by step_order and link them. Idempotent: only updates rows
+// whose template_step_id is currently NULL.
+async function backfillGoalStepTemplateLinks() {
+  try {
+    const result: { rowCount?: number | null } = await db.execute(sql`
+      UPDATE goal_steps AS gs
+      SET template_step_id = sub.template_step_id
+      FROM (
+        SELECT gs2.id AS goal_step_id, gts.id AS template_step_id
+        FROM goal_steps gs2
+        JOIN development_goals dg ON dg.id = gs2.goal_id
+        JOIN goal_template_steps gts
+          ON gts.template_id = dg.template_id
+         AND gts.step_order = gs2.step_order
+        WHERE gs2.template_step_id IS NULL
+          AND dg.template_id IS NOT NULL
+      ) AS sub
+      WHERE gs.id = sub.goal_step_id
+    `);
+    const updated = result.rowCount ?? 0;
+    if (updated > 0) {
+      logger.info({ updated }, 'Backfilled goal_steps.template_step_id from template step order');
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to backfill goal_steps.template_step_id — non-fatal, continuing');
+  }
+}
 
 // Auto-fill any missing role_permissions rows so new features never block existing users
 async function ensureDefaultPermissions() {
@@ -619,21 +649,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // If steps are provided, replace all existing steps
+      // If steps are provided, sync them while preserving existing step IDs
+      // (so any per-step video links and goal_steps references survive).
       if (steps && Array.isArray(steps)) {
-        // Delete existing steps
-        await db.delete(goal_template_steps).where(eq(goal_template_steps.template_id, templateId));
-        
-        // Insert new steps if any
-        if (steps.length > 0) {
-          const stepInserts = steps.map((step: any, index: number) => ({
-            template_id: templateId,
+        const existing = await db.select().from(goal_template_steps)
+          .where(eq(goal_template_steps.template_id, templateId));
+        const existingById = new Map(existing.map(s => [s.id, s]));
+        const incomingIds = new Set<string>();
+
+        for (let index = 0; index < steps.length; index++) {
+          const step: any = steps[index];
+          const incomingId = step?.id as string | undefined;
+          const stepValues = {
             step_order: index + 1,
             step_description: step.stepDescription,
             is_required: step.isRequired,
-            timer_type: step.timerType || 'none'
-          }));
-          await db.insert(goal_template_steps).values(stepInserts);
+            timer_type: step.timerType || 'none',
+          };
+          if (incomingId && existingById.has(incomingId)) {
+            await db.update(goal_template_steps)
+              .set(stepValues)
+              .where(eq(goal_template_steps.id, incomingId));
+            incomingIds.add(incomingId);
+          } else {
+            const [inserted] = await db.insert(goal_template_steps).values({
+              template_id: templateId,
+              ...stepValues,
+            }).returning();
+            incomingIds.add(inserted.id);
+          }
+        }
+
+        const toDelete = existing.filter(s => !incomingIds.has(s.id)).map(s => s.id);
+        if (toDelete.length > 0) {
+          await db.delete(goal_template_steps).where(inArray(goal_template_steps.id, toDelete));
         }
       }
       
@@ -685,6 +734,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               json_agg(
                 json_build_object(
                   'id', ${goal_steps.id},
+                  'template_step_id', ${goal_steps.template_step_id},
                   'step_order', ${goal_steps.step_order},
                   'step_description', ${goal_steps.step_description},
                   'is_required', ${goal_steps.is_required},
@@ -765,6 +815,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Shared helper: insert a development goal + its steps for one employee.
   // Used by both single-goal and bulk-goal endpoints to keep behavior in sync.
   type GoalStepInput = {
+    id?: string | null;
+    template_step_id?: string | null;
+    templateStepId?: string | null;
     step_order?: number | null;
     stepOrder?: number | null;
     step_description?: string | null;
@@ -788,6 +841,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (steps.length > 0) {
       const stepInserts = steps.map((step) => ({
         goal_id: newGoal.id,
+        // Track which template step this goal_step came from so per-step
+        // videos can be rendered alongside the assigned employee's goal.
+        template_step_id:
+          (step.template_step_id ?? step.templateStepId ?? step.id) ?? null,
         step_order: (step.step_order ?? step.stepOrder) as number,
         step_description: (step.step_description ?? step.stepDescription) as string,
         is_required: step.is_required ?? step.isRequired ?? true,
@@ -2497,6 +2554,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (templateSteps.length > 0) {
               const goalSteps = templateSteps.map(step => ({
                 goal_id: newGoal.id,
+                template_step_id: step.id,
                 step_order: step.step_order,
                 step_description: step.step_description,
                 is_required: step.is_required,
@@ -2765,6 +2823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (templateSteps.length > 0) {
             const goalSteps = templateSteps.map(step => ({
               goal_id: newGoal.id,
+              template_step_id: step.id,
               step_order: step.step_order,
               step_description: step.step_description,
               is_required: step.is_required,
@@ -4230,7 +4289,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // List all videos (optionally filter by source/status)
   app.get("/api/videos", authenticateToken, async (req: Request, res: Response) => {
     try {
-      const { source, status, template_id } = req.query as { source?: string; status?: string; template_id?: string };
+      const { source, status, template_id, template_step_id } = req.query as { source?: string; status?: string; template_id?: string; template_step_id?: string };
+
+      if (template_step_id) {
+        const rows = await db
+          .select({
+            id: videos.id,
+            title: videos.title,
+            description: videos.description,
+            youtube_url: videos.youtube_url,
+            source: videos.source,
+            status: videos.status,
+            created_by: videos.created_by,
+            created_at: videos.created_at,
+            display_order: goal_template_step_videos.display_order,
+            link_id: goal_template_step_videos.id,
+          })
+          .from(goal_template_step_videos)
+          .innerJoin(videos, eq(goal_template_step_videos.video_id, videos.id))
+          .where(and(
+            eq(goal_template_step_videos.template_step_id, template_step_id),
+            eq(videos.status, 'active')
+          ))
+          .orderBy(goal_template_step_videos.display_order, videos.created_at);
+        return res.json(rows);
+      }
 
       if (template_id) {
         const rows = await db
@@ -4295,12 +4378,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [created] = await db.insert(videos).values(parsed.data).returning();
 
-      // Optionally attach to a template in the same call
-      const { template_id, display_order } = req.body as { template_id?: string; display_order?: number };
+      // Optionally attach to a template (and/or template step) in the same call
+      const { template_id, template_step_id, display_order } = req.body as { template_id?: string; template_step_id?: string; display_order?: number };
       if (template_id) {
         await db.insert(goal_template_videos).values({
           video_id: created.id,
           template_id,
+          display_order: display_order ?? 0,
+        }).onConflictDoNothing();
+      }
+      if (template_step_id) {
+        await db.insert(goal_template_step_videos).values({
+          video_id: created.id,
+          template_step_id,
           display_order: display_order ?? 0,
         }).onConflictDoNothing();
       }
@@ -4428,7 +4518,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Attach an existing video to a template step
+  app.post("/api/goal-template-steps/:stepId/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const stepId = req.params.stepId;
+      const { video_id, display_order } = req.body as { video_id: string; display_order?: number };
+      if (!video_id) return res.status(400).json({ error: 'video_id required' });
+
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, video_id)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'You can only attach your own employer videos' });
+        }
+      }
+
+      const [link] = await db.insert(goal_template_step_videos).values({
+        template_step_id: stepId,
+        video_id,
+        display_order: display_order ?? 0,
+      }).onConflictDoNothing().returning();
+      res.json(link ?? { success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to attach video to template step');
+      res.status(500).json({ error: 'Failed to attach video to template step' });
+    }
+  });
+
+  // Detach a video from a template step
+  app.delete("/api/goal-template-steps/:stepId/videos/:videoId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const { stepId, videoId } = req.params;
+
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'Only the video creator can detach employer videos; Golden Scoop videos require an Administrator' });
+        }
+      }
+
+      await db.delete(goal_template_step_videos).where(and(
+        eq(goal_template_step_videos.template_step_id, stepId),
+        eq(goal_template_step_videos.video_id, videoId),
+      ));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to detach video from template step');
+      res.status(500).json({ error: 'Failed to detach video from template step' });
+    }
+  });
+
   await ensureDefaultPermissions();
+  await backfillGoalStepTemplateLinks();
 
   const httpServer = createServer(app);
   return httpServer;

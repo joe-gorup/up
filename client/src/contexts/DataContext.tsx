@@ -34,6 +34,9 @@ export interface Employee {
 
 export interface GoalStep {
   id: string;
+  // Reference back to the originating goal_template_steps row, when available.
+  // Used to look up per-step training videos for the assigned employee's goal.
+  templateStepId?: string | null;
   stepOrder: number;
   stepDescription: string;
   isRequired: boolean;
@@ -345,6 +348,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           consecutiveAllCorrect: goal.consecutive_all_correct,
           steps: goal.steps.map((step: any) => ({
             id: step.id,
+            templateStepId: step.template_step_id ?? null,
             stepOrder: step.step_order,
             stepDescription: step.step_description,
             isRequired: step.is_required
@@ -1153,6 +1157,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           mastery_achieved: false,
           consecutive_all_correct: 0,
           steps: template.steps.map(step => ({
+            // Pass the template step id so the backend can populate
+            // goal_steps.template_step_id and surface per-step videos.
+            template_step_id: step.id,
             step_order: step.stepOrder,
             step_description: step.stepDescription,
             is_required: step.isRequired
@@ -1238,6 +1245,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           relative_target_duration: templateData.relativeTargetDuration,
           status: templateData.status,
           steps: templateData.steps.map(step => ({
+            // Forward existing step ids so the backend upsert can update
+            // existing rows in place and preserve their per-step video links.
+            id: step.id,
             stepDescription: step.stepDescription,
             isRequired: step.isRequired,
             timerType: step.timerType || 'none'

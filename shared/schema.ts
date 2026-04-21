@@ -115,6 +115,7 @@ export const development_goals = pgTable("development_goals", {
 export const goal_steps = pgTable("goal_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   goal_id: varchar("goal_id").references(() => development_goals.id, { onDelete: "cascade" }),
+  template_step_id: varchar("template_step_id").references(() => goal_template_steps.id, { onDelete: "set null" }),
   step_order: integer("step_order").notNull(),
   step_description: text("step_description").notNull(),
   is_required: boolean("is_required").default(true),
@@ -123,6 +124,7 @@ export const goal_steps = pgTable("goal_steps", {
 }, (table) => ({
   // Performance indexes for JOIN optimization
   goalIdIdx: index("goal_steps_goal_id_idx").on(table.goal_id),
+  templateStepIdIdx: index("goal_steps_template_step_id_idx").on(table.template_step_id),
   stepOrderIdx: index("goal_steps_order_idx").on(table.goal_id, table.step_order),
 }));
 
@@ -653,10 +655,30 @@ export const insertGoalTemplateVideoSchema = createInsertSchema(goal_template_vi
   created_at: true,
 });
 
+// Goal Template Step <-> Video join (videos scoped to a specific template step)
+export const goal_template_step_videos = pgTable("goal_template_step_videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id").notNull().references(() => videos.id, { onDelete: "cascade" }),
+  template_step_id: varchar("template_step_id").notNull().references(() => goal_template_steps.id, { onDelete: "cascade" }),
+  display_order: integer("display_order").default(0),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateStepIdIdx: index("goal_template_step_videos_step_id_idx").on(table.template_step_id),
+  videoIdIdx: index("goal_template_step_videos_video_id_idx").on(table.video_id),
+  uniqueVideoStep: unique("goal_template_step_videos_unique").on(table.video_id, table.template_step_id),
+}));
+
+export const insertGoalTemplateStepVideoSchema = createInsertSchema(goal_template_step_videos).omit({
+  id: true,
+  created_at: true,
+});
+
 export type InsertVideo = z.infer<typeof insertVideoSchema>;
 export type Video = typeof videos.$inferSelect;
 export type InsertGoalTemplateVideo = z.infer<typeof insertGoalTemplateVideoSchema>;
 export type GoalTemplateVideo = typeof goal_template_videos.$inferSelect;
+export type InsertGoalTemplateStepVideo = z.infer<typeof insertGoalTemplateStepVideoSchema>;
+export type GoalTemplateStepVideo = typeof goal_template_step_videos.$inferSelect;
 
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;

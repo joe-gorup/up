@@ -17,10 +17,14 @@ export interface TemplateVideo {
 }
 
 interface Props {
-  templateId: string;
+  // Either templateId (template-level) or stepId (step-level) must be provided.
+  templateId?: string;
+  stepId?: string;
   // When 'admin', user can add golden_scoop videos. When 'coach', user can only add employer videos.
   mode: 'admin' | 'coach' | 'view';
   compact?: boolean;
+  // Override the section heading; defaults to "Training Videos".
+  heading?: string;
 }
 
 function getYouTubeId(url: string): string | null {
@@ -35,7 +39,7 @@ function getYouTubeId(url: string): string | null {
   return null;
 }
 
-export default function TemplateVideoManager({ templateId, mode, compact = false }: Props) {
+export default function TemplateVideoManager({ templateId, stepId, mode, compact = false, heading }: Props) {
   const { user } = useAuth();
   const [videos, setVideos] = useState<TemplateVideo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -46,11 +50,15 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({ title: '', description: '', youtube_url: '' });
 
+  const scope: 'template' | 'step' | null = stepId ? 'step' : (templateId ? 'template' : null);
+  const scopeId = stepId ?? templateId ?? '';
+
   const load = useCallback(async () => {
-    if (!templateId) return;
+    if (!scope) return;
     setLoading(true);
     try {
-      const res = await apiRequest(`/api/videos?template_id=${encodeURIComponent(templateId)}`);
+      const param = scope === 'step' ? 'template_step_id' : 'template_id';
+      const res = await apiRequest(`/api/videos?${param}=${encodeURIComponent(scopeId)}`);
       if (res.ok) {
         const data = await res.json();
         setVideos(data);
@@ -60,12 +68,12 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
     } finally {
       setLoading(false);
     }
-  }, [templateId]);
+  }, [scope, scopeId]);
 
   useEffect(() => { load(); }, [load]);
 
-  const handleAdd = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleAdd = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
     setError('');
     if (!form.title.trim() || !form.youtube_url.trim()) {
       setError('Title and YouTube URL are required');
@@ -85,7 +93,7 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
           description: form.description.trim() || null,
           youtube_url: form.youtube_url.trim(),
           source: mode === 'admin' ? 'golden_scoop' : 'employer',
-          template_id: templateId,
+          ...(scope === 'template' ? { template_id: scopeId } : { template_step_id: scopeId }),
         }),
       });
       if (!res.ok) {
@@ -104,11 +112,13 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
   };
 
   const handleRemove = async (videoId: string) => {
-    if (!confirm('Remove this video from the goal?')) return;
+    const label = scope === 'step' ? 'this step' : 'the goal';
+    if (!confirm(`Remove this video from ${label}?`)) return;
     try {
-      const res = await apiRequest(`/api/goal-templates/${templateId}/videos/${videoId}`, {
-        method: 'DELETE',
-      });
+      const url = scope === 'step'
+        ? `/api/goal-template-steps/${scopeId}/videos/${videoId}`
+        : `/api/goal-templates/${scopeId}/videos/${videoId}`;
+      const res = await apiRequest(url, { method: 'DELETE' });
       if (res.ok) await load();
     } catch (e) {
       console.error('Failed to remove video', e);
@@ -121,8 +131,8 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
     setError('');
   };
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSaveEdit = async (e?: React.FormEvent | React.MouseEvent) => {
+    if (e) e.preventDefault();
     if (!editingId) return;
     setError('');
     if (!editForm.title.trim() || !editForm.youtube_url.trim()) {
@@ -182,7 +192,7 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
         <div className="flex items-center gap-2">
           <VideoIcon className="h-4 w-4 text-blue-600" />
           <h3 className={compact ? 'text-sm font-semibold text-gray-800' : 'text-lg font-semibold text-gray-900'}>
-            Training Videos {videos.length > 0 && <span className="text-gray-400 font-normal">({videos.length})</span>}
+            {heading ?? 'Training Videos'} {videos.length > 0 && <span className="text-gray-400 font-normal">({videos.length})</span>}
           </h3>
         </div>
         {canAdd && !showForm && (
@@ -198,7 +208,11 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
       </div>
 
       {showForm && (
-        <form onSubmit={handleAdd} className="mb-4 p-3 border border-gray-200 rounded-xl bg-gray-50 space-y-2">
+        <div
+          role="group"
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); handleAdd(); } }}
+          className="mb-4 p-3 border border-gray-200 rounded-xl bg-gray-50 space-y-2"
+        >
           <div className="flex items-center justify-between">
             <span className="text-xs font-medium text-gray-700">
               {mode === 'admin' ? 'New Golden Scoop Video' : 'New Employer Video'}
@@ -233,11 +247,11 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
             <button type="button" onClick={() => { setShowForm(false); setError(''); }} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
               Cancel
             </button>
-            <button type="submit" disabled={submitting} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+            <button type="button" onClick={(e) => handleAdd(e)} disabled={submitting} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
               {submitting ? 'Adding…' : 'Add Video'}
             </button>
           </div>
-        </form>
+        </div>
       )}
 
       {loading ? (
@@ -253,7 +267,11 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
             return (
               <li key={v.id} className="p-2 rounded-lg border border-gray-100 hover:bg-gray-50 transition-colors" data-testid={`video-item-${v.id}`}>
                 {isEditing ? (
-                  <form onSubmit={handleSaveEdit} className="space-y-2">
+                  <div
+                    role="group"
+                    onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); handleSaveEdit(); } }}
+                    className="space-y-2"
+                  >
                     <input
                       type="text"
                       value={editForm.title}
@@ -282,12 +300,12 @@ export default function TemplateVideoManager({ templateId, mode, compact = false
                       <button type="button" onClick={() => { setEditingId(null); setError(''); }} className="px-3 py-1.5 text-xs font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50">
                         Cancel
                       </button>
-                      <button type="submit" disabled={submitting} data-testid={`button-save-edit-${v.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
+                      <button type="button" onClick={(e) => handleSaveEdit(e)} disabled={submitting} data-testid={`button-save-edit-${v.id}`} className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:opacity-50">
                         <Save className="h-3.5 w-3.5" />
                         {submitting ? 'Saving…' : 'Save'}
                       </button>
                     </div>
-                  </form>
+                  </div>
                 ) : (
                   <div className="flex items-start gap-3">
                     {thumb ? (

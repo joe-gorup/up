@@ -2691,12 +2691,27 @@ const handleGenerateInvitation = async () => {
                                 outcome === 'correct' ? 'Correct' :
                                 outcome === 'incorrect' ? 'Incorrect' :
                                 outcome === 'verbal_prompt' ? 'Verbal' : 'N/A';
+                              const stepVideoMode: 'admin' | 'coach' | 'view' =
+                                user?.role === 'Administrator' ? 'admin' :
+                                user?.role === 'Job Coach' ? 'coach' : 'view';
                               return (
-                                <div key={step.id} className="flex items-center gap-3 px-4 py-2.5">
-                                  <OutcomeIcon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
-                                  <span className="text-[11px] text-slate-400 font-medium w-4 shrink-0">{step.stepOrder}.</span>
-                                  <span className="text-xs text-slate-700 leading-snug flex-1">{step.stepDescription}</span>
-                                  <span className={`text-[10px] font-medium shrink-0 ${labelClass}`}>{label}</span>
+                                <div key={step.id} className="px-4 py-2.5">
+                                  <div className="flex items-center gap-3">
+                                    <OutcomeIcon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
+                                    <span className="text-[11px] text-slate-400 font-medium w-4 shrink-0">{step.stepOrder}.</span>
+                                    <span className="text-xs text-slate-700 leading-snug flex-1">{step.stepDescription}</span>
+                                    <span className={`text-[10px] font-medium shrink-0 ${labelClass}`}>{label}</span>
+                                  </div>
+                                  {step.templateStepId && (
+                                    <div className="ml-7 mt-1">
+                                      <TemplateVideoManager
+                                        stepId={step.templateStepId}
+                                        mode={stepVideoMode}
+                                        compact
+                                        heading="Step Videos"
+                                      />
+                                    </div>
+                                  )}
                                 </div>
                               );
                             })}
