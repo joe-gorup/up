@@ -1,9 +1,9 @@
-import { useState } from "react";
-import { ChevronRight, ChevronDown, Play } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Video as VideoIcon, Play, ExternalLink, X } from "lucide-react";
 
 type Source = "golden" | "employer";
-type Video = { title: string; source: Source };
-type Step = { num: number; text: string; videos: Video[] };
+type VideoT = { title: string; source: Source };
+type Step = { num: number; text: string; videos: VideoT[] };
 
 const steps: Step[] = [
   {
@@ -35,7 +35,7 @@ const steps: Step[] = [
   },
 ];
 
-const goalVideos: Video[] = [
+const goalVideos: VideoT[] = [
   { title: "End-to-end customer service walkthrough", source: "golden" },
   { title: "Body language fundamentals", source: "employer" },
 ];
@@ -62,65 +62,136 @@ function SourceBadge({ s }: { s: Source }) {
   );
 }
 
-function VideoLinks({ videos }: { videos: Video[] }) {
+function IconBtn({
+  count,
+  active,
+  onClick,
+  innerRef,
+}: {
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  innerRef?: React.RefObject<HTMLButtonElement | null>;
+}) {
   return (
-    <ul className="mt-1.5 ml-1 space-y-1">
-      {videos.map((v, i) => (
-        <li key={i} className="flex items-center gap-1.5 text-xs">
-          <Play className="w-2.5 h-2.5 fill-blue-700 text-blue-700 shrink-0" />
-          <a
-            href="#"
-            className="text-blue-700 hover:underline truncate"
-            title={v.title}
-          >
-            {v.title}
-          </a>
-          <SourceBadge s={v.source} />
-        </li>
-      ))}
-    </ul>
+    <button
+      ref={innerRef}
+      type="button"
+      onClick={onClick}
+      title={`${count} training video${count === 1 ? "" : "s"}`}
+      className={
+        "shrink-0 relative inline-flex items-center justify-center w-7 h-7 rounded-full transition-colors " +
+        (active
+          ? "bg-blue-600 text-white"
+          : "bg-blue-50 text-blue-700 hover:bg-blue-100")
+      }
+    >
+      <VideoIcon className="w-3.5 h-3.5" />
+      <span
+        className={
+          "absolute -top-1 -right-1 min-w-[15px] h-[15px] px-0.5 rounded-full text-[9px] font-bold leading-[15px] " +
+          (active
+            ? "bg-white text-blue-700"
+            : "bg-blue-600 text-white")
+        }
+      >
+        {count}
+      </span>
+    </button>
   );
 }
 
-function StepWithToggle({ step, defaultOpen }: { step: Step; defaultOpen?: boolean }) {
-  const [open, setOpen] = useState(!!defaultOpen);
+function VideoListPopover({ videos, label }: { videos: VideoT[]; label: string }) {
+  return (
+    <div className="absolute right-0 top-full mt-1 z-20 w-[260px] rounded-lg border border-gray-200 bg-white shadow-lg p-2">
+      <div className="text-[10px] uppercase tracking-wide text-gray-500 font-medium mb-1.5 px-1">
+        {label}
+      </div>
+      <ul className="space-y-0.5">
+        {videos.map((v, i) => (
+          <li key={i}>
+            <a
+              href="#"
+              className="flex items-center gap-1.5 text-xs px-1.5 py-1 rounded hover:bg-blue-50 group"
+            >
+              <Play className="w-2.5 h-2.5 fill-blue-700 text-blue-700 shrink-0" />
+              <span className="flex-1 truncate text-blue-700 group-hover:underline">
+                {v.title}
+              </span>
+              <SourceBadge s={v.source} />
+              <ExternalLink className="w-2.5 h-2.5 text-gray-400 group-hover:text-blue-700" />
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function StepRow({ step }: { step: Step }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLButtonElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    function handler(e: MouseEvent) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
   const has = step.videos.length > 0;
   return (
     <li className="text-sm">
-      <div className="flex gap-2">
-        <span className="font-medium text-gray-500 shrink-0 w-4">{step.num}.</span>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-baseline gap-2 flex-wrap">
-            <span className="text-gray-800">{step.text}</span>
-            {has && (
-              <button
-                type="button"
-                onClick={() => setOpen(!open)}
-                className="inline-flex items-center gap-0.5 text-[11px] text-gray-500 hover:text-blue-700"
-              >
-                {open ? (
-                  <ChevronDown className="w-3 h-3" />
-                ) : (
-                  <ChevronRight className="w-3 h-3" />
-                )}
-                {step.videos.length} video{step.videos.length === 1 ? "" : "s"}
-              </button>
+      <div className="flex items-start gap-2">
+        <span className="font-medium text-gray-500 shrink-0 w-4 leading-7">
+          {step.num}.
+        </span>
+        <div className="flex-1 min-w-0 leading-7 text-gray-800">
+          {step.text}
+        </div>
+        {has && (
+          <div ref={wrapRef} className="relative">
+            <IconBtn
+              count={step.videos.length}
+              active={open}
+              onClick={() => setOpen(!open)}
+              innerRef={ref}
+            />
+            {open && (
+              <VideoListPopover
+                videos={step.videos}
+                label={`Step ${step.num} videos`}
+              />
             )}
           </div>
-          {has && open && <VideoLinks videos={step.videos} />}
-        </div>
+        )}
       </div>
     </li>
   );
 }
 
 export function WatchPill() {
-  const [goalOpen, setGoalOpen] = useState(true);
+  const [goalOpen, setGoalOpen] = useState(false);
+  const goalWrap = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!goalOpen) return;
+    function handler(e: MouseEvent) {
+      if (goalWrap.current && !goalWrap.current.contains(e.target as Node)) {
+        setGoalOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [goalOpen]);
+
   return (
     <div className="min-h-screen bg-gray-50 p-6 flex items-start justify-center">
-      <div className="w-full max-w-[500px] bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
+      <div className="w-full max-w-[500px] bg-white rounded-xl shadow-sm border border-gray-200 p-6 relative overflow-visible">
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div className="flex-1">
             <h2 className="text-lg font-semibold text-gray-900">
               Customer Service Excellence
             </h2>
@@ -128,11 +199,23 @@ export function WatchPill() {
               In Progress
             </span>
           </div>
+          {goalVideos.length > 0 && (
+            <div ref={goalWrap} className="relative">
+              <IconBtn
+                count={goalVideos.length}
+                active={goalOpen}
+                onClick={() => setGoalOpen(!goalOpen)}
+              />
+              {goalOpen && (
+                <VideoListPopover videos={goalVideos} label="Goal training" />
+              )}
+            </div>
+          )}
         </div>
 
-        <ol className="space-y-3">
-          {steps.map((s, i) => (
-            <StepWithToggle key={s.num} step={s} defaultOpen={i === 0} />
+        <ol className="space-y-1">
+          {steps.map((s) => (
+            <StepRow key={s.num} step={s} />
           ))}
         </ol>
 
@@ -149,24 +232,6 @@ export function WatchPill() {
             </span>
           </div>
         </div>
-
-        {goalVideos.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <button
-              type="button"
-              onClick={() => setGoalOpen(!goalOpen)}
-              className="inline-flex items-center gap-1 text-[11px] uppercase tracking-wide font-medium text-gray-600 hover:text-blue-700"
-            >
-              {goalOpen ? (
-                <ChevronDown className="w-3 h-3" />
-              ) : (
-                <ChevronRight className="w-3 h-3" />
-              )}
-              Goal training ({goalVideos.length})
-            </button>
-            {goalOpen && <VideoLinks videos={goalVideos} />}
-          </div>
-        )}
       </div>
     </div>
   );

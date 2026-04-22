@@ -1,8 +1,9 @@
-import { Play, ExternalLink } from "lucide-react";
+import { useState } from "react";
+import { Video as VideoIcon, Play, ExternalLink } from "lucide-react";
 
 type Source = "golden" | "employer";
-type Video = { title: string; source: Source };
-type Step = { num: number; text: string; videos: Video[] };
+type VideoT = { title: string; source: Source };
+type Step = { num: number; text: string; videos: VideoT[] };
 
 const steps: Step[] = [
   {
@@ -34,7 +35,7 @@ const steps: Step[] = [
   },
 ];
 
-const goalVideos: Video[] = [
+const goalVideos: VideoT[] = [
   { title: "End-to-end customer service walkthrough", source: "golden" },
   { title: "Body language fundamentals", source: "employer" },
 ];
@@ -46,34 +47,96 @@ const dotClass = {
   grey: "bg-gray-300",
 } as const;
 
-function VideoLink({ v }: { v: Video }) {
+function SourceBadge({ s }: { s: Source }) {
   return (
-    <a
-      href="#"
-      className="group inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 hover:underline whitespace-nowrap"
+    <span
+      className={
+        "text-[9px] uppercase tracking-wide font-medium px-1 rounded " +
+        (s === "golden"
+          ? "text-amber-700 bg-amber-100/70"
+          : "text-purple-700 bg-purple-100/70")
+      }
     >
-      <Play className="w-2.5 h-2.5 fill-blue-700 text-blue-700 shrink-0" />
-      <span className="truncate max-w-[220px]">{v.title}</span>
-      <span
-        className={
-          "text-[9px] uppercase tracking-wide font-medium px-1 rounded " +
-          (v.source === "golden"
-            ? "text-amber-700 bg-amber-100/70"
-            : "text-purple-700 bg-purple-100/70")
-        }
-      >
-        {v.source === "golden" ? "GS" : "Emp"}
-      </span>
-    </a>
+      {s === "golden" ? "GS" : "Emp"}
+    </span>
+  );
+}
+
+function VideoIconButton({
+  count,
+  open,
+  onClick,
+}: {
+  count: number;
+  open: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={`${count} training video${count === 1 ? "" : "s"}`}
+      className={
+        "shrink-0 inline-flex items-center gap-0.5 px-1.5 h-5 rounded-md border text-[11px] font-medium transition-colors " +
+        (open
+          ? "bg-blue-600 border-blue-600 text-white"
+          : "bg-white border-gray-200 text-blue-700 hover:bg-blue-50 hover:border-blue-200")
+      }
+    >
+      <VideoIcon className="w-3 h-3" />
+      {count}
+    </button>
+  );
+}
+
+function StepRow({ step }: { step: Step }) {
+  const [open, setOpen] = useState(false);
+  const has = step.videos.length > 0;
+  return (
+    <li className="text-sm">
+      <div className="flex items-start gap-2">
+        <span className="font-medium text-gray-500 shrink-0 w-4 leading-5">
+          {step.num}.
+        </span>
+        <div className="flex-1 min-w-0 leading-5 text-gray-800">
+          {step.text}
+        </div>
+        {has && (
+          <VideoIconButton
+            count={step.videos.length}
+            open={open}
+            onClick={() => setOpen(!open)}
+          />
+        )}
+      </div>
+      {has && open && (
+        <ul className="mt-1.5 ml-6 space-y-1 border-l-2 border-blue-100 pl-3">
+          {step.videos.map((v, i) => (
+            <li key={i} className="flex items-center gap-1.5 text-xs">
+              <Play className="w-2.5 h-2.5 fill-blue-700 text-blue-700 shrink-0" />
+              <a
+                href="#"
+                className="text-blue-700 hover:underline truncate"
+                title={v.title}
+              >
+                {v.title}
+              </a>
+              <SourceBadge s={v.source} />
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
   );
 }
 
 export function InlineChips() {
+  const [goalOpen, setGoalOpen] = useState(false);
   return (
     <div className="min-h-screen bg-gray-50 p-6 flex items-start justify-center">
       <div className="w-full max-w-[500px] bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-start justify-between mb-4">
-          <div>
+        <div className="flex items-start justify-between mb-4 gap-3">
+          <div className="flex-1">
             <h2 className="text-lg font-semibold text-gray-900">
               Customer Service Excellence
             </h2>
@@ -81,27 +144,41 @@ export function InlineChips() {
               In Progress
             </span>
           </div>
+          {goalVideos.length > 0 && (
+            <VideoIconButton
+              count={goalVideos.length}
+              open={goalOpen}
+              onClick={() => setGoalOpen(!goalOpen)}
+            />
+          )}
         </div>
 
-        <ol className="space-y-3">
+        {goalOpen && goalVideos.length > 0 && (
+          <div className="mb-4 -mt-1 ml-0 rounded-lg bg-blue-50/50 border border-blue-100 p-2">
+            <div className="text-[10px] uppercase tracking-wide text-blue-700 font-medium mb-1">
+              Goal training
+            </div>
+            <ul className="space-y-1">
+              {goalVideos.map((v, i) => (
+                <li key={i} className="flex items-center gap-1.5 text-xs">
+                  <Play className="w-2.5 h-2.5 fill-blue-700 text-blue-700 shrink-0" />
+                  <a
+                    href="#"
+                    className="text-blue-700 hover:underline truncate"
+                    title={v.title}
+                  >
+                    {v.title}
+                  </a>
+                  <SourceBadge s={v.source} />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <ol className="space-y-2.5">
           {steps.map((s) => (
-            <li key={s.num} className="text-sm">
-              <div className="flex gap-2">
-                <span className="font-medium text-gray-500 shrink-0 w-4">
-                  {s.num}.
-                </span>
-                <div className="flex-1">
-                  <div className="text-gray-800">{s.text}</div>
-                  {s.videos.length > 0 && (
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-                      {s.videos.map((v, i) => (
-                        <VideoLink key={i} v={v} />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </li>
+            <StepRow key={s.num} step={s} />
           ))}
         </ol>
 
@@ -118,19 +195,6 @@ export function InlineChips() {
             </span>
           </div>
         </div>
-
-        {goalVideos.length > 0 && (
-          <div className="mt-4 pt-4 border-t border-gray-100">
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
-              <span className="text-[11px] uppercase tracking-wide text-gray-500 font-medium">
-                Goal training
-              </span>
-              {goalVideos.map((v, i) => (
-                <VideoLink key={i} v={v} />
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
