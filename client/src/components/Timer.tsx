@@ -136,16 +136,16 @@ export default function Timer({
             type="button"
             onClick={handleToggle}
             data-testid={isRunning ? 'button-stop-timer' : 'button-start-timer'}
-            className={`col-span-2 h-16 sm:h-20 rounded-2xl text-base sm:text-lg font-semibold flex items-center justify-center gap-3 text-white shadow-sm transition-colors ${
+            className={`col-span-2 h-8 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 text-white shadow-sm transition-colors ${
               isRunning
                 ? 'bg-rose-600 hover:bg-rose-700'
                 : 'bg-emerald-600 hover:bg-emerald-700'
             }`}
           >
             {isRunning ? (
-              <Pause className="h-6 w-6 fill-current" />
+              <Pause className="h-3 w-3 sm:h-4 sm:w-4 fill-current" />
             ) : (
-              <Play className="h-6 w-6 fill-current" />
+              <Play className="h-3 w-3 sm:h-4 sm:w-4 fill-current" />
             )}
             {isRunning ? 'Stop' : 'Start'}
           </button>
@@ -157,10 +157,10 @@ export default function Timer({
             }}
             disabled={timeSeconds === 0}
             data-testid="button-reset-timer"
-            className="h-16 sm:h-20 rounded-2xl border border-stone-300 bg-white text-stone-700 font-medium flex flex-col items-center justify-center gap-1 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="h-8 sm:h-10 rounded-xl border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            <RotateCcw className="h-5 w-5" />
-            <span className="text-xs">Reset</span>
+            <RotateCcw className="h-3 w-3" />
+            <span>Reset</span>
           </button>
         </div>
 
@@ -191,7 +191,7 @@ export default function Timer({
             <button
               type="button"
               onClick={() => setConfirmReset(false)}
-              className="flex-1 h-11 rounded-xl border border-stone-300 bg-white text-stone-700 font-medium"
+              className="flex-1 h-6 rounded-lg border border-stone-300 bg-white text-stone-700 text-xs font-medium"
               data-testid="button-cancel-reset"
             >
               Keep time
@@ -199,7 +199,7 @@ export default function Timer({
             <button
               type="button"
               onClick={handleResetConfirmed}
-              className="flex-1 h-11 rounded-xl bg-rose-600 text-white font-semibold"
+              className="flex-1 h-6 rounded-lg bg-rose-600 text-white text-xs font-semibold"
               data-testid="button-confirm-reset"
             >
               Yes, reset
@@ -218,16 +218,16 @@ export default function Timer({
               inputMode="numeric"
               aria-label="Minutes"
               data-testid="input-edit-minutes"
-              className="w-20 h-12 text-center text-2xl font-mono border border-stone-300 rounded-lg bg-white"
+              className="w-12 h-6 text-center text-base font-mono border border-stone-300 rounded bg-white"
             />
-            <span className="text-2xl font-mono text-stone-400">:</span>
+            <span className="text-base font-mono text-stone-400">:</span>
             <input
               value={editSeconds}
               onChange={(e) => setEditSeconds(e.target.value)}
               inputMode="numeric"
               aria-label="Seconds"
               data-testid="input-edit-seconds"
-              className="w-20 h-12 text-center text-2xl font-mono border border-stone-300 rounded-lg bg-white"
+              className="w-12 h-6 text-center text-base font-mono border border-stone-300 rounded bg-white"
             />
           </div>
           <div className="mt-3 flex gap-2">
@@ -235,17 +235,17 @@ export default function Timer({
               type="button"
               onClick={() => setShowManual(false)}
               data-testid="button-cancel-edit"
-              className="flex-1 h-11 rounded-xl border border-stone-300 bg-white text-stone-700 font-medium flex items-center justify-center gap-2"
+              className="flex-1 h-6 rounded-lg border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1"
             >
-              <X className="h-4 w-4" /> Cancel
+              <X className="h-3 w-3" /> Cancel
             </button>
             <button
               type="button"
               onClick={saveManualEntry}
               data-testid="button-save-edit"
-              className="flex-1 h-11 rounded-xl bg-stone-900 text-white font-semibold flex items-center justify-center gap-2"
+              className="flex-1 h-6 rounded-lg bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1"
             >
-              <Check className="h-4 w-4" /> Save
+              <Check className="h-3 w-3" /> Save
             </button>
           </div>
         </div>

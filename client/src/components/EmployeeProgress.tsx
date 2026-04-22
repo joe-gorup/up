@@ -800,22 +800,9 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                           key={step.id}
                                           className="border border-gray-300 rounded-xl p-3 sm:p-4 bg-white shadow-sm"
                                         >
-                                          <div className="flex items-start justify-between mb-3">
-                                            <div className="flex-1">
-                                              <div className="flex items-center space-x-2 mb-2 flex-wrap gap-y-1">
-                                                <span className="font-medium text-gray-900">
-                                                  {step.stepOrder}.
-                                                </span>
-                                                <span className="text-gray-700">{step.stepDescription}</span>
-                                                {step.templateStepId && (
-                                                  <StepVideoIcons templateStepId={step.templateStepId} />
-                                                )}
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          {step.timerType && step.timerType !== 'none' && (() => {
-                                            const isOpen = !!openTimers[step.id];
+                                          {(() => {
+                                            const hasTimer = step.timerType && step.timerType !== 'none';
+                                            const isOpen = hasTimer && !!openTimers[step.id];
                                             const tSeconds = timerData[step.id]?.seconds || 0;
                                             const tManual = timerData[step.id]?.manuallyEntered || false;
                                             const isRequired = step.timerType === 'required';
@@ -823,56 +810,69 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                             const mins = Math.floor(tSeconds / 60).toString().padStart(2, '0');
                                             const secs = (tSeconds % 60).toString().padStart(2, '0');
                                             return (
-                                              <div className="mb-4">
-                                                <button
-                                                  type="button"
-                                                  onClick={() => setOpenTimers(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
-                                                  aria-expanded={isOpen}
-                                                  data-testid={`button-toggle-timer-${step.id}`}
-                                                  className={`w-full sm:w-auto inline-flex items-center justify-between gap-3 min-h-[48px] px-4 py-2.5 rounded-full border transition-colors ${
-                                                    hasTime
-                                                      ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
-                                                      : 'border-stone-300 bg-white hover:bg-stone-50'
-                                                  }`}
-                                                >
-                                                  <span className="flex items-center gap-2">
-                                                    <Clock className={`h-4 w-4 ${hasTime ? 'text-emerald-600' : 'text-blue-500'}`} />
-                                                    <span className="text-sm font-medium text-gray-800">
-                                                      {hasTime ? 'Timer' : 'Start timer'}
-                                                      {isRequired && <span className="text-red-500 ml-0.5">*</span>}
-                                                    </span>
-                                                  </span>
-                                                  <span className="flex items-center gap-2">
-                                                    {hasTime && (
-                                                      <span className="font-mono tabular-nums text-sm font-semibold text-emerald-800" data-testid={`text-timer-pill-${step.id}`}>
-                                                        {mins}:{secs}
+                                              <>
+                                                <div className="flex items-start justify-between gap-2 mb-3">
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center space-x-2 mb-2 flex-wrap gap-y-1">
+                                                      <span className="font-medium text-gray-900">
+                                                        {step.stepOrder}.
                                                       </span>
-                                                    )}
-                                                    {tManual && (
-                                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
-                                                        Manual
+                                                      <span className="text-gray-700">{step.stepDescription}</span>
+                                                      {step.templateStepId && (
+                                                        <StepVideoIcons templateStepId={step.templateStepId} />
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  {hasTimer && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setOpenTimers(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
+                                                      aria-expanded={isOpen}
+                                                      data-testid={`button-toggle-timer-${step.id}`}
+                                                      className={`shrink-0 inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] leading-none transition-colors ${
+                                                        hasTime
+                                                          ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
+                                                          : 'border-stone-300 bg-white hover:bg-stone-50'
+                                                      }`}
+                                                    >
+                                                      <Clock className={`h-3 w-3 ${hasTime ? 'text-emerald-600' : 'text-blue-500'}`} />
+                                                      <span className="font-medium text-gray-800">
+                                                        {hasTime ? 'Timer' : 'Start timer'}
+                                                        {isRequired && <span className="text-red-500 ml-0.5">*</span>}
                                                       </span>
-                                                    )}
-                                                    {isOpen ? (
-                                                      <ChevronDown className="h-4 w-4 text-gray-500" />
-                                                    ) : (
-                                                      <ChevronRight className="h-4 w-4 text-gray-500" />
-                                                    )}
-                                                  </span>
-                                                </button>
-                                                {/* Keep Timer mounted so a running clock keeps ticking and saving while collapsed */}
-                                                <div className={isOpen ? 'mt-3' : 'sr-only'} aria-hidden={!isOpen}>
-                                                  <Timer
-                                                    onTimeChange={(timeInSeconds, manuallyEntered) =>
-                                                      handleTimerChange(step.id, timeInSeconds, manuallyEntered)
-                                                    }
-                                                    initialTime={timerData[step.id]?.seconds || 0}
-                                                    isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
-                                                    disabled={false}
-                                                    className="w-full max-w-md"
-                                                  />
+                                                      {hasTime && (
+                                                        <span className="font-mono tabular-nums font-semibold text-emerald-800" data-testid={`text-timer-pill-${step.id}`}>
+                                                          {mins}:{secs}
+                                                        </span>
+                                                      )}
+                                                      {tManual && (
+                                                        <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1 py-0.5 rounded">
+                                                          Manual
+                                                        </span>
+                                                      )}
+                                                      {isOpen ? (
+                                                        <ChevronDown className="h-3 w-3 text-gray-500" />
+                                                      ) : (
+                                                        <ChevronRight className="h-3 w-3 text-gray-500" />
+                                                      )}
+                                                    </button>
+                                                  )}
                                                 </div>
-                                              </div>
+                                                {hasTimer && (
+                                                  /* Keep Timer mounted so a running clock keeps ticking and saving while collapsed */
+                                                  <div className={isOpen ? 'mb-4' : 'sr-only'} aria-hidden={!isOpen}>
+                                                    <Timer
+                                                      onTimeChange={(timeInSeconds, manuallyEntered) =>
+                                                        handleTimerChange(step.id, timeInSeconds, manuallyEntered)
+                                                      }
+                                                      initialTime={timerData[step.id]?.seconds || 0}
+                                                      isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
+                                                      disabled={false}
+                                                      className="w-full max-w-md"
+                                                    />
+                                                  </div>
+                                                )}
+                                              </>
                                             );
                                           })()}
 
