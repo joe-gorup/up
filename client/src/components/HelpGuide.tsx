@@ -245,16 +245,16 @@ const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[]
         area: 'Assessments',
         notes: [
           '**Step Timer redesign** — Timer is collapsed behind a "Record time" pill in the step\'s top-right, keeps ticking in the background, has a guarded Reset, and a pencil icon for manual entry on a more compact, right-anchored card.',
-          '**Step timing on goals** — Timing is enabled on goal steps that need it and carries over from the goal template automatically.',
+          '**Step timing on goals** — Timing is now available on goal steps that need it and carries over from the goal template automatically.',
           '**Always-visible step outcomes** — Goal steps stay visible during an assessment with at-a-glance outcome indicators.',
-          '**Submission validation** — Submitting an assessment now validates data and returns clearer error messages.',
+          '**Clearer submission errors** — Submitting an assessment now shows clearer messages if something needed is missing.',
         ]
       },
       {
         area: 'Goal Assignment',
         notes: [
           '**Bulk Assign Goals** — From My Shift, assign a goal template to one or many employees in a single step, with a "skip duplicates" option and the list filtered to your current shift. Also available from an individual employee profile.',
-          '**Permission-gated** — Assign Goals action and screen now fully honor the Goal Assignment permission across the app and API.',
+          '**Permission-aware** — The Assign Goals button and screen now follow the Goal Assignment permission, so each role only sees what they\'re allowed to use.',
         ]
       },
       {
@@ -284,7 +284,7 @@ const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[]
       {
         area: 'System',
         notes: [
-          '**Faster, more reliable requests** — Reduced API call volume and raised the request limit to prevent "too many requests" errors during normal usage.',
+          '**Faster, more reliable** — The app loads faster and is less likely to show "too many requests" errors during normal use.',
         ]
       }
     ]
