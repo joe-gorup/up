@@ -341,15 +341,17 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     const completedRequiredSteps = allRequiredSteps.filter(step => {
       const outcome = outcomes[step.id];
       const hasOutcome = outcome && outcome.outcome;
-      
-      // Check timer requirements (commented out as timerType is not in schema yet)
-      // if (step.timerType === 'required') {
-      //   const timerDuration = timerData[step.id]?.seconds || 0;
-      //   if (timerDuration <= 0) {
-      //     return false; // Required timer not completed
-      //   }
-      // }
-      
+
+      // If the template marks the step's timer as required, a non-zero
+      // duration must be recorded (either by running the stopwatch or by
+      // manually entering a time) before the assessment can be submitted.
+      if (step.timerType === 'required') {
+        const timerDuration = timerData[step.id]?.seconds || 0;
+        if (timerDuration <= 0) {
+          return false;
+        }
+      }
+
       return hasOutcome; // Accept any outcome including 'na', 'correct', or 'verbal_prompt'
     });
     

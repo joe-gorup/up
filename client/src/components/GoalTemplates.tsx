@@ -293,12 +293,24 @@ export default function GoalTemplates() {
                       : 'border-gray-200 bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start space-x-3 flex-1">
                       <span className="font-medium text-gray-900 mt-1">
                         {step.stepOrder}. {step.stepDescription}
                       </span>
                     </div>
+                    {step.timerType && step.timerType !== 'none' && (
+                      <span
+                        className={`shrink-0 mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          step.timerType === 'required'
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-blue-100 text-blue-700 border border-blue-200'
+                        }`}
+                        data-testid={`badge-timer-${index}`}
+                      >
+                        {step.timerType === 'required' ? 'Timer required' : 'Timer optional'}
+                      </span>
+                    )}
                   </div>
                   {step.id && (
                     <TemplateVideoManager stepId={step.id} mode="admin" compact heading="Step Videos" />
