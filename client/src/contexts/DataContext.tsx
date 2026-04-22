@@ -351,7 +351,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
             templateStepId: step.template_step_id ?? null,
             stepOrder: step.step_order,
             stepDescription: step.step_description,
-            isRequired: step.is_required
+            isRequired: step.is_required,
+            timerType: step.timer_type || 'none'
           })),
           recentSessions: (goal.recent_sessions ?? goal.recentSessions ?? []).map((s: any) => ({
             date: s.date,
