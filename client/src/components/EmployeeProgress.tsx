@@ -837,7 +837,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                                     >
                                                       <Clock className={`h-3 w-3 ${hasTime ? 'text-emerald-600' : 'text-blue-500'}`} />
                                                       <span className="font-medium text-gray-800">
-                                                        {hasTime ? 'Timer' : 'Start timer'}
+                                                        {hasTime ? 'Timer' : 'Record time'}
                                                         {isRequired && <span className="text-red-500 ml-0.5">*</span>}
                                                       </span>
                                                       {hasTime && (

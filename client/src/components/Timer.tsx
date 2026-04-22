@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, AlertTriangle, Check, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, AlertTriangle, Check, X, Pencil } from 'lucide-react';
 
 interface TimerProps {
   onTimeChange: (timeInSeconds: number, manuallyEntered: boolean) => void;
@@ -104,14 +104,26 @@ export default function Timer({
       data-testid="timer-card"
     >
       <div className="px-4 pt-3 pb-1">
-        {isRunning && (
-          <div className="flex justify-end">
+        <div className="flex items-center justify-between min-h-[20px]">
+          {isRunning ? (
             <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Running
             </span>
-          </div>
-        )}
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={openManualEditor}
+            data-testid="button-edit-time"
+            aria-label="Enter time manually"
+            title="Enter time manually"
+            className="h-6 w-6 rounded-md text-stone-500 hover:text-stone-800 hover:bg-stone-100 flex items-center justify-center"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
         <div className="mt-1 flex items-baseline justify-center gap-2">
           <div
             className="text-4xl sm:text-5xl font-mono font-semibold tabular-nums text-stone-900 leading-none"
@@ -161,16 +173,6 @@ export default function Timer({
           </button>
         </div>
 
-        <div className="mt-4 text-center">
-          <button
-            type="button"
-            onClick={openManualEditor}
-            data-testid="button-edit-time"
-            className="text-sm text-stone-500 underline underline-offset-4 hover:text-stone-700"
-          >
-            Enter time manually
-          </button>
-        </div>
       </div>
 
       {confirmReset && (
