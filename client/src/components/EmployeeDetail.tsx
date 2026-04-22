@@ -2709,6 +2709,9 @@ const handleGenerateInvitation = async () => {
                                         mode={stepVideoMode}
                                         compact
                                         heading="Step Videos"
+                                        allowAdd={false}
+                                        collapsible
+                                        hideWhenEmpty
                                       />
                                     </div>
                                   )}
@@ -2768,6 +2771,9 @@ const handleGenerateInvitation = async () => {
                             templateId={matchingTemplate.id}
                             mode={videoMode}
                             compact
+                            allowAdd={false}
+                            collapsible
+                            hideWhenEmpty
                           />
                         );
                       })()}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Video as VideoIcon, ExternalLink, X, Pencil, Archive, Save, Link as LinkIcon, Check, Copy } from 'lucide-react';
+import { Plus, Trash2, Video as VideoIcon, ExternalLink, X, Pencil, Archive, Save, Link as LinkIcon, Check, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';
@@ -26,6 +26,12 @@ interface Props {
   compact?: boolean;
   // Override the section heading; defaults to "Training Videos".
   heading?: string;
+  // Suppress the "Add Video" affordance independent of mode (e.g., on viewing surfaces).
+  allowAdd?: boolean;
+  // Render as a default-collapsed card with click-to-expand header.
+  collapsible?: boolean;
+  // When true (and not authoring), render nothing once loaded with zero videos.
+  hideWhenEmpty?: boolean;
 }
 
 function getYouTubeId(url: string): string | null {
@@ -40,12 +46,13 @@ function getYouTubeId(url: string): string | null {
   return null;
 }
 
-export default function TemplateVideoManager({ templateId, stepId, mode, compact = false, heading }: Props) {
+export default function TemplateVideoManager({ templateId, stepId, mode, compact = false, heading, allowAdd, collapsible = false, hideWhenEmpty = false }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [videos, setVideos] = useState<TemplateVideo[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [expanded, setExpanded] = useState(!collapsible);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState({ title: '', description: '', youtube_url: '' });
@@ -229,7 +236,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
     }
   };
 
-  const canAdd = mode !== 'view';
+  const canAdd = (allowAdd ?? (mode !== 'view'));
   const canRemove = (v: TemplateVideo) =>
     user?.role === 'Administrator' || (mode === 'coach' && v.created_by === user?.id);
   const canEdit = (v: TemplateVideo) =>
@@ -237,17 +244,40 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
   const canArchive = (v: TemplateVideo) =>
     user?.role === 'Administrator' || v.created_by === user?.id;
 
+  if (!loading && videos.length === 0 && (hideWhenEmpty || (collapsible && !canAdd))) {
+    return null;
+  }
+
+  const headingNode = (
+    <div className="flex items-center gap-2">
+      {collapsible && (
+        expanded
+          ? <ChevronDown className="h-4 w-4 text-gray-500" />
+          : <ChevronRight className="h-4 w-4 text-gray-500" />
+      )}
+      <VideoIcon className="h-4 w-4 text-blue-600" />
+      <h3 className={compact ? 'text-sm font-semibold text-gray-800' : 'text-lg font-semibold text-gray-900'}>
+        {heading ?? 'Training Videos'} {videos.length > 0 && <span className="text-gray-400 font-normal">({videos.length})</span>}
+      </h3>
+    </div>
+  );
+
   return (
     <div className={compact ? 'mt-3' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-6'}>
-      <div className="flex items-center justify-between mb-3">
+      <div className={`flex items-center justify-between ${expanded ? 'mb-3' : ''}`}>
+        {collapsible ? (
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-2 text-left hover:opacity-80 transition-opacity"
+            aria-expanded={expanded}
+            data-testid={`button-toggle-videos-${scope}-${scopeId}`}
+          >
+            {headingNode}
+          </button>
+        ) : headingNode}
         <div className="flex items-center gap-2">
-          <VideoIcon className="h-4 w-4 text-blue-600" />
-          <h3 className={compact ? 'text-sm font-semibold text-gray-800' : 'text-lg font-semibold text-gray-900'}>
-            {heading ?? 'Training Videos'} {videos.length > 0 && <span className="text-gray-400 font-normal">({videos.length})</span>}
-          </h3>
-        </div>
-        <div className="flex items-center gap-2">
-          {videos.length > 0 && (
+          {expanded && videos.length > 0 && (
             <button
               type="button"
               onClick={handleCopyAll}
@@ -259,7 +289,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
               {copiedAll ? 'Copied' : 'Copy all'}
             </button>
           )}
-          {canAdd && !showForm && (
+          {expanded && canAdd && !showForm && (
           <button
             type="button"
             onClick={() => setShowForm(true)}
@@ -272,7 +302,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
         </div>
       </div>
 
-      {showForm && (
+      {expanded && showForm && (
         <div
           role="group"
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.target as HTMLElement).tagName !== 'TEXTAREA') { e.preventDefault(); handleAdd(); } }}
@@ -319,7 +349,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
         </div>
       )}
 
-      {loading ? (
+      {expanded && (loading ? (
         <p className="text-sm text-gray-500">Loading videos…</p>
       ) : videos.length === 0 ? (
         <p className="text-sm text-gray-500">No videos attached yet.</p>
@@ -445,7 +475,7 @@ export default function TemplateVideoManager({ templateId, stepId, mode, compact
             );
           })}
         </ul>
-      )}
+      ))}
     </div>
   );
 }
