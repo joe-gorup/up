@@ -128,12 +128,12 @@ export default function Timer({
       </div>
 
       <div className="px-4 pt-3 pb-4">
-        <div className="grid grid-cols-[repeat(25,minmax(0,1fr))] gap-2">
+        <div className="grid grid-cols-10 gap-2">
           <button
             type="button"
             onClick={handleToggle}
             data-testid={isRunning ? 'button-stop-timer' : 'button-start-timer'}
-            className={`col-span-[15] h-8 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 text-white shadow-sm transition-colors ${
+            className={`col-span-6 h-8 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 text-white shadow-sm transition-colors ${
               isRunning
                 ? 'bg-rose-600 hover:bg-rose-700'
                 : 'bg-emerald-600 hover:bg-emerald-700'
@@ -154,7 +154,7 @@ export default function Timer({
             }}
             disabled={timeSeconds === 0}
             data-testid="button-reset-timer"
-            className="col-span-[8] h-8 sm:h-10 rounded-xl border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="col-span-4 h-8 sm:h-10 rounded-xl border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <RotateCcw className="h-3 w-3" />
             <span>Reset</span>
