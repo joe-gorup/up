@@ -61,7 +61,7 @@ export function InlinePlayer() {
                     target="_blank"
                     rel="noopener noreferrer"
                     title="Watch training video"
-                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
+                    className="shrink-0 inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
                   >
                     <VideoIcon className="w-4 h-4" />
                   </a>

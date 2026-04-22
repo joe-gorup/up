@@ -54,7 +54,7 @@ export default function StepVideoIcons({ templateStepId, className }: Props) {
           onClick={(e) => e.stopPropagation()}
           title={`Watch: ${v.title}`}
           aria-label={`Watch training video: ${v.title}`}
-          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-md bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
+          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-colors"
           data-testid={`link-step-video-${v.id}`}
         >
           <VideoIcon className="w-3.5 h-3.5" />
