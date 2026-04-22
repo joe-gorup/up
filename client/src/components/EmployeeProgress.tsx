@@ -108,6 +108,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const [showNotes, setShowNotes] = useState<Record<string, boolean>>({});
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
   const [timerData, setTimerData] = useState<Record<string, { seconds: number; manuallyEntered: boolean }>>({}); // Timer state for each step
+  const [openTimers, setOpenTimers] = useState<Record<string, boolean>>({}); // Whether the launcher-pill timer card is expanded for a step
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
@@ -813,25 +814,67 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                             </div>
                                           </div>
 
-                                          {step.timerType && step.timerType !== 'none' && (
-                                            <div className="mb-4">
-                                              <div className="flex items-center space-x-2 mb-2">
-                                                <Clock className="h-4 w-4 text-blue-500" />
-                                                <span className="text-sm font-medium text-gray-700">
-                                                  Timer {step.timerType === 'required' && <span className="text-red-500">*</span>}
-                                                </span>
+                                          {step.timerType && step.timerType !== 'none' && (() => {
+                                            const isOpen = !!openTimers[step.id];
+                                            const tSeconds = timerData[step.id]?.seconds || 0;
+                                            const tManual = timerData[step.id]?.manuallyEntered || false;
+                                            const isRequired = step.timerType === 'required';
+                                            const hasTime = tSeconds > 0;
+                                            const mins = Math.floor(tSeconds / 60).toString().padStart(2, '0');
+                                            const secs = (tSeconds % 60).toString().padStart(2, '0');
+                                            return (
+                                              <div className="mb-4">
+                                                <button
+                                                  type="button"
+                                                  onClick={() => setOpenTimers(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
+                                                  aria-expanded={isOpen}
+                                                  data-testid={`button-toggle-timer-${step.id}`}
+                                                  className={`w-full sm:w-auto inline-flex items-center justify-between gap-3 min-h-[48px] px-4 py-2.5 rounded-full border transition-colors ${
+                                                    hasTime
+                                                      ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
+                                                      : 'border-stone-300 bg-white hover:bg-stone-50'
+                                                  }`}
+                                                >
+                                                  <span className="flex items-center gap-2">
+                                                    <Clock className={`h-4 w-4 ${hasTime ? 'text-emerald-600' : 'text-blue-500'}`} />
+                                                    <span className="text-sm font-medium text-gray-800">
+                                                      {hasTime ? 'Timer' : 'Start timer'}
+                                                      {isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                                    </span>
+                                                  </span>
+                                                  <span className="flex items-center gap-2">
+                                                    {hasTime && (
+                                                      <span className="font-mono tabular-nums text-sm font-semibold text-emerald-800" data-testid={`text-timer-pill-${step.id}`}>
+                                                        {mins}:{secs}
+                                                      </span>
+                                                    )}
+                                                    {tManual && (
+                                                      <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+                                                        Manual
+                                                      </span>
+                                                    )}
+                                                    {isOpen ? (
+                                                      <ChevronDown className="h-4 w-4 text-gray-500" />
+                                                    ) : (
+                                                      <ChevronRight className="h-4 w-4 text-gray-500" />
+                                                    )}
+                                                  </span>
+                                                </button>
+                                                {/* Keep Timer mounted so a running clock keeps ticking and saving while collapsed */}
+                                                <div className={isOpen ? 'mt-3' : 'sr-only'} aria-hidden={!isOpen}>
+                                                  <Timer
+                                                    onTimeChange={(timeInSeconds, manuallyEntered) =>
+                                                      handleTimerChange(step.id, timeInSeconds, manuallyEntered)
+                                                    }
+                                                    initialTime={timerData[step.id]?.seconds || 0}
+                                                    isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
+                                                    disabled={false}
+                                                    className="w-full max-w-md"
+                                                  />
+                                                </div>
                                               </div>
-                                              <Timer
-                                                onTimeChange={(timeInSeconds, manuallyEntered) => 
-                                                  handleTimerChange(step.id, timeInSeconds, manuallyEntered)
-                                                }
-                                                initialTime={timerData[step.id]?.seconds || 0}
-                                                isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
-                                                disabled={false}
-                                                className="w-full max-w-md"
-                                              />
-                                            </div>
-                                          )}
+                                            );
+                                          })()}
 
                                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                             <OutcomeSelector
