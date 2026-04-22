@@ -1,1 +1,1 @@
-export const CURRENT_RELEASE = '2026-03-28';
+export const CURRENT_RELEASE = '2026-04-22';
