@@ -112,7 +112,7 @@ export default function Timer({
             </span>
           </div>
         )}
-        <div className="mt-1 flex items-baseline gap-2">
+        <div className="mt-1 flex items-baseline justify-center gap-2">
           <div
             className="text-4xl sm:text-5xl font-mono font-semibold tabular-nums text-stone-900 leading-none"
             data-testid="text-timer-display"
