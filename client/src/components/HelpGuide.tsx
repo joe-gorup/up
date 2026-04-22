@@ -37,6 +37,7 @@ const GUIDE_SECTIONS: Section[] = [
           'Click anywhere on an employee\'s card to open their full profile.',
           'From their profile, select a location and click "Start Assessment" to begin documenting goals.',
           'During an assessment, mark each step as correct or incorrect, then end the session when finished.',
+          'For steps that need a time recorded, tap the "Record time" pill in the top-right of the step to open the timer card. Use Start/Stop to time the step, or tap the pencil icon to enter a time manually.',
           'To remove everyone from your shift list at once, click "Clear All" at the top of the page.'
         ]
       },
@@ -131,6 +132,7 @@ const GUIDE_SECTIONS: Section[] = [
           'Click anywhere on an employee\'s card to open their full profile.',
           'From a Super Scooper\'s profile, select a location and click "Start Assessment" to begin an assessment session.',
           'During an assessment, mark each goal step as correct or incorrect. The system tracks consecutive correct responses automatically.',
+          'For steps that need a time recorded, tap the "Record time" pill in the top-right of the step to open the timer card. Use Start/Stop to time the step, or tap the pencil icon in the timer card to enter a time manually.',
           'Click "End Assessment" when you\'re done. The progress is saved immediately.',
           'Review past assessments in the employee\'s profile to see their history.',
           'You can also view Guardian Notes and Coach Notes from the employee profile.',
@@ -236,6 +238,21 @@ const GUIDE_SECTIONS: Section[] = [
 ];
 
 const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
+  {
+    date: 'April 22, 2026',
+    groups: [
+      {
+        area: 'Assessments',
+        notes: [
+          'Redesigned the step timer to keep step rows compact. The timer is now hidden behind a small "Record time" pill in the top-right of each step — tap it to open the timer card, tap again to collapse.',
+          'A running timer keeps ticking and saving in the background even when the timer card is collapsed, so you never lose time by closing it.',
+          'Reset is now guarded against accidental taps — tapping Reset asks for confirmation ("Keep time" or "Yes, reset") and is disabled when the timer is already at 00:00.',
+          'Manual time entry has moved to a small pencil icon in the top-right corner of the timer card, keeping the main controls focused on Start/Stop.',
+          'The expanded timer card is more compact and now anchors to the right side of the step for a tidier layout.',
+        ]
+      }
+    ]
+  },
   {
     date: 'March 28, 2026',
     groups: [
