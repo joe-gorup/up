@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
 import Timer from './Timer';
-import StepVideosButton from './StepVideosButton';
+import StepVideoIcons from './StepVideoIcons';
 
 // Move OutcomeSelector outside the main component to prevent recreation on every render
 const OutcomeSelector = ({ 
@@ -805,10 +805,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                                 </span>
                                                 <span className="text-gray-700">{step.stepDescription}</span>
                                                 {step.templateStepId && (
-                                                  <StepVideosButton
-                                                    templateStepId={step.templateStepId}
-                                                    stepLabel={`Step ${step.stepOrder}: ${step.stepDescription}`}
-                                                  />
+                                                  <StepVideoIcons templateStepId={step.templateStepId} />
                                                 )}
                                               </div>
                                             </div>
