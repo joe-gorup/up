@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Video as VideoIcon, X, ExternalLink, Link as LinkIcon, Check, Copy } from 'lucide-react';
+import { Youtube as VideoIcon, X, ExternalLink, Link as LinkIcon, Check, Copy } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useToast } from '../hooks/use-toast';
 

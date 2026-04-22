@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Trash2, Video as VideoIcon, ExternalLink, X, Pencil, Archive, Save, Link as LinkIcon, Check, Copy, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Youtube as VideoIcon, ExternalLink, X, Pencil, Archive, Save, Link as LinkIcon, Check, Copy, ChevronDown, ChevronRight } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
 import { useToast } from '../hooks/use-toast';

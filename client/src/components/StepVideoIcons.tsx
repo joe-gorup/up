@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Video as VideoIcon } from 'lucide-react';
+import { Youtube as VideoIcon } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 
 interface StepVideo {
