@@ -372,8 +372,9 @@ export default function MyShift() {
             {canAssignGoals && (
               <button
                 onClick={() => setShowAssignGoals(true)}
-                className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all bg-white text-blue-700 border border-blue-300 hover:bg-blue-50"
-                title="Assign Goals"
+                disabled={pinnedEmployees.length === 0}
+                className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all bg-white text-blue-700 border border-blue-300 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                title={pinnedEmployees.length === 0 ? 'Add employees to your shift first' : 'Assign Goals to your shift'}
                 data-testid="button-assign-goals"
               >
                 <Target className="h-4 w-4" />
@@ -412,6 +413,8 @@ export default function MyShift() {
               <X className="h-5 w-5" />
             </button>
             <GoalAssignment
+              allowedEmployeeIds={pinnedEmployees.map(e => e.id)}
+              audienceLabel="your shift"
               onClose={() => setShowAssignGoals(false)}
               onSuccess={() => setShowAssignGoals(false)}
             />

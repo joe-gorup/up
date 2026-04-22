@@ -4,11 +4,13 @@ import { useData, type Employee, type GoalTemplate, type DevelopmentGoal } from 
 
 interface GoalAssignmentProps {
   initialEmployeeId?: string;
+  allowedEmployeeIds?: string[];
+  audienceLabel?: string;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }: GoalAssignmentProps) {
+export default function GoalAssignment({ initialEmployeeId, allowedEmployeeIds, audienceLabel, onClose, onSuccess }: GoalAssignmentProps) {
   const { employees, goalTemplates, developmentGoals, bulkAssignGoal } = useData();
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
@@ -18,11 +20,19 @@ export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
+  const allowedSet = useMemo(
+    () => (allowedEmployeeIds ? new Set(allowedEmployeeIds) : null),
+    [allowedEmployeeIds]
+  );
+
   const activeEmployees = useMemo<Employee[]>(
-    () => employees.filter((e) => e.isActive).sort((a, b) =>
-      `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)
-    ),
-    [employees]
+    () => employees
+      .filter((e) => e.isActive)
+      .filter((e) => !allowedSet || allowedSet.has(e.id))
+      .sort((a, b) =>
+        `${a.first_name} ${a.last_name}`.localeCompare(`${b.first_name} ${b.last_name}`)
+      ),
+    [employees, allowedSet]
   );
 
   const availableTemplates = goalTemplates.filter((template) => template.status === 'active');
