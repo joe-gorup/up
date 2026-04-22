@@ -1,13 +1,18 @@
 import { useState } from 'react';
-import { Users, Target, CheckCircle, Clock, Search, ClipboardList, AlertTriangle, Phone, Heart, Brain } from 'lucide-react';
+import { Users, Target, CheckCircle, Clock, Search, ClipboardList, AlertTriangle, Phone, Heart, Brain, X } from 'lucide-react';
 import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import EmployeeAvatar from './EmployeeAvatar';
 import EmployeeDetail from './EmployeeDetail';
+import GoalAssignment from './GoalAssignment';
 
 export default function MyShift() {
   const { employees, developmentGoals, stepProgress } = useProgressData();
   const { user } = useAuth();
+  const { canModify } = usePermissions();
+  const canAssignGoals = canModify('goal_assignment');
+  const [showAssignGoals, setShowAssignGoals] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [pinnedIds, setPinnedIds] = useState<string[]>(() => {
     const saved = sessionStorage.getItem(`myshift-pinned-${user?.id}`);
@@ -364,6 +369,17 @@ export default function MyShift() {
                 Clear All
               </button>
             )}
+            {canAssignGoals && (
+              <button
+                onClick={() => setShowAssignGoals(true)}
+                className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all bg-white text-blue-700 border border-blue-300 hover:bg-blue-50"
+                title="Assign Goals"
+                data-testid="button-assign-goals"
+              >
+                <Target className="h-4 w-4" />
+                <span className="hidden sm:inline">Assign Goals</span>
+              </button>
+            )}
             <button
               onClick={handleOpenSearch}
               className="flex items-center gap-2 px-2 sm:px-4 py-2 rounded-xl text-sm font-medium transition-all bg-blue-600 text-white hover:bg-blue-700"
@@ -375,6 +391,33 @@ export default function MyShift() {
           </div>
         </div>
       </div>
+
+      {showAssignGoals && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
+          onClick={() => setShowAssignGoals(false)}
+          data-testid="modal-assign-goals"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAssignGoals(false)}
+              className="absolute top-3 right-3 z-10 p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              aria-label="Close"
+              data-testid="button-close-assign-goals"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <GoalAssignment
+              onClose={() => setShowAssignGoals(false)}
+              onSuccess={() => setShowAssignGoals(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {pinnedEmployees.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
