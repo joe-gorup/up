@@ -244,58 +244,47 @@ const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[]
       {
         area: 'Assessments',
         notes: [
-          'Redesigned the step timer to keep step rows compact. The timer is now hidden behind a small "Record time" pill in the top-right of each step — tap it to open the timer card, tap again to collapse.',
-          'A running timer keeps ticking and saving in the background even when the timer card is collapsed, so you never lose time by closing it.',
-          'Reset is now guarded against accidental taps — tapping Reset asks for confirmation ("Keep time" or "Yes, reset") and is disabled when the timer is already at 00:00.',
-          'Manual time entry has moved to a small pencil icon in the top-right corner of the timer card, keeping the main controls focused on Start/Stop.',
-          'The expanded timer card is more compact and now anchors to the right side of the step for a tidier layout.',
-          'Step timing is now enabled on goal steps that need it — the timer type carries over from the goal template so you only configure it once.',
-          'Goal steps stay visible during an assessment with at-a-glance outcome indicators on each step.',
-          'Submitting an assessment now validates the data and returns clearer error messages if something is missing.',
+          '**Step Timer redesign** — Timer is collapsed behind a "Record time" pill in the step\'s top-right, keeps ticking in the background, has a guarded Reset, and a pencil icon for manual entry on a more compact, right-anchored card.',
+          '**Step timing on goals** — Timing is enabled on goal steps that need it and carries over from the goal template automatically.',
+          '**Always-visible step outcomes** — Goal steps stay visible during an assessment with at-a-glance outcome indicators.',
+          '**Submission validation** — Submitting an assessment now validates data and returns clearer error messages.',
         ]
       },
       {
         area: 'Goal Assignment',
         notes: [
-          'New "Assign Goals" workflow: from My Shift, tap "Assign Goals" to assign a goal template to one or many employees on your shift in a single step.',
-          'Goal assignment can also be opened directly from an employee profile to assign a goal to that one employee.',
-          'When assigning to multiple employees, a "Skip employees who already have this goal active" option keeps you from creating duplicates.',
-          'The bulk assign list is filtered to only the employees on your current shift, so you don\'t have to scroll through the entire roster.',
-          'The Assign Goals action and screen now fully honor the Goal Assignment permission — if a role doesn\'t have permission, the button is hidden and the screen shows a clear "no permission" message.',
+          '**Bulk Assign Goals** — From My Shift, assign a goal template to one or many employees in a single step, with a "skip duplicates" option and the list filtered to your current shift. Also available from an individual employee profile.',
+          '**Permission-gated** — Assign Goals action and screen now fully honor the Goal Assignment permission across the app and API.',
         ]
       },
       {
         area: 'Training Videos',
         notes: [
-          'New training video library: attach one or more videos to any step on a goal template, manage them right from the template edit form.',
-          'Employees see a video icon on steps during their assessments — tap it to watch the training video without leaving the assessment.',
-          'Videos open in a new tab and include a "Copy link" option so they can be shared easily.',
-          'Guardians can now see training videos for their loved one\'s active goals, and the goal list on the Guardian view is filtered to active goals only.',
-          'Polished the video UI: rounded video icons, cleaner placement on goal cards and step rows, and the videos card collapses when you\'re just viewing.',
-          '"Add Video" only appears in the places it\'s relevant, reducing clutter on screens where it doesn\'t apply.',
+          '**Training Video library** — Attach one or more videos to any step on a goal template and manage them from the template edit form.',
+          '**In-assessment playback** — Employees see a video icon on steps during assessments to watch training videos without leaving the screen.',
+          '**Share & copy link** — Videos open in a new tab and include a Copy Link option.',
+          '**Guardian access** — Guardians can see training videos for their loved one\'s active goals (Guardian goal list now active-only).',
+          '**Cleaner video UI** — Rounded icons, tidier placement on cards and step rows, and the videos card collapses when just viewing.',
         ]
       },
       {
         area: 'Certifications',
         notes: [
-          'Certification checklists now use a 3-state response (Yes / No / N/A) instead of a single checkbox, matching how assessments work.',
-          'Certification checklists were redesigned as step-style cards, making them faster to scan and complete.',
-          'Mobile experience for certification checklists has been improved with larger tap targets and better spacing.',
-          'Employee profiles now include a Certification Score History with a breakdown of past attempts and scores.',
+          '**3-state checklist responses** — Certification checklists now use Yes / No / N/A, matching assessments.',
+          '**Step-card redesign** — Checklists were redesigned as step-style cards and are easier to use on mobile.',
+          '**Certification Score History** — Employee profiles now include score history with a breakdown of past attempts.',
         ]
       },
       {
         area: 'Permissions',
         notes: [
-          'All new user roles automatically get a default permission set when they\'re created, so administrators don\'t need to configure each role from scratch.',
-          'Bulk Goal Assignment now enforces the Goal Assignment permission both in the interface and at the API layer.',
+          '**Default permissions for new roles** — New user roles automatically receive a default permission set on creation.',
         ]
       },
       {
         area: 'System',
         notes: [
-          'Reduced unnecessary API requests across the app for faster page loads and fewer "too many requests" errors.',
-          'Increased the API request limit to comfortably support normal usage without hitting rate limits.',
+          '**Faster, more reliable requests** — Reduced API call volume and raised the request limit to prevent "too many requests" errors during normal usage.',
         ]
       }
     ]
@@ -442,12 +431,24 @@ function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
                       {group.area}
                     </span>
                     <ul className="space-y-2">
-                      {group.notes.map((note, noteIdx) => (
-                        <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
-                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>{note}</span>
-                        </li>
-                      ))}
+                      {group.notes.map((note, noteIdx) => {
+                        const match = note.match(/^\*\*(.+?)\*\*\s*(?:—|-)?\s*(.*)$/);
+                        return (
+                          <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
+                            <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              {match ? (
+                                <>
+                                  <strong className="font-semibold text-gray-900">{match[1]}</strong>
+                                  {match[2] ? <> — {match[2]}</> : null}
+                                </>
+                              ) : (
+                                note
+                              )}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))}
