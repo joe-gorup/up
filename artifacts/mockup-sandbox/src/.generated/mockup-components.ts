@@ -5,9 +5,9 @@ export const modules: ModuleMap = {
   "./components/mockups/goal-tasks/ProgressRoadmap.tsx": () => import("../components/mockups/goal-tasks/ProgressRoadmap.tsx"),
   "./components/mockups/goal-tasks/StepFirstGrid.tsx": () => import("../components/mockups/goal-tasks/StepFirstGrid.tsx"),
   "./components/mockups/goal-tasks/StepHistoryCards.tsx": () => import("../components/mockups/goal-tasks/StepHistoryCards.tsx"),
-  "./components/mockups/video-display/InlinePlayer.tsx": () => import("../components/mockups/video-display/InlinePlayer.tsx"),
   "./components/mockups/multi-assign/BulkUploadHub.tsx": () => import("../components/mockups/multi-assign/BulkUploadHub.tsx"),
   "./components/mockups/multi-assign/BulkUploadTab.tsx": () => import("../components/mockups/multi-assign/BulkUploadTab.tsx"),
   "./components/mockups/multi-assign/EmpMgmtHeaderBtn.tsx": () => import("../components/mockups/multi-assign/EmpMgmtHeaderBtn.tsx"),
-  "./components/mockups/multi-assign/EmpMgmtToolbar.tsx": () => import("../components/mockups/multi-assign/EmpMgmtToolbar.tsx")
+  "./components/mockups/multi-assign/EmpMgmtToolbar.tsx": () => import("../components/mockups/multi-assign/EmpMgmtToolbar.tsx"),
+  "./components/mockups/video-display/InlinePlayer.tsx": () => import("../components/mockups/video-display/InlinePlayer.tsx")
 };

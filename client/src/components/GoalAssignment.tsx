@@ -222,6 +222,40 @@ export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+              {initialEmployeeId ? (
+                (() => {
+                  const emp = activeEmployees.find((e) => e.id === initialEmployeeId);
+                  const hasExisting = emp ? employeesWithExistingGoal.has(emp.id) : false;
+                  return (
+                    <div>
+                      <h4 className="font-medium text-gray-900 mb-3">Assigning to</h4>
+                      <div
+                        className="flex items-center justify-between p-3 border border-blue-200 bg-blue-50/40 rounded-lg"
+                        data-testid="single-employee-summary"
+                      >
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {emp ? `${emp.first_name} ${emp.last_name}` : 'Selected employee'}
+                          </p>
+                          {emp?.role && (
+                            <p className="text-xs text-gray-500">{emp.role}</p>
+                          )}
+                        </div>
+                        {hasExisting && (
+                          <span
+                            className="inline-flex items-center text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700"
+                            data-testid="badge-existing-single"
+                          >
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Already has this goal active
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : (
+              <>
               <div className="flex items-center justify-between mb-4">
                 <h4 className="font-medium text-gray-900">Select Employees ({selectedCount} selected)</h4>
                 <div className="flex items-center space-x-3 text-sm">
@@ -310,6 +344,8 @@ export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }
                   {skippedCount} selected employee{skippedCount === 1 ? '' : 's'} will be skipped (already has this goal).
                 </p>
               )}
+              </>
+              )}
             </div>
 
             {errorMessage && (
@@ -335,9 +371,11 @@ export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }
               >
                 {loading
                   ? 'Assigning...'
-                  : selectedCount === 0
-                    ? 'Select at least one employee'
-                    : `Assign Goal to ${selectedCount} ${selectedCount === 1 ? 'Employee' : 'Employees'}`}
+                  : initialEmployeeId
+                    ? 'Assign Goal'
+                    : selectedCount === 0
+                      ? 'Select at least one employee'
+                      : `Assign Goal to ${selectedCount} ${selectedCount === 1 ? 'Employee' : 'Employees'}`}
               </button>
             </div>
           </form>

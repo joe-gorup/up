@@ -2742,30 +2742,6 @@ const handleGenerateInvitation = async () => {
                         </div>
                       )}
 
-                      {/* Training Videos for this goal's template */}
-                      {(() => {
-                        // Prefer the stable template_id linkage; fall back to
-                        // name match for legacy goals created before that
-                        // column existed.
-                        const matchingTemplate =
-                          (goal.templateId && goalTemplates.find(t => t.id === goal.templateId)) ||
-                          goalTemplates.find(t => t.name === goal.title);
-                        if (!matchingTemplate) return null;
-                        const videoMode: 'admin' | 'coach' | 'view' =
-                          user?.role === 'Administrator' ? 'admin' :
-                          user?.role === 'Job Coach' ? 'coach' : 'view';
-                        return (
-                          <TemplateVideoManager
-                            templateId={matchingTemplate.id}
-                            mode={videoMode}
-                            compact
-                            allowAdd={false}
-                            collapsible
-                            hideWhenEmpty
-                          />
-                        );
-                      })()}
-
                       {/* Mastery Status */}
                       {!editingGoal && goal.consecutiveAllCorrect >= 2 && (
                         <div className="mt-6 p-4 bg-orange-50 border border-orange-200 rounded-xl">
