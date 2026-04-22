@@ -5,7 +5,5 @@ export const modules: ModuleMap = {
   "./components/mockups/goal-tasks/ProgressRoadmap.tsx": () => import("../components/mockups/goal-tasks/ProgressRoadmap.tsx"),
   "./components/mockups/goal-tasks/StepFirstGrid.tsx": () => import("../components/mockups/goal-tasks/StepFirstGrid.tsx"),
   "./components/mockups/goal-tasks/StepHistoryCards.tsx": () => import("../components/mockups/goal-tasks/StepHistoryCards.tsx"),
-  "./components/mockups/video-display/InlineChips.tsx": () => import("../components/mockups/video-display/InlineChips.tsx"),
-  "./components/mockups/video-display/InlinePlayer.tsx": () => import("../components/mockups/video-display/InlinePlayer.tsx"),
-  "./components/mockups/video-display/WatchPill.tsx": () => import("../components/mockups/video-display/WatchPill.tsx")
+  "./components/mockups/video-display/InlinePlayer.tsx": () => import("../components/mockups/video-display/InlinePlayer.tsx")
 };
