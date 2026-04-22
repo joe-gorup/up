@@ -1,22 +1,25 @@
 import React, { useState } from 'react';
-import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star, FileCheck } from 'lucide-react';
+import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star, FileCheck, Target, X } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import EmployeeForm from './EmployeeForm';
 import EmployeeDetail from './EmployeeDetail';
 import EmployeeAvatar from './EmployeeAvatar';
+import GoalAssignment from './GoalAssignment';
 
 export default function EmployeeManagement() {
   const { employees, developmentGoals, updateEmployee, certifications } = useData();
   const { user } = useAuth();
   const { canModify } = usePermissions();
   const canManageEmployees = canModify('employee_profiles');
+  const canAssignGoals = canModify('goal_assignment');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [showAssignGoals, setShowAssignGoals] = useState(false);
 
   const filteredEmployees = employees
     .filter(employee => {
@@ -130,6 +133,17 @@ export default function EmployeeManagement() {
           ))}
         </div>
 
+        {canAssignGoals && (
+          <button
+            onClick={() => setShowAssignGoals(true)}
+            className="flex items-center justify-center space-x-2 bg-white text-blue-700 border border-blue-300 px-4 py-3 rounded-xl hover:bg-blue-50 transition-colors text-sm font-medium whitespace-nowrap"
+            data-testid="button-assign-goals"
+          >
+            <Target className="h-5 w-5" />
+            <span>Assign Goals</span>
+          </button>
+        )}
+
         {canManageEmployees && (
           <button
             onClick={handleAddEmployee}
@@ -141,6 +155,33 @@ export default function EmployeeManagement() {
           </button>
         )}
       </div>
+
+      {showAssignGoals && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 sm:p-8 overflow-y-auto"
+          onClick={() => setShowAssignGoals(false)}
+          data-testid="modal-assign-goals"
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl my-4 relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowAssignGoals(false)}
+              className="absolute top-3 right-3 z-10 p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg"
+              aria-label="Close"
+              data-testid="button-close-assign-goals"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <GoalAssignment
+              onClose={() => setShowAssignGoals(false)}
+              onSuccess={() => setShowAssignGoals(false)}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Employees Table */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">

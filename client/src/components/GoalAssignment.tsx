@@ -102,7 +102,7 @@ export default function GoalAssignment({ initialEmployeeId, onClose, onSuccess }
             <ArrowLeft className="h-5 w-5 text-gray-600" />
           </button>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Assign Goal</h1>
+            <h1 className="text-3xl font-bold text-gray-900">Assign Goals</h1>
             <p className="text-gray-600">
               Create a new development goal for one or more employees
             </p>
