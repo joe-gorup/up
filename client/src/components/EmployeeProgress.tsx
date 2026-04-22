@@ -868,7 +868,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                                       initialTime={timerData[step.id]?.seconds || 0}
                                                       isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
                                                       disabled={false}
-                                                      className="w-full max-w-[336px]"
+                                                      className="w-full max-w-[302px]"
                                                     />
                                                   </div>
                                                 )}
