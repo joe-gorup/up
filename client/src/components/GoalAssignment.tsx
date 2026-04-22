@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { ArrowLeft, Target, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Target, AlertCircle, Lock } from 'lucide-react';
 import { useData, type Employee, type GoalTemplate, type DevelopmentGoal } from '../contexts/DataContext';
+import { usePermissions } from '../hooks/usePermissions';
 
 interface GoalAssignmentProps {
   initialEmployeeId?: string;
@@ -12,6 +13,8 @@ interface GoalAssignmentProps {
 
 export default function GoalAssignment({ initialEmployeeId, allowedEmployeeIds, audienceLabel, onClose, onSuccess }: GoalAssignmentProps) {
   const { employees, goalTemplates, developmentGoals, bulkAssignGoal } = useData();
+  const { canModify } = usePermissions();
+  const canAssignGoals = canModify('goal_assignment');
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<Set<string>>(
     () => new Set(initialEmployeeId ? [initialEmployeeId] : [])
@@ -82,6 +85,10 @@ export default function GoalAssignment({ initialEmployeeId, allowedEmployeeIds, 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedTemplate || effectiveSelectedIds.length === 0) return;
+    if (!canAssignGoals) {
+      setErrorMessage('You do not have permission to assign goals.');
+      return;
+    }
 
     setLoading(true);
     setErrorMessage(null);
@@ -99,6 +106,35 @@ export default function GoalAssignment({ initialEmployeeId, allowedEmployeeIds, 
   const selectedCount = effectiveSelectedIds.length;
   const totalChecked = selectedEmployeeIds.size;
   const skippedCount = totalChecked - selectedCount;
+
+  if (!canAssignGoals) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="flex items-center space-x-4 mb-8">
+          <button
+            onClick={onClose}
+            className="p-2 rounded-xl hover:bg-gray-100 transition-colors"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="h-5 w-5 text-gray-600" />
+          </button>
+          <h1 className="text-3xl font-bold text-gray-900">Assign Goals</h1>
+        </div>
+        <div
+          className="bg-amber-50 border border-amber-200 rounded-xl p-6 flex items-start gap-3"
+          data-testid="permission-denied"
+        >
+          <Lock className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-semibold text-amber-900">You don't have permission to assign goals.</p>
+            <p className="text-sm text-amber-800 mt-1">
+              Ask an Administrator to enable the Goal Assignment permission for your role in Permission Settings.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -375,7 +411,7 @@ export default function GoalAssignment({ initialEmployeeId, allowedEmployeeIds, 
               </button>
               <button
                 type="submit"
-                disabled={loading || selectedCount === 0}
+                disabled={loading || selectedCount === 0 || !canAssignGoals}
                 className="px-6 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 data-testid="button-submit"
               >
