@@ -249,6 +249,53 @@ const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[]
           'Reset is now guarded against accidental taps — tapping Reset asks for confirmation ("Keep time" or "Yes, reset") and is disabled when the timer is already at 00:00.',
           'Manual time entry has moved to a small pencil icon in the top-right corner of the timer card, keeping the main controls focused on Start/Stop.',
           'The expanded timer card is more compact and now anchors to the right side of the step for a tidier layout.',
+          'Step timing is now enabled on goal steps that need it — the timer type carries over from the goal template so you only configure it once.',
+          'Goal steps stay visible during an assessment with at-a-glance outcome indicators on each step.',
+          'Submitting an assessment now validates the data and returns clearer error messages if something is missing.',
+        ]
+      },
+      {
+        area: 'Goal Assignment',
+        notes: [
+          'New "Assign Goals" workflow: from My Shift, tap "Assign Goals" to assign a goal template to one or many employees on your shift in a single step.',
+          'Goal assignment can also be opened directly from an employee profile to assign a goal to that one employee.',
+          'When assigning to multiple employees, a "Skip employees who already have this goal active" option keeps you from creating duplicates.',
+          'The bulk assign list is filtered to only the employees on your current shift, so you don\'t have to scroll through the entire roster.',
+          'The Assign Goals action and screen now fully honor the Goal Assignment permission — if a role doesn\'t have permission, the button is hidden and the screen shows a clear "no permission" message.',
+        ]
+      },
+      {
+        area: 'Training Videos',
+        notes: [
+          'New training video library: attach one or more videos to any step on a goal template, manage them right from the template edit form.',
+          'Employees see a video icon on steps during their assessments — tap it to watch the training video without leaving the assessment.',
+          'Videos open in a new tab and include a "Copy link" option so they can be shared easily.',
+          'Guardians can now see training videos for their loved one\'s active goals, and the goal list on the Guardian view is filtered to active goals only.',
+          'Polished the video UI: rounded video icons, cleaner placement on goal cards and step rows, and the videos card collapses when you\'re just viewing.',
+          '"Add Video" only appears in the places it\'s relevant, reducing clutter on screens where it doesn\'t apply.',
+        ]
+      },
+      {
+        area: 'Certifications',
+        notes: [
+          'Certification checklists now use a 3-state response (Yes / No / N/A) instead of a single checkbox, matching how assessments work.',
+          'Certification checklists were redesigned as step-style cards, making them faster to scan and complete.',
+          'Mobile experience for certification checklists has been improved with larger tap targets and better spacing.',
+          'Employee profiles now include a Certification Score History with a breakdown of past attempts and scores.',
+        ]
+      },
+      {
+        area: 'Permissions',
+        notes: [
+          'All new user roles automatically get a default permission set when they\'re created, so administrators don\'t need to configure each role from scratch.',
+          'Bulk Goal Assignment now enforces the Goal Assignment permission both in the interface and at the API layer.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          'Reduced unnecessary API requests across the app for faster page loads and fewer "too many requests" errors.',
+          'Increased the API request limit to comfortably support normal usage without hitting rate limits.',
         ]
       }
     ]
