@@ -103,34 +103,31 @@ export default function Timer({
       className={`rounded-2xl bg-white border border-stone-200 shadow-sm overflow-hidden ${className}`}
       data-testid="timer-card"
     >
-      <div className="px-5 pt-5 pb-2">
-        <div className="flex items-center justify-between">
-          <div className="text-xs font-semibold uppercase tracking-wider text-stone-500">
-            Timer
-          </div>
-          {isRunning && (
-            <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+      <div className="px-4 pt-3 pb-1">
+        {isRunning && (
+          <div className="flex justify-end">
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
               Running
             </span>
-          )}
-        </div>
-        <div className="mt-2 flex items-baseline gap-3">
+          </div>
+        )}
+        <div className="mt-1 flex items-baseline gap-2">
           <div
-            className="text-5xl sm:text-6xl font-mono font-semibold tabular-nums text-stone-900 leading-none"
+            className="text-4xl sm:text-5xl font-mono font-semibold tabular-nums text-stone-900 leading-none"
             data-testid="text-timer-display"
           >
             {formatTime(timeSeconds)}
           </div>
           {manualEntry && (
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-2 py-1 rounded">
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
               Manual
             </span>
           )}
         </div>
       </div>
 
-      <div className="px-5 pt-4 pb-5">
+      <div className="px-4 pt-3 pb-4">
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
@@ -177,7 +174,7 @@ export default function Timer({
       </div>
 
       {confirmReset && (
-        <div className="border-t border-stone-200 bg-rose-50 px-5 py-4">
+        <div className="border-t border-stone-200 bg-rose-50 px-4 py-3">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
             <div className="flex-1">
@@ -209,7 +206,7 @@ export default function Timer({
       )}
 
       {showManual && (
-        <div className="border-t border-stone-200 bg-stone-50 px-5 py-4">
+        <div className="border-t border-stone-200 bg-stone-50 px-4 py-3">
           <div className="text-sm font-semibold text-stone-800">Enter time manually</div>
           <div className="mt-3 flex items-center justify-center gap-2">
             <input

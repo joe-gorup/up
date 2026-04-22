@@ -860,7 +860,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                                 </div>
                                                 {hasTimer && (
                                                   /* Keep Timer mounted so a running clock keeps ticking and saving while collapsed */
-                                                  <div className={isOpen ? 'mb-4' : 'sr-only'} aria-hidden={!isOpen}>
+                                                  <div className={isOpen ? 'mb-4 flex justify-end' : 'sr-only'} aria-hidden={!isOpen}>
                                                     <Timer
                                                       onTimeChange={(timeInSeconds, manuallyEntered) =>
                                                         handleTimerChange(step.id, timeInSeconds, manuallyEntered)
@@ -868,7 +868,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                                       initialTime={timerData[step.id]?.seconds || 0}
                                                       isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
                                                       disabled={false}
-                                                      className="w-full max-w-md"
+                                                      className="w-full max-w-[336px]"
                                                     />
                                                   </div>
                                                 )}
