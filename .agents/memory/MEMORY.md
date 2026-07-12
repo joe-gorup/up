@@ -1,0 +1,1 @@
+- [Collaborative assessment sessions](collab-assessment.md) — Option B chosen: presence indicator + session joining, no hard locks or WebSockets.

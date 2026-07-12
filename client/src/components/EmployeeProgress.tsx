@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X } from 'lucide-react';
+import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X, Users } from 'lucide-react';
 import { Employee } from '../contexts/DataContext';
 import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
+import { apiRequest } from '../lib/auth';
 import Timer from './Timer';
 import StepVideoIcons from './StepVideoIcons';
 
@@ -110,6 +111,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const [timerData, setTimerData] = useState<Record<string, { seconds: number; manuallyEntered: boolean }>>({}); // Timer state for each step
   const [openTimers, setOpenTimers] = useState<Record<string, boolean>>({}); // Whether the launcher-pill timer card is expanded for a step
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [presenceInfo, setPresenceInfo] = useState<{ ownerName: string; activeDocumenters: string[] } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -141,6 +143,29 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       loadUserDrafts(user.id);
     }
   }, [user?.id, loadUserDrafts]);
+
+  // Poll presence info every 15 seconds while assessment is active
+  useEffect(() => {
+    if (!assessmentSessionId) return;
+    const fetchPresence = () => {
+      apiRequest(`/api/employees/${employee.id}/lock-status`).then(async res => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sessionId) {
+            setPresenceInfo({
+              ownerName: data.ownerName || '',
+              activeDocumenters: data.activeDocumenters || []
+            });
+          } else {
+            setPresenceInfo(null);
+          }
+        }
+      }).catch(() => {});
+    };
+    fetchPresence();
+    const interval = setInterval(fetchPresence, 15000);
+    return () => clearInterval(interval);
+  }, [assessmentSessionId, employee.id]);
   
   const employeeGoals = developmentGoals.filter(goal => 
     goal.employeeId === employee.id && goal.status === 'active'
@@ -558,8 +583,20 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     };
   };
 
+  const presenceNames = presenceInfo
+    ? [presenceInfo.ownerName, ...presenceInfo.activeDocumenters].filter(Boolean)
+    : [];
+
   return (
     <div className="space-y-6">
+      {/* Presence indicator — shown when others are also in this session */}
+      {presenceNames.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+          <Users className="h-4 w-4 flex-shrink-0 text-blue-500" />
+          <span>Also here: <span className="font-medium">{presenceNames.join(', ')}</span></span>
+        </div>
+      )}
+
       {/* Development Goals */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="border-b border-gray-200 px-3 sm:px-6 py-4">

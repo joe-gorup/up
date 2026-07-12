@@ -88,6 +88,15 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
   const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState(false);
+  const [employeeLockStatus, setEmployeeLockStatus] = useState<{
+    locked: boolean;
+    ownSession?: boolean;
+    sessionId?: string;
+    location?: string;
+    ownerName?: string;
+    activeDocumenters?: string[];
+  } | null>(null);
+  const [joiningSession, setJoiningSession] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [editForm, setEditForm] = useState({
@@ -718,6 +727,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         setProfileAssessmentSessionId(result.sessionId || null);
         setAssessmentMode(true);
         setActiveGoalsExpanded(false);
+        setEmployeeLockStatus(null);
       } else {
         alert(result.error || 'Could not start assessment. The employee may be locked by another session.');
       }
@@ -729,12 +739,32 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   };
 
+  const handleJoinSession = () => {
+    if (!employeeLockStatus?.sessionId) return;
+    setJoiningSession(true);
+    setProfileAssessmentSessionId(employeeLockStatus.sessionId);
+    setAssessmentLocation(employeeLockStatus.location || '9540 Nall Avenue');
+    setAssessmentMode(true);
+    setActiveGoalsExpanded(false);
+    setEmployeeLockStatus(null);
+    setJoiningSession(false);
+  };
+
   const handleEndAssessment = async () => {
     await endAssessmentSession();
     setAssessmentMode(false);
     setProfileAssessmentSessionId(null);
     setActiveGoalsExpanded(true);
   };
+
+  useEffect(() => {
+    if (!canAssess || assessmentMode) return;
+    let cancelled = false;
+    apiRequest(`/api/employees/${employeeId}/lock-status`).then(async res => {
+      if (res.ok && !cancelled) setEmployeeLockStatus(await res.json());
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [employeeId, canAssess, assessmentMode]);
   
   if (!employee) {
     return (
@@ -2162,27 +2192,48 @@ const handleGenerateInvitation = async () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <select
-                          value={assessmentLocation}
-                          onChange={(e) => setAssessmentLocation(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        >
-                          <option value="9540 Nall Avenue">9540 Nall Avenue</option>
-                          <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
-                          <option value="Remote">Remote</option>
-                        </select>
-                      </div>
-                      <button
-                        onClick={handleStartAssessment}
-                        disabled={startingAssessment}
-                        className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                      >
-                        <ClipboardCheck className="h-5 w-5" />
-                        <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
-                        <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
-                      </button>
+                      {employeeLockStatus?.locked ? (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3">
+                          <div className="flex items-start gap-2">
+                            <Users className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-700">
+                              <span className="font-semibold text-amber-800">{employeeLockStatus.ownerName}</span> is already assessing this employee. Join to document alongside them.
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleJoinSession}
+                            disabled={joiningSession}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm"
+                          >
+                            <Users className="h-4 w-4" />
+                            <span>{joiningSession ? 'Joining...' : 'Join session'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <select
+                              value={assessmentLocation}
+                              onChange={(e) => setAssessmentLocation(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            >
+                              <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                              <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                              <option value="Remote">Remote</option>
+                            </select>
+                          </div>
+                          <button
+                            onClick={handleStartAssessment}
+                            disabled={startingAssessment}
+                            className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                          >
+                            <ClipboardCheck className="h-5 w-5" />
+                            <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                            <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -2441,27 +2492,48 @@ const handleGenerateInvitation = async () => {
                     <h2 className="text-lg font-semibold text-gray-900">Goal Assessment</h2>
                   </div>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                      <select
-                        value={assessmentLocation}
-                        onChange={(e) => setAssessmentLocation(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      >
-                        <option value="9540 Nall Avenue">9540 Nall Avenue</option>
-                        <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
-                        <option value="Remote">Remote</option>
-                      </select>
-                    </div>
-                    <button
-                      onClick={handleStartAssessment}
-                      disabled={startingAssessment}
-                      className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      <ClipboardCheck className="h-5 w-5" />
-                      <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
-                      <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
-                    </button>
+                    {employeeLockStatus?.locked ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3">
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-amber-700">
+                            <span className="font-semibold text-amber-800">{employeeLockStatus.ownerName}</span> is already assessing this employee. Join to document alongside them.
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleJoinSession}
+                          disabled={joiningSession}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm"
+                        >
+                          <Users className="h-4 w-4" />
+                          <span>{joiningSession ? 'Joining...' : 'Join session'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                          <select
+                            value={assessmentLocation}
+                            onChange={(e) => setAssessmentLocation(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          >
+                            <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                            <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                            <option value="Remote">Remote</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={handleStartAssessment}
+                          disabled={startingAssessment}
+                          className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <ClipboardCheck className="h-5 w-5" />
+                          <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                          <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}

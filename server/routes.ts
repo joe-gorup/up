@@ -1085,23 +1085,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'documenter_user_id is required for draft progress' });
       }
 
-      // If tied to a session, verify the caller still owns the lock
-      if (mappedData.assessment_session_id) {
-        const [session] = await db.select().from(assessment_sessions)
-          .where(eq(assessment_sessions.id, mappedData.assessment_session_id))
-          .limit(1);
-        if (session && session.locked_by && session.locked_by !== user.id) {
-          let takenOverByName = 'an administrator';
-          const [admin] = await db.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
-          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
-          return res.status(423).json({
-            error: 'This session has been taken over. Your changes cannot be saved.',
-            error_code: 'SESSION_TAKEN_OVER',
-            taken_over_by: takenOverByName
-          });
-        }
-      }
-      
       // Check if draft already exists for this step/employee/session/documenter
       const existingDraft = await db.select().from(step_progress)
         .where(and(
@@ -1168,23 +1151,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'documenter_user_id is required for submission' });
       }
 
-      // If tied to a session, verify the caller still owns the lock
-      if (assessment_session_id) {
-        const [session] = await db.select().from(assessment_sessions)
-          .where(eq(assessment_sessions.id, assessment_session_id))
-          .limit(1);
-        if (session && session.locked_by && session.locked_by !== user.id) {
-          let takenOverByName = 'an administrator';
-          const [admin] = await db.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
-          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
-          return res.status(423).json({
-            error: 'This session has been taken over. Your changes cannot be saved.',
-            error_code: 'SESSION_TAKEN_OVER',
-            taken_over_by: takenOverByName
-          });
-        }
-      }
-      
       // Get all draft progress for this employee/session/date/documenter
       const draftProgress = await db.select().from(step_progress)
         .where(and(
@@ -1835,17 +1801,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Only allow renewal if user owns the lock
       if (existingSession.locked_by !== user.id) {
-        // Check if it was taken over by someone else
-        let takenOverByName = 'an administrator';
-        if (existingSession.locked_by) {
-          const [admin] = await db.select().from(employees).where(eq(employees.id, existingSession.locked_by)).limit(1);
-          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
-        }
-        return res.status(423).json({
-          error: 'This session has been taken over. You no longer have access.',
-          error_code: 'SESSION_TAKEN_OVER',
-          taken_over_by: takenOverByName
-        });
+        return res.status(403).json({ error: 'You do not have permission to renew this session' });
       }
 
       // Extend lock expiry by 30 minutes
@@ -2040,7 +1996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Get lock status for a single employee (used by profile pages to proactively show banner)
+  // Get presence/lock status for a single employee — who has an active session and who is actively documenting
   app.get("/api/employees/:employeeId/lock-status", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
@@ -2065,23 +2021,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json({ locked: false });
       }
 
-      // Own session — not blocked
-      if (lockingSession.locked_by === user.id) {
-        return res.json({ locked: false, ownSession: true, sessionId: lockingSession.id });
+      // Resolve session owner name
+      let ownerName = 'Another Manager';
+      const [owner] = await db.select().from(employees)
+        .where(eq(employees.id, lockingSession.locked_by)).limit(1);
+      if (owner) ownerName = `${owner.first_name} ${owner.last_name}`;
+
+      // Find who else has been actively documenting in this session in the last 20 minutes
+      const twentyMinsAgo = new Date(now.getTime() - 20 * 60 * 1000);
+      const recentProgress = await db
+        .selectDistinct({ documenterId: step_progress.documenter_user_id })
+        .from(step_progress)
+        .where(
+          and(
+            eq(step_progress.assessment_session_id, lockingSession.id),
+            eq(step_progress.employee_id, employeeId),
+            sql`${step_progress.updated_at} >= ${twentyMinsAgo}`
+          )
+        );
+
+      // Look up names for active documenters (exclude the caller)
+      const presenceNames: string[] = [];
+      const seenIds = new Set<string>([lockingSession.locked_by]);
+      for (const row of recentProgress) {
+        if (!row.documenterId || seenIds.has(row.documenterId)) continue;
+        seenIds.add(row.documenterId);
+        const [emp] = await db.select().from(employees).where(eq(employees.id, row.documenterId)).limit(1);
+        if (emp) presenceNames.push(`${emp.first_name} ${emp.last_name}`);
       }
 
-      let managerName = 'Another Manager';
-      const [manager] = await db.select().from(employees)
-        .where(eq(employees.id, lockingSession.locked_by)).limit(1);
-      if (manager) managerName = `${manager.first_name} ${manager.last_name}`;
+      const ownSession = lockingSession.locked_by === user.id;
 
       res.json({
-        locked: true,
+        locked: !ownSession,
+        ownSession,
         sessionId: lockingSession.id,
+        location: lockingSession.location,
         lockedById: lockingSession.locked_by,
-        managerName,
+        ownerName,
         lockedAt: lockingSession.locked_at,
-        expiresAt: lockingSession.expires_at
+        expiresAt: lockingSession.expires_at,
+        activeDocumenters: presenceNames  // Others (not the owner) who recently saved progress
       });
     } catch (error) {
       logger.error({ error, employeeId: req.params.employeeId }, 'Failed to get employee lock status');
