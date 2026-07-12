@@ -140,6 +140,8 @@ export const assessment_sessions = pgTable("assessment_sessions", {
   locked_by: varchar("locked_by").references(() => employees.id), // Manager who currently has the lock
   locked_at: timestamp("locked_at", { withTimezone: true }), // When the session was locked
   expires_at: timestamp("expires_at", { withTimezone: true }), // When the lock expires
+  taken_over_from: varchar("taken_over_from").references(() => employees.id), // Previous owner if an admin took over
+  taken_over_at: timestamp("taken_over_at", { withTimezone: true }), // When the admin takeover occurred
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => ({

@@ -1078,10 +1078,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/step-progress/draft", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb({ ...req.body, status: 'draft' });
+      const user = (req as any).user as AuthUser;
       
       // Require documenter_user_id for drafts
       if (!mappedData.documenter_user_id) {
         return res.status(400).json({ error: 'documenter_user_id is required for draft progress' });
+      }
+
+      // If tied to a session, verify the caller still owns the lock
+      if (mappedData.assessment_session_id) {
+        const [session] = await db.select().from(assessment_sessions)
+          .where(eq(assessment_sessions.id, mappedData.assessment_session_id))
+          .limit(1);
+        if (session && session.locked_by && session.locked_by !== user.id) {
+          let takenOverByName = 'an administrator';
+          const [admin] = await db.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
+          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
+          return res.status(423).json({
+            error: 'This session has been taken over. Your changes cannot be saved.',
+            error_code: 'SESSION_TAKEN_OVER',
+            taken_over_by: takenOverByName
+          });
+        }
       }
       
       // Check if draft already exists for this step/employee/session/documenter
@@ -1136,6 +1154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/step-progress/submit", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employee_id, assessment_session_id, date, documenter_user_id } = req.body;
+      const user = (req as any).user as AuthUser;
       
       logger.info({ 
         employeeId: employee_id,
@@ -1147,6 +1166,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Require documenter_user_id for submission
       if (!documenter_user_id) {
         return res.status(400).json({ error: 'documenter_user_id is required for submission' });
+      }
+
+      // If tied to a session, verify the caller still owns the lock
+      if (assessment_session_id) {
+        const [session] = await db.select().from(assessment_sessions)
+          .where(eq(assessment_sessions.id, assessment_session_id))
+          .limit(1);
+        if (session && session.locked_by && session.locked_by !== user.id) {
+          let takenOverByName = 'an administrator';
+          const [admin] = await db.select().from(employees).where(eq(employees.id, session.locked_by)).limit(1);
+          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
+          return res.status(423).json({
+            error: 'This session has been taken over. Your changes cannot be saved.',
+            error_code: 'SESSION_TAKEN_OVER',
+            taken_over_by: takenOverByName
+          });
+        }
       }
       
       // Get all draft progress for this employee/session/date/documenter
@@ -1799,7 +1835,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Only allow renewal if user owns the lock
       if (existingSession.locked_by !== user.id) {
-        return res.status(403).json({ error: 'You do not have permission to renew this session' });
+        // Check if it was taken over by someone else
+        let takenOverByName = 'an administrator';
+        if (existingSession.locked_by) {
+          const [admin] = await db.select().from(employees).where(eq(employees.id, existingSession.locked_by)).limit(1);
+          if (admin) takenOverByName = `${admin.first_name} ${admin.last_name}`;
+        }
+        return res.status(423).json({
+          error: 'This session has been taken over. You no longer have access.',
+          error_code: 'SESSION_TAKEN_OVER',
+          taken_over_by: takenOverByName
+        });
       }
 
       // Extend lock expiry by 30 minutes
@@ -1819,6 +1865,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, sessionId: req.params.id }, 'Failed to renew assessment session');
       res.status(500).json({ error: 'Failed to renew assessment session' });
+    }
+  });
+
+  // Admin takeover of an active assessment session
+  app.post("/api/assessment-sessions/:id/takeover", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      if (user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Administrators can take over assessment sessions' });
+      }
+
+      const [existingSession] = await db.select().from(assessment_sessions)
+        .where(eq(assessment_sessions.id, id)).limit(1);
+
+      if (!existingSession) {
+        return res.status(404).json({ error: 'Assessment session not found' });
+      }
+
+      if (existingSession.status === 'completed' || existingSession.status === 'abandoned') {
+        return res.status(400).json({ error: 'This session is already finished' });
+      }
+
+      if (existingSession.locked_by === user.id) {
+        return res.status(400).json({ error: 'You already own this session' });
+      }
+
+      const previousOwnerId = existingSession.locked_by;
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 30);
+
+      const [updatedSession] = await db
+        .update(assessment_sessions)
+        .set({
+          locked_by: user.id,
+          locked_at: new Date(),
+          expires_at: expiresAt,
+          taken_over_from: previousOwnerId,
+          taken_over_at: new Date(),
+          updated_at: new Date()
+        })
+        .where(eq(assessment_sessions.id, id))
+        .returning();
+
+      let previousOwnerName = 'the previous manager';
+      if (previousOwnerId) {
+        const [prev] = await db.select().from(employees).where(eq(employees.id, previousOwnerId)).limit(1);
+        if (prev) previousOwnerName = `${prev.first_name} ${prev.last_name}`;
+      }
+
+      logger.info({
+        sessionId: id,
+        adminId: user.id,
+        adminName: user.name,
+        previousOwnerId,
+        previousOwnerName
+      }, 'Assessment session taken over by administrator');
+
+      res.json({ session: updatedSession, previousOwnerName });
+    } catch (error) {
+      logger.error({ error, sessionId: req.params.id }, 'Failed to take over assessment session');
+      res.status(500).json({ error: 'Failed to take over session' });
     }
   });
 
@@ -1928,6 +2037,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, employeeIds: req.body.employee_ids }, 'Failed to check session locks');
       res.status(500).json({ error: 'Failed to check session locks' });
+    }
+  });
+
+  // Get lock status for a single employee (used by profile pages to proactively show banner)
+  app.get("/api/employees/:employeeId/lock-status", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      const now = new Date();
+
+      // Clean up expired sessions first
+      await db.update(assessment_sessions)
+        .set({ status: 'abandoned', locked_by: null, locked_at: null, expires_at: null, updated_at: now })
+        .where(sql`${assessment_sessions.status} IN ('draft', 'in_progress') AND ${assessment_sessions.expires_at} < ${now}`);
+
+      // Find active session that includes this employee
+      const [lockingSession] = await db.select()
+        .from(assessment_sessions)
+        .where(
+          sql`${assessment_sessions.status} IN ('draft', 'in_progress')
+              AND ${assessment_sessions.employee_ids}::jsonb ? ${employeeId}`
+        )
+        .limit(1);
+
+      if (!lockingSession || !lockingSession.locked_by) {
+        return res.json({ locked: false });
+      }
+
+      // Own session — not blocked
+      if (lockingSession.locked_by === user.id) {
+        return res.json({ locked: false, ownSession: true, sessionId: lockingSession.id });
+      }
+
+      let managerName = 'Another Manager';
+      const [manager] = await db.select().from(employees)
+        .where(eq(employees.id, lockingSession.locked_by)).limit(1);
+      if (manager) managerName = `${manager.first_name} ${manager.last_name}`;
+
+      res.json({
+        locked: true,
+        sessionId: lockingSession.id,
+        lockedById: lockingSession.locked_by,
+        managerName,
+        lockedAt: lockingSession.locked_at,
+        expiresAt: lockingSession.expires_at
+      });
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to get employee lock status');
+      res.status(500).json({ error: 'Failed to get lock status' });
     }
   });
 
