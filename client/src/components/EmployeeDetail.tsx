@@ -2397,6 +2397,9 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
+          {/* Employee Reviews */}
+          <EmployeeReviews employeeId={employeeId} />
+
         </div>
 
         {/* Right Column - Goals */}
@@ -2911,9 +2914,6 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
           )}
-
-          {/* Employee Reviews */}
-          <EmployeeReviews employeeId={employeeId} />
 
           {/* Archived Goals */}
           {archivedGoals.length > 0 && (
