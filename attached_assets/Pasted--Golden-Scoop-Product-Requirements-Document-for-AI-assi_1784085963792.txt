@@ -1,0 +1,162 @@
+# Golden Scoop — Product Requirements Document (for AI-assisted development)
+
+## What This App Is
+
+Golden Scoop (branded as "Unique Pathway by thegoldenscoop.org") is a web-based employee development and goal-tracking application built for an ice cream shop. It lets managers and administrators document employee progress on structured, step-by-step skill goals through scheduled assessment sessions. The app is in active production with real data since September 2025.
+
+---
+
+## Users & Roles
+
+| Role | What They Do |
+|------|-------------|
+| Administrator | Full access to everything — settings, all employees, all data |
+| Shift Lead | Runs assessments, views all Super Scoopers, builds a daily "My Shift" list |
+| Assistant Manager | Same as Shift Lead |
+| Job Coach | External coach — sees only their assigned Super Scoopers via "My Scoopers" page |
+| Guardian | Family member — sees only their loved one's profile via "My Loved Ones" page |
+| Super Scooper | The employee being tracked — limited system access |
+
+All users (including Super Scoopers) are stored in a single `employees` table. System access is controlled by `has_system_access: boolean` and `password`.
+
+---
+
+## Core Features
+
+### Employee Profiles
+- Full profile: name, role, date of birth, allergies, emergency contacts, interests/motivators, challenges, regulation strategies, service providers
+- ROI compliance flow: legal consent text, toggle checkboxes, guardian info, signature capture
+- Promotion certifications: Mentor and Shift Lead certs with date and notes
+
+### Goal System
+- **Goal Templates**: reusable skeletons (85 in production) with a title, goal statement, ordered steps, mastery criteria, and a relative target duration (e.g., "90 days"). Steps can have timers (required/optional/none) and video links.
+- **Development Goals**: employee-specific instances assigned from a template. Status: active / completed / archived.
+- **Goal Steps**: ordered steps copied from the template at assignment time.
+- **Mastery**: tracked by `consecutive_all_correct` — default criteria is 3 consecutive assessments with all required steps Correct.
+
+### Assessment Sessions
+- A session covers one or more employees at a specific location on a specific date.
+- One active session per employee at a time (PostgreSQL Advisory Lock prevents race conditions on creation).
+- **Collaborative joining (Option B)**: if a session is already open for an employee, other managers see a banner — "X is already assessing this employee — Join session" — and can join the existing session to document alongside them. No hard block. No WebSockets — presence is polled every 15 seconds via `GET /api/employees/:id/lock-status`.
+- Sessions expire automatically; abandoned sessions are cleaned up.
+
+### Step Progress
+- Per-step outcomes: Correct / Verbal Prompt / Incorrect / N/A
+- Notes per step
+- Per-step timer: collapsed behind a pill by default, expands to Start/Stop/Reset/Manual entry. Timer state persists even when collapsed. Time is saved in seconds on submit.
+- Each step_progress row tracks `documenter_user_id` (who entered it).
+
+### My Shift Workflow
+- Shift Leads / Admins search and pin employees to a daily working list (persisted in session).
+- Assessments are launched from individual employee profile pages, not from a separate documentation page.
+
+### Coach & Guardian Experience
+- Job Coaches: "My Scoopers" page — fixed assigned list, no free search, check-in notes, file attachments, rich-text coach notes.
+- Guardians: "My Loved Ones" page — single linked scooper, view-only profile, guardian notes.
+
+### Admin Tools
+- **User Management**: invite new users via email token, set role, manage access.
+- **Configurable Permissions**: matrix grid (features × roles). Toggle View/Modify/Delete per feature per role. Admins always have full access (locked). Enforced via `requirePermission` middleware (backend) and `usePermissions` hook (frontend).
+- **Goal Template Manager**: create/edit/archive templates and their steps, attach video links to steps.
+- **Assessment History**: batch endpoint eliminates N+1 fetching; client-side caching prevents redundant re-fetches.
+
+---
+
+## Tech Stack
+
+- **Frontend**: React + TypeScript, Vite, Tailwind CSS, shadcn/ui, Radix UI, Lucide React icons
+- **State**: React Context API (auth + global data), TanStack Query v5 (server state)
+- **Routing**: wouter (client-side SPA)
+- **Backend**: Express.js + Node.js + TypeScript (monolithic)
+- **Database**: PostgreSQL on Neon (serverless) via @neondatabase/serverless WebSocket driver
+- **ORM**: Drizzle ORM — schema-first, type-safe
+- **Validation**: Zod + drizzle-zod
+- **Build/Deploy**: Vite (frontend) + esbuild (backend), served on same port via Express
+
+---
+
+## Database Schema (production tables)
+
+### employees
+id (uuid pk), name (legacy NOT NULL), first_name, last_name, email, role, profile_image_url, is_active, has_system_access, password, last_login, date_of_birth, roi_status, roi_signed_at, roi_signature, roi_consent_type, roi_no_release_details, roi_guardian_*, has_service_provider, service_providers (jsonb), allergies (jsonb), emergency_contacts (jsonb), interests_motivators (jsonb), challenges (jsonb), regulation_strategies (jsonb), created_at, updated_at
+
+### goal_templates
+id, name, goal_statement, default_mastery_criteria, relative_target_duration, default_target_date, status, created_at, updated_at
+
+### goal_template_steps
+id, template_id (fk), step_order, step_description, is_required, timer_required, timer_type ("none"/"required"/"optional"), created_at
+
+### development_goals
+id, employee_id (fk), template_id (fk), title, description, start_date, target_end_date, status, mastery_achieved, mastery_date, consecutive_all_correct, created_at, updated_at
+
+### goal_steps
+id, goal_id (fk), step_order, step_description, is_required, created_at
+
+### step_progress
+id, development_goal_id (fk), goal_step_id (fk), employee_id (fk), date, outcome, notes, assessment_session_id (fk), status, documenter_user_id (fk → employees), completion_time_seconds, timer_manually_entered, created_at, updated_at
+
+### assessment_sessions
+id, manager_id (fk), date, location, employee_ids (jsonb array), notes, status ("draft"/"in_progress"/"completed"/"abandoned"), locked_by (fk), locked_at, expires_at, taken_over_from, taken_over_at, created_at, updated_at
+
+### assessment_summaries
+id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, updated_at
+
+### Additional tables (newer, not all in production yet)
+- coach_assignments (coach_id → scooper_id)
+- guardian_relationships (guardian_id → scooper_id)
+- guardian_notes (one note per guardian-scooper pair)
+- account_invitations (setup tokens)
+- coach_checkins (structured visit notes)
+- coach_files (PDF/TXT/DOC/DOCX/RTF uploads)
+- coach_notes (rich text notes per scooper)
+- promotion_certifications (mentor/shift lead with date and notes)
+- employee_contacts (unified contact management)
+- role_permissions (configurable feature × role permission matrix)
+
+---
+
+## Key File Locations
+
+| What | Where |
+|------|-------|
+| Database schema + types | `shared/schema.ts` |
+| All API routes | `server/routes.ts` |
+| Storage interface | `server/storage.ts` |
+| Auth + apiRequest | `client/src/lib/auth.ts` |
+| Global data context | `client/src/contexts/DataContext.tsx` |
+| Auth context | `client/src/contexts/AuthContext.tsx` |
+| Employee profile page | `client/src/components/EmployeeDetail.tsx` |
+| Assessment UI | `client/src/components/EmployeeProgress.tsx` |
+| Permission hook | `client/src/hooks/usePermissions.ts` |
+| Client-side cache | `client/src/lib/apiCache.ts` |
+| App router | `client/src/App.tsx` |
+
+---
+
+## Hard Development Rules (ALWAYS follow these)
+
+1. **Schema changes must be additive only.** Never drop, rename, or change the type of an existing column. Never add NOT NULL without a default. Only add new nullable columns or new tables.
+
+2. **Always populate `employees.name`** when creating or updating an employee — set it to `${first_name} ${last_name}`. It's a legacy NOT NULL field.
+
+3. **Run `npm run db:push` before publishing.** If it shows a data-loss warning, STOP. Only use `--force` if the warning is for a genuinely safe new addition.
+
+4. **Every API endpoint requires `authenticateToken` middleware.** Role-restricted endpoints use `requireRole()`. Job Coach endpoints verify coach-to-employee assignment. Guardian endpoints verify guardian-to-scooper relationship.
+
+5. **`apiRequest` signature**: `apiRequest(url: string, options?: RequestInit)` — URL first, options object second. Not `(method, url)`.
+
+6. **TanStack Query v5 only accepts object form**: `useQuery({ queryKey: [...], queryFn: ... })` — not the old array/positional form.
+
+7. **Never bulk-delete core tables** (employees, development_goals, step_progress, goal_templates, assessment_sessions). Use soft deletes (status flags) where possible.
+
+8. **Do not modify** `vite.config.ts`, `server/vite.ts`, `package.json`, or `drizzle.config.ts`.
+
+---
+
+## Current Production Stats
+- 57 employees
+- 85 goal templates with 1,377 steps
+- 24 active development goals
+- 430 step_progress records
+- 81 assessment sessions
+- In use since September 2025
