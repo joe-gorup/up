@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "TVazuPe9frYY1Tg7XGM1C"
+uri = "file://PRD - Golden Scoop Employee Management System.md"
+type = "text"
+title = "Golden Scoop PRD v2.0"
