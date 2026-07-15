@@ -1,0 +1,41 @@
+Create a prototype for an Employee Review & Feedback section within the Golden Scoop "Unique Pathway" app. This feature enables managers and admins to conduct and track mid-year and annual reviews using a set of six standard free-text questions. 
+
+**Core Functionality:**
+- **Review Creation**: Managers or admins can initiate a review by selecting "Mid-Year" or "Annual" and answering six structured questions about the employee's performance. Reviews are listed chronologically per employee with full visibility to authorized roles, configurable by admins.
+  
+- **Permissions**: Control over who can view, create, edit, or delete a review based on role, strictly adhering to RBAC policies.
+  
+- **Data Export**: Admins can export review data in CSV format for reporting purposes.
+
+**User Stories**:
+- Managers want to document feedback and review past submissions for meaningful coaching sessions.
+- Admins require robust control over review visibility and the ability to extract data for organizational reporting.
+- Employees desire to view performance insights, as permitted by admin-defined roles.
+
+**User Experience**:
+- Access from an employee’s profile via a "Reviews" tab.
+- Presents a form with required fields for the six questions.
+- Allows visibility and interaction based on permissions, with retroactive updates reflecting any permission changes.
+
+**Technical Requirements**:
+- New database table in PostgreSQL will store reviews, requiring schema adjustments without disrupting existing flows.
+- Use Express and Node.js for backend with Postgres DB, leveraging existing authentication methods.
+- Implement endpoints: POST/create, GET/list, PATCH/edit, DELETE/remove, and an admin-specific export function.
+- UI built in React with shadcn/ui components and Tailwind CSS for styling. 
+
+**Performance**: 
+- API endpoints will check permissions during each request, fully implementing RBAC.
+- Ensure form submission latency is <500ms.
+- Review volumes modest; appropriately index DB tables.
+
+**Monitoring**:
+- Log operations involving review creation, updates, deletions, and exports.
+
+**Integration**:
+- Tie into existing analytics and authentication frameworks.
+- Scalability and performance monitoring without affecting existing assessment features.
+
+**Non-goals**:
+- Not included: AI-driven insights, reminder automation, or bulk imports.
+
+This foundational feature allows structured, policy-compliant employee reviews with robust administrative control, visibility, and accountability.

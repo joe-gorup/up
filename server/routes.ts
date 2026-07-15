@@ -6,8 +6,8 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions, employee_reviews,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration
@@ -4755,6 +4755,148 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error }, 'Failed to detach video from template step');
       res.status(500).json({ error: 'Failed to detach video from template step' });
+    }
+  });
+
+  // ========== Employee Reviews Endpoints ==========
+
+  app.get("/api/employees/:employeeId/reviews", authenticateToken, requirePermission('employee_reviews', 'can_view'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      // Guardian role has no access to reviews
+      if (user.role === 'Guardian') return res.status(403).json({ error: 'Access denied' });
+
+      const reviews = await db.select().from(employee_reviews)
+        .where(eq(employee_reviews.employee_id, employeeId))
+        .orderBy(desc(employee_reviews.created_at));
+
+      const reviewerIds = Array.from(new Set(reviews.map(r => r.reviewer_id).filter(Boolean))) as string[];
+      let reviewerMap: Record<string, string> = {};
+      if (reviewerIds.length > 0) {
+        const reviewers = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, reviewerIds));
+        reviewerMap = Object.fromEntries(reviewers.map(e => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+      }
+
+      const enriched = reviews.map(r => ({ ...r, reviewer_name: r.reviewer_id ? (reviewerMap[r.reviewer_id] || 'Unknown') : null }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch reviews');
+      res.status(500).json({ error: 'Failed to fetch reviews' });
+    }
+  });
+
+  app.post("/api/employees/:employeeId/reviews", authenticateToken, requirePermission('employee_reviews', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      if (user.role === 'Guardian' || user.role === 'Super Scooper') {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const reviewData = { ...req.body, employee_id: employeeId, reviewer_id: user.id };
+      const parsed = insertEmployeeReviewSchema.parse(reviewData);
+      const [review] = await db.insert(employee_reviews).values(parsed).returning();
+
+      logger.info({ reviewId: review.id, reviewerId: user.id, employeeId }, 'Employee review created');
+      const reviewer_name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown';
+      res.json({ ...review, reviewer_name });
+    } catch (error) {
+      logger.error({ error }, 'Failed to create review');
+      res.status(500).json({ error: 'Failed to create review' });
+    }
+  });
+
+  app.patch("/api/reviews/:id", authenticateToken, requirePermission('employee_reviews', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      const [existing] = await db.select().from(employee_reviews).where(eq(employee_reviews.id, id));
+      if (!existing) return res.status(404).json({ error: 'Review not found' });
+      if (existing.reviewer_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original reviewer or an Administrator can edit this review' });
+      }
+
+      const { review_type, q1, q2, q3, q4, q5, q6 } = req.body;
+      const [updated] = await db.update(employee_reviews)
+        .set({ review_type, q1, q2, q3, q4, q5, q6, updated_at: new Date() })
+        .where(eq(employee_reviews.id, id))
+        .returning();
+
+      logger.info({ reviewId: id, editorId: user.id }, 'Employee review updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error }, 'Failed to update review');
+      res.status(500).json({ error: 'Failed to update review' });
+    }
+  });
+
+  app.delete("/api/reviews/:id", authenticateToken, requirePermission('employee_reviews', 'can_delete'), async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      const [existing] = await db.select().from(employee_reviews).where(eq(employee_reviews.id, id));
+      if (!existing) return res.status(404).json({ error: 'Review not found' });
+      if (existing.reviewer_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original reviewer or an Administrator can delete this review' });
+      }
+
+      await db.delete(employee_reviews).where(eq(employee_reviews.id, id));
+      logger.info({ reviewId: id, deletedBy: user.id }, 'Employee review deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to delete review');
+      res.status(500).json({ error: 'Failed to delete review' });
+    }
+  });
+
+  // Admin-only CSV export
+  app.get("/api/employees/:employeeId/reviews/export", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+
+      const [emp] = await db.select().from(employees).where(eq(employees.id, employeeId)).limit(1);
+      const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : employeeId;
+
+      const reviews = await db.select().from(employee_reviews)
+        .where(eq(employee_reviews.employee_id, employeeId))
+        .orderBy(desc(employee_reviews.created_at));
+
+      const reviewerIds = Array.from(new Set(reviews.map(r => r.reviewer_id).filter(Boolean))) as string[];
+      let reviewerMap: Record<string, string> = {};
+      if (reviewerIds.length > 0) {
+        const reviewers = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, reviewerIds));
+        reviewerMap = Object.fromEntries(reviewers.map(e => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+      }
+
+      const escape = (v: string | null | undefined) => `"${(v || '').replace(/"/g, '""')}"`;
+
+      const headers = ['Employee', 'Review Type', 'Date', 'Reviewer',
+        'Q1: Greatest Strengths', 'Q2: Growth Areas', 'Q3: Goal Progress',
+        'Q4: Teamwork & Attitude', 'Q5: Achievements', 'Q6: Next Period Goals'];
+
+      const rows = reviews.map(r => [
+        escape(empName),
+        escape(r.review_type === 'mid_year' ? 'Mid-Year' : 'Annual'),
+        escape(r.created_at ? new Date(r.created_at).toLocaleDateString() : ''),
+        escape(r.reviewer_id ? (reviewerMap[r.reviewer_id] || 'Unknown') : ''),
+        escape(r.q1), escape(r.q2), escape(r.q3), escape(r.q4), escape(r.q5), escape(r.q6),
+      ].join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="reviews-${empName.replace(/\s+/g, '-')}.csv"`);
+      logger.info({ employeeId, exportedBy: (req as any).user.id, count: reviews.length }, 'Reviews exported to CSV');
+      res.send(csv);
+    } catch (error) {
+      logger.error({ error }, 'Failed to export reviews');
+      res.status(500).json({ error: 'Failed to export reviews' });
     }
   });
 

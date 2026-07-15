@@ -581,6 +581,7 @@ export const PERMISSION_FEATURES = [
   'guardian_notes',
   'contacts',
   'past_assessments',
+  'employee_reviews',
 ] as const;
 
 export type PermissionFeature = typeof PERMISSION_FEATURES[number];
@@ -602,6 +603,7 @@ export const PERMISSION_FEATURE_LABELS: Record<PermissionFeature, string> = {
   guardian_notes: 'Guardian Notes',
   contacts: 'Contacts',
   past_assessments: 'Past Assessments',
+  employee_reviews: 'Employee Reviews',
 };
 
 export const CONFIGURABLE_ROLES = ['Shift Lead', 'Assistant Manager', 'Job Coach', 'Guardian'] as const;
@@ -712,3 +714,26 @@ export type InsertGuardianNote = z.infer<typeof insertGuardianNoteSchema>;
 export type GuardianNote = typeof guardian_notes.$inferSelect;
 export type InsertEmployeeContact = z.infer<typeof insertEmployeeContactSchema>;
 export type EmployeeContact = typeof employee_contacts.$inferSelect;
+
+// Employee reviews table
+export const employee_reviews = pgTable("employee_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }),
+  reviewer_id: varchar("reviewer_id").references(() => employees.id, { onDelete: "set null" }),
+  review_type: text("review_type").notNull().default("mid_year"), // "mid_year" | "annual"
+  q1: text("q1"),
+  q2: text("q2"),
+  q3: text("q3"),
+  q4: text("q4"),
+  q5: text("q5"),
+  q6: text("q6"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("employee_reviews_employee_id_idx").on(table.employee_id),
+  reviewerIdIdx: index("employee_reviews_reviewer_id_idx").on(table.reviewer_id),
+}));
+
+export const insertEmployeeReviewSchema = createInsertSchema(employee_reviews).omit({ id: true, created_at: true, updated_at: true });
+export type InsertEmployeeReview = z.infer<typeof insertEmployeeReviewSchema>;
+export type EmployeeReview = typeof employee_reviews.$inferSelect;

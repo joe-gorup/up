@@ -11,6 +11,7 @@ import GoalAssignment from './GoalAssignment';
 import TemplateVideoManager from './TemplateVideoManager';
 import StepVideoIcons from './StepVideoIcons';
 import CoachCheckin from './CoachCheckin';
+import EmployeeReviews from './EmployeeReviews';
 import EmployeeProgress from './EmployeeProgress';
 import CertificationHistory from './CertificationHistory';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -2910,6 +2911,9 @@ const handleGenerateInvitation = async () => {
               )}
             </div>
           )}
+
+          {/* Employee Reviews */}
+          <EmployeeReviews employeeId={employeeId} />
 
           {/* Archived Goals */}
           {archivedGoals.length > 0 && (
