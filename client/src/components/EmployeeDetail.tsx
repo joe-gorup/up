@@ -2075,7 +2075,7 @@ const handleGenerateInvitation = async () => {
         </div>
       )}
 
-      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? (assessmentMode ? 'lg:grid-cols-2' : 'lg:grid-cols-3') : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? (assessmentMode ? 'lg:grid-cols-2' : 'lg:grid-cols-3') : 'lg:grid-cols-3'} gap-6`}>
         {/* Left Column for Super Scoopers: Assessment card (when not in assessment mode) + Guardian/Coach Notes */}
         <div className={employee.role === 'Super Scooper' ? 'lg:col-span-1 space-y-6' : 'contents'}>
 
