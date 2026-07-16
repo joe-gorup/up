@@ -112,6 +112,23 @@ const GUIDE_SECTIONS: Section[] = [
           'Features marked "N/A" are not applicable to that role (e.g., "My Scoopers" only applies to Job Coaches).',
           'Click "Save Changes" to apply your updates, or "Discard" to undo unsaved changes.'
         ]
+      },
+      {
+        page: 'Employee Reviews',
+        icon: ClipboardList,
+        description: 'Document structured mid-year and annual performance reviews for Super Scoopers directly from their employee profile.',
+        steps: [
+          'Open any Super Scooper\'s employee profile.',
+          'Scroll down the left column to find the "Reviews" section, below Job Coach Notes.',
+          'Click "Reviews" to expand the section.',
+          'Click "New Review" to open the review form.',
+          'Select the review type: Mid-Year Review or Annual Review.',
+          'Answer all 6 guided questions covering strengths, growth areas, goal progress, teamwork, achievements, and goals for the next period.',
+          'Click "Save Review" — all 6 questions must be answered before saving is enabled.',
+          'Past reviews appear in the list. Click any review row to expand it and read the full answers.',
+          'Use the pencil icon to edit a review, or the trash icon to delete it. Administrators can edit or delete any review.',
+          'Click "Export CSV" (visible when the Reviews section is expanded) to download all reviews for that employee as a spreadsheet.'
+        ]
       }
     ]
   },
@@ -148,6 +165,19 @@ const GUIDE_SECTIONS: Section[] = [
           'Review summary statistics: active employees, total active goals, mastered goals, and goals near mastery.',
           'Scroll down to see recent activity and identify employees who may need additional support.',
           'Use this as a quick check-in tool before or after your shift.'
+        ]
+      },
+      {
+        page: 'Employee Reviews',
+        icon: ClipboardList,
+        description: 'Write structured mid-year and annual performance reviews for Super Scoopers as part of their ongoing development.',
+        steps: [
+          'Open a Super Scooper\'s employee profile from My Shift or Employee Management.',
+          'Scroll down the left column and click "Reviews" to expand the section.',
+          'Click "New Review" and select Mid-Year or Annual review type.',
+          'Answer all 6 guided questions and click "Save Review" — all fields must be filled.',
+          'You can edit or delete reviews you have written using the pencil and trash icons.',
+          'Click on any past review to expand it and read the full answers.'
         ]
       }
     ]
@@ -238,6 +268,30 @@ const GUIDE_SECTIONS: Section[] = [
 ];
 
 const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
+  {
+    date: 'July 16, 2026',
+    groups: [
+      {
+        area: 'Employee Profiles',
+        notes: [
+          '**Employee Reviews** — Administrators, Shift Leads, and Assistant Managers can now write mid-year and annual reviews for Super Scoopers directly from their profile. Reviews are structured around 6 guided questions covering strengths, growth areas, goal progress, teamwork, achievements, and goals for the next review period.',
+          '**CSV Export** — Administrators can export all reviews for an employee as a CSV file directly from the Reviews section on their profile.',
+        ]
+      },
+      {
+        area: 'Assessments',
+        notes: [
+          '**Collaborative session presence** — When another staff member is already documenting a Super Scooper, an amber banner now appears showing who is in the session. You can join and document alongside them at the same time.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          '**Portrait layout** — Employee profile pages now consistently use a single-column layout on portrait screens (phone and tablet) for all role types, switching to the two-column view only in landscape.',
+        ]
+      }
+    ]
+  },
   {
     date: 'April 22, 2026',
     groups: [
