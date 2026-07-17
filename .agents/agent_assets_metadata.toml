@@ -6,3 +6,9 @@ id = "TVazuPe9frYY1Tg7XGM1C"
 uri = "file://PRD - Golden Scoop Employee Management System.md"
 type = "text"
 title = "Golden Scoop PRD v2.0"
+
+[[outputs]]
+id = "2DYskSx8ep5AeCzgWoEE6"
+uri = "file://Tech Stack - Unique Pathway.md"
+type = "text"
+title = "Tech Stack — Unique Pathway"
