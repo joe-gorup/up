@@ -41,7 +41,7 @@ const EMPLOYEE_ALLOWED_FIELDS = [
   'first_name', 'last_name', 'email', 'role', 'date_of_birth',
   'is_active', 'has_system_access', 'password',
   'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
-  'regulation_strategies', 'has_service_provider', 'service_providers',
+  'regulation_strategies', 'accommodations', 'has_service_provider', 'service_providers',
   'profile_image_url', 'location',
   'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
   'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',

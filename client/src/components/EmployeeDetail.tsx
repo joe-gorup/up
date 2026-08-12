@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility } from 'lucide-react';
 import { useData, PromotionCertification } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
@@ -58,6 +58,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingSupportInterests, setEditingSupportInterests] = useState(false);
   const [editingSupportChallenges, setEditingSupportChallenges] = useState(false);
   const [editingSupportStrategies, setEditingSupportStrategies] = useState(false);
+  const [editingSupportAccommodations, setEditingSupportAccommodations] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
@@ -65,7 +66,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [supportForm, setSupportForm] = useState({
     interestsMotivators: [''],
     challenges: [''],
-    regulationStrategies: ['']
+    regulationStrategies: [''],
+    accommodations: ['']
   });
   const [serviceProviderForm, setServiceProviderForm] = useState<Array<{ name: string; type: string }>>([]);
 
@@ -441,7 +443,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
       setSupportForm({
         interestsMotivators: employee.interestsMotivators.length > 0 ? [...employee.interestsMotivators] : [''],
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
-        regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
+        regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : [''],
+        accommodations: employee.accommodations.length > 0 ? [...employee.accommodations] : ['']
       });
       setServiceProviderForm(
         employee.serviceProviders?.length > 0 
@@ -504,7 +507,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   };
 
 
-  const handleSaveSupportCategory = async (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies') => {
+  const handleSaveSupportCategory = async (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies' | 'accommodations') => {
     setSavingProfile(true);
     try {
       await updateEmployee(employeeId, {
@@ -513,6 +516,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
       if (category === 'interestsMotivators') setEditingSupportInterests(false);
       if (category === 'challenges') setEditingSupportChallenges(false);
       if (category === 'regulationStrategies') setEditingSupportStrategies(false);
+      if (category === 'accommodations') setEditingSupportAccommodations(false);
     } catch (error) {
       console.error('Error saving support info:', error);
     } finally {
@@ -526,7 +530,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   };
 
 
-  const handleCancelSupportCategory = (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies') => {
+  const handleCancelSupportCategory = (category: 'interestsMotivators' | 'challenges' | 'regulationStrategies' | 'accommodations') => {
     if (employee) {
       const data = employee[category];
       setSupportForm(prev => ({
@@ -537,6 +541,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     if (category === 'interestsMotivators') setEditingSupportInterests(false);
     if (category === 'challenges') setEditingSupportChallenges(false);
     if (category === 'regulationStrategies') setEditingSupportStrategies(false);
+    if (category === 'accommodations') setEditingSupportAccommodations(false);
   };
 
   const startEditingServiceProvider = () => {
@@ -966,6 +971,12 @@ const handleGenerateInvitation = async () => {
                       <span>{employee.regulationStrategies.length}</span>
                     </div>
                   )}
+                  {employee.accommodations.length > 0 && (
+                    <div className="flex items-center space-x-1 text-teal-600 bg-teal-50 px-2 py-0.5 rounded-full text-xs" title={`Accommodations: ${employee.accommodations.join(', ')}`}>
+                      <Accessibility className="h-3 w-3" />
+                      <span>{employee.accommodations.length}</span>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -1166,6 +1177,60 @@ const handleGenerateInvitation = async () => {
                     )
                   )}
                 </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                    <Accessibility className="h-3.5 w-3.5 text-teal-600 mr-1.5" /> Accommodations
+                  </h4>
+                  {canEdit && !editingSupportAccommodations && (
+                    <button
+                      onClick={() => setEditingSupportAccommodations(true)}
+                      className="p-1.5 text-teal-400 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition-colors"
+                      title="Edit accommodations"
+                    >
+                      <SquarePen className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 mb-2">Tools, equipment, and environmental supports (e.g. magnifying glass, adaptive grippers)</p>
+                {editingSupportAccommodations ? (
+                  <div>
+                    <div className="space-y-1.5">
+                      {supportForm.accommodations.map((accommodation, index) => (
+                        <div key={index} className="flex space-x-1.5">
+                          <input type="text" value={accommodation} onChange={(e) => updateSupportArrayItem('accommodations', index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Accommodation" />
+                          {supportForm.accommodations.length > 1 && (
+                            <button type="button" onClick={() => removeSupportArrayItem('accommodations', index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => addSupportArrayItem('accommodations')} className="flex items-center space-x-1 text-blue-600 hover:text-blue-700 text-xs font-medium mt-2 pt-1">
+                      <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                    </button>
+                    <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                      <button onClick={() => handleCancelSupportCategory('accommodations')} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                      <button onClick={() => handleSaveSupportCategory('accommodations')} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 text-xs font-medium disabled:opacity-50 transition-colors">
+                        <Save className="h-3 w-3" />
+                        <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  employee.accommodations.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {employee.accommodations.map((item, i) => (
+                        <span key={i} className="bg-teal-100 text-teal-800 px-2.5 py-1 rounded-full text-sm">{item}</span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-gray-400 text-sm italic">None recorded</p>
+                  )
+                )}
               </div>
             </div>
 
