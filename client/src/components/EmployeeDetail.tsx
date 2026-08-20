@@ -23,7 +23,10 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const { user } = useAuth();
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [assessmentMode, setAssessmentMode] = useState(false);
-  const [showSupportExpanded, setShowSupportExpanded] = useState(user?.role === 'Administrator');
+  // Expand support details by default for staff who need Service Provider / Job Coach sections
+  const [showSupportExpanded, setShowSupportExpanded] = useState(
+    ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '')
+  );
   const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
   const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState(false);
