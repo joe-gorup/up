@@ -2,7 +2,8 @@
 
 **Last updated:** August 20, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Status:** Planning — design review recommended before major new development
+**Status:** Planning — design review recommended before major T3+ development  
+**Shipped to main:** T1 (manager profile visibility), T2 (accommodations)
 
 ---
 
@@ -19,8 +20,8 @@
 
 | ID | Topic | Status | Type | Notes |
 |----|--------|--------|------|-------|
-| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | Investigate on Replit | Bug / UX | Likely collapsed “View Details” default for non-Admins |
-| **T2** | Accommodations on profile | **In PR** ([#4](https://github.com/joe-gorup/up/pull/4)) | Feature | Dedicated field (separate from regulation strategies) |
+| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | **Done** (merged to `main`) | Bug / UX | View Details expands by default for Admin, Shift Lead, Assistant Manager |
+| **T2** | Accommodations on profile | **Done** (merged to `main`) | Feature | Dedicated field (separate from regulation strategies); run DB migration on deploy |
 | **T3** | Admin-controllable configuration (forms, checklists, field names) | Planned — **design first** | Platform | Strategic theme; see §3 |
 | **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | Should be first use of Admin form builder (T3) |
 | **T5** | Unified notes feed (name, date, all authorized users) | Planned | Feature | Replace siloed guardian/coach note UIs |
@@ -226,9 +227,9 @@ Hold a short design / architecture review covering:
 
 ## 9. Next actions
 
-1. **Schedule design review** (§6) before starting T3/T4/T5/T6 development.  
-2. **Obtain Google Doc** with five mid-year questions.  
-3. **Complete T1 Replit check** and decide fix.  
-4. **Merge / deploy T2** (accommodations PR) when ready.  
+1. **Deploy `main`** to Replit/production and run accommodations migration (`migrations/0002_add_accommodations_column.sql` or `npm run db:push`).  
+2. **Verify T1** as Ali (Shift Lead): Service Provider / Job Coach visible without hunting for View Details.  
+3. **Schedule design review** (§6) before starting T3/T4/T5/T6 development.  
+4. **Obtain Google Doc** with five mid-year questions.  
 5. **Lock sequence** (Option A recommended).  
 6. After design review: write short tech spec for T3-A, then implement.
