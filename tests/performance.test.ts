@@ -20,8 +20,7 @@ describe('Performance & Scalability Tests', () => {
         emergencyContacts: [],
         interestsMotivators: [],
         challenges: [],
-        regulationStrategies: [],
-        accommodations: []
+        regulationStrategies: []
       }));
 
       const developmentGoals = employees.flatMap((emp, empIndex) => 

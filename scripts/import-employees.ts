@@ -25,7 +25,6 @@ interface EmployeeCSVRow {
   interests_motivators?: string; // JSON string or comma-separated
   challenges?: string; // JSON string or comma-separated
   regulation_strategies?: string; // JSON string or comma-separated
-  accommodations?: string; // JSON string or comma-separated
 }
 
 /**
@@ -95,8 +94,7 @@ export async function importEmployees(csvFilePath: string): Promise<void> {
             emergency_contacts: parseEmergencyContacts(row.emergency_contacts || ''),
             interests_motivators: parseCSVField(row.interests_motivators || ''),
             challenges: parseCSVField(row.challenges || ''),
-            regulation_strategies: parseCSVField(row.regulation_strategies || ''),
-            accommodations: parseCSVField(row.accommodations || '')
+            regulation_strategies: parseCSVField(row.regulation_strategies || '')
           };
 
           employeeData.push(employeeRecord);

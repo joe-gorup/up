@@ -45,7 +45,6 @@ export const employees = pgTable("employees", {
   interests_motivators: jsonb("interests_motivators").default(sql`'[]'::jsonb`),
   challenges: jsonb("challenges").default(sql`'[]'::jsonb`),
   regulation_strategies: jsonb("regulation_strategies").default(sql`'[]'::jsonb`),
-  accommodations: jsonb("accommodations").default(sql`'[]'::jsonb`),
   
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
