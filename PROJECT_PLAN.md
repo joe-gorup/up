@@ -2,7 +2,7 @@
 
 **Last updated:** August 21, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Status:** Planning — design review recommended before major development  
+**Companion:** `ARCHITECTURE_BIG_CHANGES.md` (T3–T7 platform design draft) · `WORK_PACKETS.md` (Replit packets)  
 
 ### Working model (locked)
 
