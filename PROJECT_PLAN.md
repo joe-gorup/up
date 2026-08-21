@@ -1,9 +1,26 @@
 # Unique Pathway (UP) — Feature Project Plan
 
-**Last updated:** August 20, 2026  
+**Last updated:** August 21, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Status:** Planning — design review recommended before major T3+ development  
-**Shipped to main:** T1 (manager profile visibility), T2 (accommodations)
+**Status:** Planning — design review recommended before major development  
+
+### Working model (locked)
+
+| Role | Who | Responsibility |
+|------|-----|----------------|
+| **Architect / Lead Engineer** | Cursor (this agent) | Specs, sequencing, design review, acceptance criteria, code review guidance — **does not ship app code to `main`** |
+| **Implementation** | Replit (Joe / Replit Agent) | Build, test, migrate DB, deploy per issued work packets |
+| **Product** | Allison / Sarah / Eileen | Priorities, open decisions (§4), Google Doc content |
+
+Cursor issues **work packets** (scope, files, acceptance tests, non-goals). Replit implements and reports back. Cursor updates this plan and the next packet.
+
+---
+
+## 0. Rollback note (Aug 21, 2026)
+
+T1 (manager View Details default) and T2 (accommodations) were briefly merged to `main` from Cursor Cloud, then **reverted**. `main` is back to pre-feature state (`5395fe0` lineage + revert commits).
+
+**If Replit already ran `db:push` for accommodations:** the `employees.accommodations` column may still exist in the DB. That is harmless (unused). Do **not** drop it unless product explicitly asks — follow additive-only guidelines. Re-implement T2 cleanly on Replit when sequenced.
 
 ---
 
@@ -20,10 +37,10 @@
 
 | ID | Topic | Status | Type | Notes |
 |----|--------|--------|------|-------|
-| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | **Done** (merged to `main`) | Bug / UX | View Details expands by default for Admin, Shift Lead, Assistant Manager |
-| **T2** | Accommodations on profile | **Done** (merged to `main`) | Feature | Dedicated field (separate from regulation strategies); run DB migration on deploy |
+| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | **Ready for Replit** — confirm then fix | Bug / UX | Likely cause: `showSupportExpanded` defaults true only for Administrator |
+| **T2** | Accommodations on profile | **Ready for Replit** — after confirm | Feature | Dedicated field (separate from regulation strategies) |
 | **T3** | Admin-controllable configuration (forms, checklists, field names) | Planned — **design first** | Platform | Strategic theme; see §3 |
-| **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | Should be first use of Admin form builder (T3) |
+| **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | First use of Admin form builder (T3) |
 | **T5** | Unified notes feed (name, date, all authorized users) | Planned | Feature | Replace siloed guardian/coach note UIs |
 | **T6** | Lightweight parent / job coach users (view + notes) | Planned | Feature | Streamlined invite; not full employee profile |
 | **T7** | Promotion certification checklists Admin-editable | Planned (via T3) | Migration | Currently hardcoded in `EmployeeDetail.tsx` |
@@ -71,7 +88,7 @@ Admins manage content that today requires a developer release:
 |------|----------|
 | Mentor / Shift Lead promotion checklist questions | Hardcoded arrays in `EmployeeDetail.tsx` |
 | Mid-year review questions | Do not exist yet |
-| Support Information category names | Hardcoded UI (Interests, Challenges, Strategies, Accommodations) |
+| Support Information category names | Hardcoded UI (Interests, Challenges, Strategies, …) |
 | Coach check-in question structure | Hardcoded in `CoachCheckin.tsx` |
 | Contact relationship dropdown options | Hardcoded in contacts UI |
 
@@ -119,9 +136,9 @@ T4 (mid-year questions) and T7 (cert checklists) should be **consumers of T3-A**
 10. Parent/coach access: view + notes only, or do coaches still need check-ins and files?  
 11. Who can invite parents/coaches — Admin only, or Shift Leads too?
 
-### Must confirm for T1
+### Must confirm for T1 (on Replit before coding)
 
-12. On Replit as Ali: does **View Details** reveal Service Provider / Job Coach, or are they missing entirely?
+12. As Ali (Shift Lead): does **View Details** reveal Service Provider / Job Coach, or are they missing even when expanded?
 
 ---
 
@@ -131,8 +148,8 @@ T4 (mid-year questions) and T7 (cert checklists) should be **consumers of T3-A**
 
 ```text
 Design review (T3 architecture + T4/T5/T6 touchpoints)
-    → T1 quick fix (if confirmed)
-    → Merge T2 (accommodations) if not already
+    → T1 quick fix on Replit (if confirmed)
+    → T2 accommodations on Replit
     → T3-A form builder
     → T4 mid-year reviews (first template)
     → T7 migrate promotion checklists onto builder
@@ -141,20 +158,16 @@ Design review (T3 architecture + T4/T5/T6 touchpoints)
     → T3-B configurable profile fields (optional follow-on)
 ```
 
-**Why:** T3 shapes T4 and T7. Building mid-year as hardcoded now creates throwaway work. Notes (T5) and invites (T6) benefit from knowing who can access profiles and write notes.
-
 ### Option B — Ship quick wins, design in parallel
 
 ```text
-T1 fix + merge T2
+T1 + T2 on Replit
     → Design review for T3 (parallel)
-    → T5 notes (independent-ish)
+    → T5 notes
     → T3-A + T4
     → T6 invites
     → T7 cert migration
 ```
-
-**Why:** Unblocks Ali and accommodations faster; accepts some rework risk if notes model must align with future limited-access users.
 
 ### Option C — Hardcode mid-year now, CMS later
 
@@ -162,40 +175,29 @@ T1 fix + merge T2
 T1 → T2 → Hardcoded T4 → T5 → T6 → T3 later (migrate T4 + T7)
 ```
 
-**Why:** Fastest path to data entry for this review cycle. **Cost:** second build to migrate into Admin config; conflicts with “stop frequent developer updates.”
-
-**Recommendation:** Prefer **Option A** (or B if Ali/accommodations must ship immediately). Avoid Option C unless the mid-year data entry deadline is imminent and the Google Doc is ready.
+**Recommendation:** Prefer **Option A** (or B if Ali/accommodations must ship immediately). Avoid Option C unless the mid-year deadline is imminent.
 
 ---
 
 ## 6. Design review checklist (before major T3+ development)
 
-Hold a short design / architecture review covering:
-
 | # | Topic | Decision needed |
 |---|--------|-----------------|
 | 1 | Form template data model | Tables, versioning, soft-deactivate |
-| 2 | Response model | Per employee, per cycle (mid-year / annual)? Editable after submit? |
+| 2 | Response model | Per employee, per cycle? Editable after submit? |
 | 3 | Admin UI location | New “Forms / Reviews” nav vs under Settings |
 | 4 | Permissions | Who manages templates vs who fills responses |
-| 5 | Migration of cert checklists | Big-bang vs gradual; preserve past `checklist_results` |
-| 6 | Notes model | New unified table vs aggregator API over existing stores |
-| 7 | Limited-access users | New role vs permission flags on Guardian / Job Coach |
-| 8 | Profile field config (T3-B) | In or out of v1 scope |
+| 5 | Migration of cert checklists | Preserve past `checklist_results` |
+| 6 | Notes model | New unified table vs aggregator API |
+| 7 | Limited-access users | New role vs permission flags |
+| 8 | Profile field config (T3-B) | In or out of v1 |
 | 9 | Sequence lock | Confirm Option A, B, or C |
 
-**Suggested attendees:** Product owner (Allison/Sarah/Eileen), Joe (dev), Admin power user who will maintain forms.
-
-**Outcomes of review:**
-
-- Locked sequence  
-- T3 v1 scope boundary (what is *not* in v1)  
-- Answered open questions §4  
-- Seed content: mid-year questions from Google Doc  
+**Outcomes:** locked sequence, T3 v1 boundary, answered §4 questions, mid-year questions from Google Doc.
 
 ---
 
-## 7. Current codebase anchors (for implementers)
+## 7. Codebase anchors (for Replit implementers)
 
 | Topic | Key files |
 |-------|-----------|
@@ -216,7 +218,7 @@ Hold a short design / architecture review covering:
 | ID | Done when |
 |----|-----------|
 | T1 | Shift Lead sees Service Provider + Job Coach without confusion; verified as Ali on Replit |
-| T2 | Admins can add/edit accommodations on profile; migrated in production |
+| T2 | Admins can add/edit accommodations on profile; column deployed safely |
 | T3-A | Admin can create/edit/deactivate form questions; no code change for new questions |
 | T4 | Five mid-year questions available; answers enterable per Super Scooper |
 | T5 | One chronological notes feed with author name + date; authorized roles can add |
@@ -225,11 +227,31 @@ Hold a short design / architecture review covering:
 
 ---
 
-## 9. Next actions
+## 9. Work packet template (Cursor → Replit)
 
-1. **Deploy `main`** to Replit/production and run accommodations migration (`migrations/0002_add_accommodations_column.sql` or `npm run db:push`).  
-2. **Verify T1** as Ali (Shift Lead): Service Provider / Job Coach visible without hunting for View Details.  
-3. **Schedule design review** (§6) before starting T3/T4/T5/T6 development.  
+Each implementation request from Cursor should include:
+
+```text
+WORK PACKET: <ID> — <title>
+Goal: …
+Background: …
+Likely root cause / approach: …
+Files to touch: …
+Schema changes: (none | additive only — describe)
+Out of scope: …
+Acceptance tests:
+  1. …
+Deploy notes: …
+Report back: what changed, how tested, any blockers
+```
+
+---
+
+## 10. Next actions
+
+1. **Replit:** `git pull origin main` — confirm T1/T2 code is gone (reverted).  
+2. **Cursor:** issue first work packet for **T1 investigate + fix** (after Ali confirm).  
+3. **Schedule design review** (§6) before T3/T4/T5/T6.  
 4. **Obtain Google Doc** with five mid-year questions.  
 5. **Lock sequence** (Option A recommended).  
-6. After design review: write short tech spec for T3-A, then implement.
+6. After design review: Cursor writes T3-A tech spec work packet → Replit implements.
