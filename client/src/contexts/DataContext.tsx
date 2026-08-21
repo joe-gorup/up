@@ -23,6 +23,7 @@ export interface Employee {
   interestsMotivators: string[];
   challenges: string[];
   regulationStrategies: string[];
+  accommodations: string[];
   hasServiceProvider: boolean;
   serviceProviders: Array<{ name: string; type: string }>;
   date_of_birth?: string | null;
@@ -295,6 +296,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: emp.interests_motivators || [],
           challenges: emp.challenges || [],
           regulationStrategies: emp.regulation_strategies || [],
+          accommodations: emp.accommodations || [],
           hasServiceProvider: emp.has_service_provider || false,
           serviceProviders: emp.service_providers || [],
           date_of_birth: emp.date_of_birth || null,
@@ -436,6 +438,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Music', 'Art', 'Praise and recognition'],
         challenges: ['Loud noises', 'Sudden changes'],
         regulationStrategies: ['5-minute breaks', 'Visual schedules', 'Calm voice'],
+        accommodations: [],
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -459,6 +462,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Animals', 'Colorful stickers', 'Team activities'],
         challenges: ['Complex instructions'],
         regulationStrategies: ['Break tasks into steps', 'Use positive reinforcement'],
+        accommodations: [],
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -552,6 +556,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interests_motivators: employeeData.interestsMotivators,
           challenges: employeeData.challenges,
           regulation_strategies: employeeData.regulationStrategies,
+          accommodations: employeeData.accommodations,
           has_service_provider: employeeData.hasServiceProvider,
           service_providers: employeeData.serviceProviders,
           ...(employeeData.date_of_birth && { date_of_birth: employeeData.date_of_birth }),
@@ -574,6 +579,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: newEmployee.interests_motivators || [],
           challenges: newEmployee.challenges || [],
           regulationStrategies: newEmployee.regulation_strategies || [],
+          accommodations: newEmployee.accommodations || [],
           hasServiceProvider: newEmployee.has_service_provider || false,
           serviceProviders: newEmployee.service_providers || [],
           date_of_birth: newEmployee.date_of_birth || null,
@@ -611,6 +617,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.interestsMotivators) updateData.interests_motivators = updates.interestsMotivators;
       if (updates.challenges) updateData.challenges = updates.challenges;
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
+      if (updates.accommodations) updateData.accommodations = updates.accommodations;
       if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
       if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
       if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
@@ -639,6 +646,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: updatedEmployee.interests_motivators || [],
           challenges: updatedEmployee.challenges || [],
           regulationStrategies: updatedEmployee.regulation_strategies || [],
+          accommodations: updatedEmployee.accommodations || [],
           hasServiceProvider: updatedEmployee.has_service_provider || false,
           serviceProviders: updatedEmployee.service_providers || [],
           date_of_birth: updatedEmployee.date_of_birth || null,
