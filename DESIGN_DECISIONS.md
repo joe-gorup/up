@@ -44,15 +44,16 @@
 
 | Form type | Fill | View answers |
 |-----------|------|--------------|
-| Mid-year review | **Administrator, Shift Lead** | **Staff only:** Admin, Shift Lead, Assistant Manager |
+| Mid-year review | **Administrator, Shift Lead** | **Staff by default;** Guardian/Job Coach via Permissions (see B17) |
 | Mentor / Shift Lead cert | **Administrator** (same as today) | Staff with profile access |
 | Coach check-in | **Job Coach, Administrator** | Staff + assigned coach |
 | ROI onboarding | **Guardian / Super Scooper** (self) | Admin |
 
 | # | Decision | Locked answer |
 |---|----------|---------------|
-| B17 | Mid-year visible to Guardians / Job Coaches? | **No** — staff-only `[CONFIRM with Allison/Sarah]` |
+| B17 | Mid-year visible to Guardians / Job Coaches? | **No by default** — ✅ **Locked (Joe, Aug 22):** Guardians and Job Coaches do **not** see mid-year answers unless Admin grants it in **Permission Settings** |
 | B18 | Per-template fill roles configurable? | **Yes** — `settings_json.allowed_fill_roles` |
+| B19 | Permission feature for form/review answers | **Add `form_responses`** to `PERMISSION_FEATURES` — View (and optionally Modify for fill). Default: staff roles View **on**; Guardian + Job Coach View **off**. Admin toggles per role in Permissions Manager |
 
 ---
 
@@ -102,7 +103,7 @@
 | # | Item | Owner | Status |
 |---|------|-------|--------|
 | F1 | **Google Doc — five mid-year questions** (exact text) | Allison / Sarah | ⏳ **Waiting on product** — blocks PACKET-004 / T4 seed only |
-| F2 | Mid-year staff-only visibility (B17) | Allison / Sarah | `[CONFIRM]` recommended Yes (staff-only) |
+| F2 | Mid-year staff-only visibility (B17) | Joe | ✅ **Locked** — no by default; configurable via `form_responses` permission |
 | F3 | Shift Lead can invite parents/coaches (D11) | Allison / Joe | `[CONFIRM]` recommended Admin-only v1 |
 | F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ⏳ Replit PACKET-001 confirm |
 | F5 | Super Scoopers ever write notes? | Product | Locked **no** for v1 — override if needed |
