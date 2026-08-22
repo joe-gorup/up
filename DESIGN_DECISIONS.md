@@ -101,7 +101,7 @@
 
 | # | Item | Owner | Status |
 |---|------|-------|--------|
-| F1 | **Google Doc — five mid-year questions** (exact text) | Allison / Sarah | ⏳ **Required before seeding T4** |
+| F1 | **Google Doc — five mid-year questions** (exact text) | Allison / Sarah | ⏳ **Waiting on product** — blocks PACKET-004 / T4 seed only |
 | F2 | Mid-year staff-only visibility (B17) | Allison / Sarah | `[CONFIRM]` recommended Yes (staff-only) |
 | F3 | Shift Lead can invite parents/coaches (D11) | Allison / Joe | `[CONFIRM]` recommended Admin-only v1 |
 | F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ⏳ Replit PACKET-001 confirm |
@@ -139,7 +139,26 @@
 
 ---
 
-## I. Sign-off
+## J. Blockers & parallel work
+
+### Blocked on Google Doc (F1)
+- **PACKET-004** — seed mid-year template with exact question text  
+- **T4** — entering collected meeting data into the five questions  
+
+Everything else proceeds. When the doc arrives, paste questions into F1 and run seed — no form-engine rework needed.
+
+### Can start now (Replit)
+| Packet | Work | Needs Google Doc? |
+|--------|------|-------------------|
+| PACKET-001 | T1 manager visibility | No |
+| PACKET-002 | T2 accommodations | No |
+| PACKET-003A | Form engine Phase 1 (schema, Admin CRUD, core types) | No |
+| PACKET-003B | Cert migration + empty mid-year template shell | No — placeholder questions ok until F1 |
+| PACKET-003C+ | Check-ins, notes, invites | No |
+
+**Tip:** Admin can create/rename mid-year questions in the builder once 003B ships; the Google Doc is only needed to seed the *correct* initial wording in one shot.
+
+---
 
 | Role | Name | Date | OK / changes |
 |------|------|------|--------------|
