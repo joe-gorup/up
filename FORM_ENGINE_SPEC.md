@@ -298,6 +298,13 @@ Admin builder previews each type. Profile/fill UI uses same registry.
 
 Enforce via centralized `canAccessScooper` + template `settings_json.allowed_fill_roles`.
 
+**New permission features (Replit — with form engine / T6):**
+
+| Feature key | Label | Default View | Default Modify | Purpose |
+|-------------|-------|--------------|----------------|---------|
+| `form_responses` | Form & Review Responses | Staff on; Guardian/Job Coach off | Admin + Shift Lead fill | View mid-year & submitted form answers |
+| `external_user_invites` | External User Invites | — | Admin on; others off | Grant access / invite parents & coaches |
+
 ---
 
 ## 10. What we are explicitly NOT building in v1

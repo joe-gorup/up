@@ -252,5 +252,5 @@ Report back: what changed, how tested, any blockers
 1. **Waiting (product):** Google Doc with five mid-year questions — blocks **PACKET-004 / T4 seed only**.  
 2. **Replit (now):** PACKET-001 (T1) → PACKET-002 (T2) → PACKET-003A (form engine core).  
 3. **Replit (after 003A):** PACKET-003B — certs + mid-year template shell (placeholder questions ok until doc arrives).  
-4. **Confirm with team:** Admin-only invites v1 (D11). ~~Mid-year staff-only (B17)~~ **Done.**  
+4. ~~Confirm with team: Admin-only invites v1 (D11). Mid-year staff-only (B17).~~ **Product decisions locked** — see `DESIGN_DECISIONS.md` §F.  
 5. **When doc arrives:** paste into `DESIGN_DECISIONS.md` F1 → PACKET-004 seed template → Allison enters meeting data.

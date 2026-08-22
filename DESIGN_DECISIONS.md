@@ -75,16 +75,17 @@
 | D1 | Notes feed v1 approach | **Phase 1: aggregator API** over guardian + coach notes; **Phase 2: `profile_notes` table** | Avoid double UI during transition |
 | D2 | Include in feed | **Free-form notes first**; check-in summaries as linked cards (not full Q&A inline); assessment notes **out of feed v1** | Keeps feed readable |
 | D3 | Guardian notes model | **Timeline** — multiple entries per guardian (drop 1:1 upsert) | Required for real “feed” |
-| D4 | Who can write notes | **Guardian, Job Coach, Shift Lead, Administrator** | Super Scooper: **no** v1 |
+| D4 | Who can write notes | **Guardian, Job Coach, Shift Lead, Administrator** | ✅ **Super Scooper: no** (Joe, Aug 22) |
 | D5 | Who can view notes | Same as **profile view ACL** for that scooper | |
 | D6 | Note body format | **Plain text v1** for unified feed; coach rich notes linked or migrated in Phase 2 | |
 | D7 | Edit/delete notes | **Author edits own; Admin deletes any** | |
 | D8 | Limited-access model | **Permission presets on existing roles** — no new roles | Guardian = view + notes; Job Coach = full coach preset |
 | D9 | Job Coach capabilities | **Keep check-ins + files + notes** for standard Job Coach | Optional future “notes-only coach” = permission preset |
 | D10 | Guardian capabilities | **View linked scooper profile (read-only) + notes** | No assessments, no cert data, no goal documentation |
-| D11 | Who can invite parents/coaches | **Administrator only v1** | Shift Lead invite: **Phase 2 of T6** `[CONFIRM]` |
+| D11 | Who can invite parents/coaches | ✅ **Locked (Joe, Aug 22):** **Administrator only by default**; other roles (e.g. Shift Lead) via Permission Settings |
 | D12 | Invite UX | **From scooper profile** — Contacts (Guardian), Job Coach section (coach) | One flow: link + assignment + invitation |
-| D13 | ACL implementation | **Central server helpers** `canAccessScooper`, `canWriteNotes`, `canFillReview` | Enforce + replace hardcoded role arrays over time |
+| D13 | ACL implementation | **Central server helpers** `canAccessScooper`, `canWriteNotes`, `canFillReview`, `canInviteExternalUser` | Enforce + replace hardcoded role arrays over time |
+| D14 | Permission feature for invites | **Add `external_user_invites`** to `PERMISSION_FEATURES` — Modify (send invite / grant access). Default: Administrator **on**; all other roles **off**. Admin enables per role in Permissions Manager |
 
 ---
 
@@ -104,9 +105,9 @@
 |---|------|-------|--------|
 | F1 | **Google Doc — five mid-year questions** (exact text) | Allison / Sarah | ⏳ **Waiting on product** — blocks PACKET-004 / T4 seed only |
 | F2 | Mid-year staff-only visibility (B17) | Joe | ✅ **Locked** — no by default; configurable via `form_responses` permission |
-| F3 | Shift Lead can invite parents/coaches (D11) | Allison / Joe | `[CONFIRM]` recommended Admin-only v1 |
+| F3 | Who can invite parents/coaches (D11) | Joe | ✅ **Locked** — Admin by default; configurable via `external_user_invites` permission |
 | F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ⏳ Replit PACKET-001 confirm |
-| F5 | Super Scoopers ever write notes? | Product | Locked **no** for v1 — override if needed |
+| F5 | Super Scoopers ever write notes? | Joe | ✅ **Locked — No** |
 
 ---
 
