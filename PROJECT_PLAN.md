@@ -2,7 +2,7 @@
 
 **Last updated:** August 21, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Companion:** `ARCHITECTURE_BIG_CHANGES.md` (T3–T7 platform design draft) · `WORK_PACKETS.md` (Replit packets) · **`FORM_ENGINE_SPEC.md`** (question types + migration phases)  
+**Companion:** `ARCHITECTURE_BIG_CHANGES.md` · `WORK_PACKETS.md` · `FORM_ENGINE_SPEC.md` · **`DESIGN_DECISIONS.md`** (locked answers)  
 
 ### Working model (locked)
 
