@@ -2,6 +2,22 @@
 
 Paste one packet at a time into Replit. Do not implement from this repo’s Cursor Cloud agent unless product explicitly overrides the working model.
 
+**Design locked:** `DESIGN_DECISIONS.md` · **Form spec:** `FORM_ENGINE_SPEC.md`
+
+---
+
+## Start here — recommended order
+
+| Order | Packet | Effort | Why this order |
+|-------|--------|--------|----------------|
+| **1** | **PACKET-001** | ~1 hour | Quick win for Ali; confirms T1 before bigger work |
+| **2** | **PACKET-002** | ~half day | Small schema + UI; independent of form engine |
+| **3** | **PACKET-003A** | multi-day | Form engine foundation — do **not** skip 001/002 unless Ali/accommodations are explicitly deferred |
+| 4 | PACKET-003B | multi-day | Certs + mid-year profile card (after 003A) |
+| … | PACKET-004 | small | Seed mid-year questions — **needs Google Doc** |
+
+**Do not start with 003A alone** unless T1/T2 are already done or explicitly postponed.
+
 ---
 
 ## PACKET-001 — T1: Manager Service Provider / Job Coach visibility
@@ -93,12 +109,179 @@ Migration result, screenshots or short notes, any leftover column from prior att
 
 ---
 
-## Later packets (not ready)
+## PACKET-003A — Form engine Phase 1 (core)
+
+**Status:** Ready — design locked (`DESIGN_DECISIONS.md`)  
+**Priority:** High — foundation for mid-year, certs, check-ins  
+**Prerequisite:** PACKET-001 + 002 recommended first (not strictly required)  
+**Blocked by Google Doc?** No
+
+### Goal
+Admin can create **form templates** with sections and questions; staff can save **draft** and **submit** answers for a scooper. Phase 1 delivers schema, API, Admin builder UI, and **8 working question types**. Advanced types register in schema but may render as “coming soon” until Phase 4.
+
+### Reference implementation
+Copy patterns from **Goal Templates** (`GoalTemplates.tsx`, `goal_templates`, `goal_template_steps`, routes in `server/routes.ts`).
+
+### Schema (additive only — `shared/schema.ts` + `npm run db:push`)
+
+```text
+form_templates
+  id, name, description
+  form_type          -- enum: mid_year_review | mentor_certification | shift_lead_certification |
+                     --       coach_checkin | roi_onboarding | custom
+  status             -- active | inactive | archived
+  version            -- integer, default 1
+  settings_json      -- { allowed_fill_roles: string[], lock_on_submit: true }
+  created_by, created_at, updated_at
+
+form_sections
+  id, template_id, title, sort_order, status
+
+form_questions
+  id, template_id, section_id (nullable)
+  stable_key, prompt, help_text, question_type, config_json
+  sort_order, status
+
+form_response_sets
+  id, template_id, template_version, employee_id
+  cycle_label (nullable), status (draft | submitted)
+  submitted_by, submitted_at, created_at, updated_at
+
+form_answers
+  id, response_set_id, question_id
+  value_json, snapshot_json, answered_by, updated_at
+```
+
+**Indexes:** `employee_id`, `template_id`, `response_set_id`, unique on `(template_id, employee_id, cycle_label)` where cycle_label not null.
+
+**Zod:** insert/select types for all tables (match existing Drizzle patterns).
+
+### New permission features (same PR)
+
+Add to `PERMISSION_FEATURES` + labels + seed defaults in `server/routes.ts`:
+
+| Key | Label | Default Modify |
+|-----|-------|----------------|
+| `form_responses` | Form & Review Responses | Admin + Shift Lead: view; Guardian/Job Coach: view **off** |
+| `external_user_invites` | External User Invites | Admin **on** only |
+
+Use existing `role_permissions` / Permissions Manager — no UI redesign needed beyond new rows.
+
+### API (`server/routes.ts` — all `authenticateToken`)
+
+**Admin template CRUD**
+- `GET/POST /api/form-templates`
+- `GET/PUT/DELETE /api/form-templates/:id` (soft-delete → status archived)
+- `POST /api/form-templates/:id/duplicate`
+- Nested or separate endpoints for sections/questions reorder
+
+**Response sets**
+- `GET /api/scoopers/:scooperId/form-responses?template_id=&cycle_label=`
+- `POST /api/form-response-sets` — create draft
+- `PUT /api/form-response-sets/:id` — save answers (draft)
+- `POST /api/form-response-sets/:id/submit` — lock; snapshot each answer
+- ACL: `canAccessScooper` + `form_responses` permission + template `allowed_fill_roles`
+- **View rule (locked):** Guardian/Job Coach denied unless `form_responses` View enabled for their role
+
+**Server helpers (new file e.g. `server/scooperAccess.ts`)**
+- `canAccessScooper(user, scooperId): Promise<boolean>`
+- `canViewFormResponses(user, scooperId): Promise<boolean>`
+- `canFillForm(user, template, scooperId): Promise<boolean>`
+
+Start by centralizing logic already scattered in routes (coach_assignments, guardian_relationships, manager roles).
+
+### Question types — Phase 1 MUST render
+
+| type | Fill UI |
+|------|---------|
+| `free_text` | Single-line input |
+| `long_text` | Textarea |
+| `yes_no` | Yes / No toggle or buttons |
+| `single_select` | Dropdown + chip style via `config_json.display.style` |
+| `multi_select` | Checkbox list |
+| `date` | `<input type="date">` |
+| `date_time` | datetime-local or date + time pair |
+| `section_header` | Read-only heading |
+| `help_text` | Read-only paragraph |
+
+**Register but stub OK in Phase 1:** `rich_text`, `number`, `scale`, `email`, `phone`, `time`, `signature`, `file`, `repeatable_group`, `divider`
+
+`config_json` shape — see `FORM_ENGINE_SPEC.md` §2.3 (options, validation, display).
+
+**Answer snapshot on submit** (`snapshot_json`):
+```json
+{ "prompt": "...", "question_type": "yes_no", "options": [...], "value": { "bool": true } }
+```
+
+### Admin UI
+
+- **Sidebar:** new item **“Forms & Reviews”** — Administrator only (same pattern as Goal Templates link in `Sidebar.tsx` + route in `App.tsx`)
+- **List page:** templates filtered by status; search; Create / Duplicate / Archive
+- **Edit page:** template name, form_type, sections, questions list
+  - Add question → pick type → prompt, help, options (for selects), required flag
+  - Reorder sections/questions (up/down buttons fine — no drag required v1)
+  - Deactivate question (status inactive) — do not hard-delete if answers exist
+- **Preview:** optional read-only preview of fill UI
+
+### Fill UI (minimal v1)
+
+No profile card required in 003A — can be a standalone test route or simple modal:
+- Admin picks template + scooper → create draft → fill → save draft → submit
+- **PACKET-003B** adds Reviews card on `EmployeeDetail.tsx`
+
+### Files to touch (expected)
+
+| Area | Files |
+|------|--------|
+| Schema | `shared/schema.ts` |
+| API | `server/routes.ts`, new `server/scooperAccess.ts` |
+| Admin UI | new `FormTemplates.tsx` or `FormsAndReviews.tsx`, `Sidebar.tsx`, `App.tsx` |
+| Fill UI | new `FormResponseFill.tsx` + registry `formQuestionRegistry.tsx` |
+| State | extend `DataContext.tsx` or use fetch in components (match Goal Templates) |
+| Permissions | `shared/schema.ts` PERMISSION_FEATURES, seed in `server/routes.ts`, `PermissionsManager.tsx` labels |
+
+### Out of scope (003A)
+
+- Mid-year profile card (003B)
+- Cert migration / dual-read (003B)
+- Conditionals (`show_when`) — Phase 3
+- Coach check-in replacement — Phase 3
+- Google Doc seed — PACKET-004
+- Notes feed, invites UI — PACKET-005/006
+- All advanced type renderers — Phase 4
+
+### Acceptance tests
+
+1. Admin creates template `Test Mid-Year` type `mid_year_review` with 2 sections, 5 questions mixing yes_no, free_text, single_select, date.
+2. Admin duplicates template → new id, same questions.
+3. Admin deactivates one question → hidden from new fill; old submitted sets still show snapshot.
+4. Admin fills for a scooper: save draft → reload → answers persist.
+5. Submit → status submitted; non-Admin cannot edit (403 or read-only).
+6. Shift Lead with `form_responses` view can read submitted answers; Guardian cannot (default).
+7. Admin enables Guardian `form_responses` View in Permissions → Guardian can view (if linked scooper).
+8. `npm run db:push` — additive only, no data-loss warnings ignored.
+
+### Deploy
+
+`npm run db:push` → publish → smoke test as Admin.
+
+### Report back
+
+- Migration output
+- Screenshot or short Loom of Admin create + fill + submit
+- List of any stubbed types
+- Permission seed confirmed in Permissions Manager
+
+---
+
+## Later packets
 
 | Packet | Topic | Blocked by |
 |--------|--------|------------|
-| PACKET-003 | T3-A form builder | Design review + §4 decisions |
-| PACKET-004 | T4 mid-year questions | Google Doc + PACKET-003 |
-| PACKET-005 | T5 unified notes | Product decisions §4 |
-| PACKET-006 | T6 lightweight invites | Notes model + access decisions |
-| PACKET-007 | T7 migrate cert checklists | PACKET-003 |
+| PACKET-003B | Certs + mid-year profile card + seed scripts | PACKET-003A |
+| PACKET-004 | Seed mid-year from Google Doc | F1 Google Doc + 003B |
+| PACKET-003C | Conditionals + coach check-in migration | 003B |
+| PACKET-005 | Unified notes feed | 003A ACL helpers |
+| PACKET-006 | Invites + `external_user_invites` enforcement | 005 optional |
+| PACKET-003D | Advanced types + ROI subset | 003C |
+| PACKET-007 | Profile catalog (T3-B) | 003A |
