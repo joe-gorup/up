@@ -249,9 +249,8 @@ Report back: what changed, how tested, any blockers
 
 ## 10. Next actions
 
-1. **Replit:** `git pull origin main` — confirm T1/T2 code is gone (reverted).  
-2. **Cursor:** issue first work packet for **T1 investigate + fix** (after Ali confirm).  
-3. **Schedule design review** (§6) before T3/T4/T5/T6.  
-4. **Obtain Google Doc** with five mid-year questions.  
-5. **Lock sequence** (Option A recommended).  
-6. After design review: Cursor writes T3-A tech spec work packet → Replit implements.
+1. **Waiting (product):** Google Doc with five mid-year questions — blocks **PACKET-004 / T4 seed only**.  
+2. **Replit (now):** PACKET-001 (T1) → PACKET-002 (T2) → PACKET-003A (form engine core).  
+3. **Replit (after 003A):** PACKET-003B — certs + mid-year template shell (placeholder questions ok until doc arrives).  
+4. **Confirm with team:** mid-year staff-only (B17), Admin-only invites v1 (D11).  
+5. **When doc arrives:** paste into `DESIGN_DECISIONS.md` F1 → PACKET-004 seed template → Allison enters meeting data.
