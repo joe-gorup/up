@@ -2,7 +2,9 @@
 
 **Role:** Cursor = Architect / Lead · Replit = Implementer  
 **Status:** Design draft for review — **do not implement until design review locks §5 decisions**  
-**Companion docs:** `PROJECT_PLAN.md`, `WORK_PACKETS.md`
+**Companion docs:** `PROJECT_PLAN.md`, `WORK_PACKETS.md`, **`FORM_ENGINE_SPEC.md`** (full question-type + migration spec)
+
+**Target:** “Almost everything” — one form engine migrates mid-year, certs, coach check-ins, ROI (partial), and shared option lists; profile catalog (T3-B) in parallel.
 
 ---
 
@@ -69,8 +71,8 @@ form_sections        -- optional grouping (Shift Lead cert already has categorie
 form_questions
   id, template_id, section_id (nullable)
   prompt, help_text
-  question_type      -- 'yes_no' | 'free_text' | 'long_text' | 'single_select' | 'multi_select' | 'scale'
-  options_json       -- for select/scale
+  question_type      -- see FORM_ENGINE_SPEC.md §2 (17 answer types + 3 layout types)
+  config_json        -- display, options, validation, conditionals (not just options_json)
   is_required, sort_order
   status             -- 'active' | 'inactive'  (soft-deactivate; never hard-delete if answers exist)
   stable_key         -- optional slug for analytics across renames
@@ -127,12 +129,18 @@ Current: questions hardcoded in `EmployeeDetail.tsx`; answers in `promotion_cert
 
 **Do not** rewrite historical JSON into new tables in v1 unless needed for reporting.
 
-### 3.7 First consumer: T4 mid-year
+### 3.8 Question types & migration scope
 
-Once engine exists:
-1. Admin creates template `Mid-Year Review 2026` with 5 questions from Google Doc.
-2. Staff open scooper → Reviews → Start / Edit response set for cycle `2026-mid-year`.
-3. No further developer involvement for question text changes.
+**Full catalog:** `FORM_ENGINE_SPEC.md`
+
+v1 aims to migrate nearly all structured content:
+
+- **Phase 1–2:** Core types + mid-year + cert checklists  
+- **Phase 3:** Coach check-ins (requires conditionals + chip display)  
+- **Phase 4:** Signature, file, rich text, repeatable groups (ROI partial)  
+- **Phase 5:** Profile field catalog + shared option lists  
+
+Goal assessment outcomes stay in `step_progress` (not form engine).
 
 ---
 

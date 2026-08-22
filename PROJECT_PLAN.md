@@ -2,7 +2,7 @@
 
 **Last updated:** August 21, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Companion:** `ARCHITECTURE_BIG_CHANGES.md` (T3–T7 platform design draft) · `WORK_PACKETS.md` (Replit packets)  
+**Companion:** `ARCHITECTURE_BIG_CHANGES.md` (T3–T7 platform design draft) · `WORK_PACKETS.md` (Replit packets) · **`FORM_ENGINE_SPEC.md`** (question types + migration phases)  
 
 ### Working model (locked)
 
@@ -39,7 +39,7 @@ T1 (manager View Details default) and T2 (accommodations) were briefly merged to
 |----|--------|--------|------|-------|
 | **T1** | Manager (Ali) missing Service Provider / Job Coach sections | **Ready for Replit** — confirm then fix | Bug / UX | Likely cause: `showSupportExpanded` defaults true only for Administrator |
 | **T2** | Accommodations on profile | **Ready for Replit** — after confirm | Feature | Dedicated field (separate from regulation strategies) |
-| **T3** | Admin-controllable configuration (forms, checklists, field names) | Planned — **design first** | Platform | Strategic theme; see §3 |
+| **T3** | Admin-controllable configuration (forms, checklists, field names) | Planned — **design first** | Platform | See `FORM_ENGINE_SPEC.md` — almost-full type catalog + 6 phases |
 | **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | First use of Admin form builder (T3) |
 | **T5** | Unified notes feed (name, date, all authorized users) | Planned | Feature | Replace siloed guardian/coach note UIs |
 | **T6** | Lightweight parent / job coach users (view + notes) | Planned | Feature | Streamlined invite; not full employee profile |
