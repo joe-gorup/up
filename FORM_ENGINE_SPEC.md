@@ -239,12 +239,13 @@ Aiming for “almost everything” does **not** mean one big bang. Ship in layer
 - Admin CRUD for templates + questions (all **answer types** registered; renderers can stub advanced types)
 - API: list/fill/submit response set
 - Answer snapshot on submit
-- Types fully working: `free_text`, `long_text`, `yes_no`, `single_select`, `multi_select`, `date`, `date_time`, `section_header`, `help_text`
+- Types fully working: `free_text`, `long_text`, `yes_no`, `single_select`, `multi_select`, `date`, `date_time`, `scale`, `section_header`, `help_text`
+- **`scale` is required in Phase 1** — mid-year review uses 1–5 ratings (`MIDYEAR_REVIEW_QUESTIONS.md`)
 
 ### Phase 2 — First migrations (PACKET-003B)
-- Mid-year profile card (T4)
+- Mid-year profile card (T4) seeded from `MIDYEAR_REVIEW_QUESTIONS.md`
 - Cert checklists (T7) with dual-read legacy JSON
-- Seed scripts from hardcoded arrays
+- Seed scripts from hardcoded cert arrays + mid-year question file
 
 ### Phase 3 — Conditionals + coach check-in (PACKET-003C)
 - Conditional show/required
@@ -253,7 +254,7 @@ Aiming for “almost everything” does **not** mean one big bang. Ship in layer
 - Deprecate hardcoded `SETTING_OPTIONS`, etc.
 
 ### Phase 4 — Rich + compliance types (PACKET-003D)
-- `rich_text`, `file`, `signature`, `repeatable_group`, `email`, `phone`, `number`, `scale`, `time`
+- `rich_text`, `file`, `signature`, `repeatable_group`, `email`, `phone`, `number`, `time`
 - ROI onboarding template (or subset)
 - Wire file/signature to existing storage patterns
 

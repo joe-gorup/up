@@ -14,7 +14,7 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | **2** | **PACKET-002** | ~half day | Small schema + UI; independent of form engine |
 | **3** | **PACKET-003A** | multi-day | Form engine foundation — do **not** skip 001/002 unless Ali/accommodations are explicitly deferred |
 | 4 | PACKET-003B | multi-day | Certs + mid-year profile card (after 003A) |
-| … | PACKET-004 | small | Seed mid-year questions — **needs Google Doc** |
+| … | PACKET-004 | small | Seed/enter mid-year answers — **content locked** (`MIDYEAR_REVIEW_QUESTIONS.md`) |
 
 **Do not start with 003A alone** unless T1/T2 are already done or explicitly postponed.
 
@@ -203,8 +203,11 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
 | `date_time` | datetime-local or date + time pair |
 | `section_header` | Read-only heading |
 | `help_text` | Read-only paragraph |
+| `scale` | 1–5 (or configurable min/max) rating control — **required for mid-year** |
 
-**Register but stub OK in Phase 1:** `rich_text`, `number`, `scale`, `email`, `phone`, `time`, `signature`, `file`, `repeatable_group`, `divider`
+**Register but stub OK in Phase 1:** `rich_text`, `number`, `email`, `phone`, `time`, `signature`, `file`, `repeatable_group`, `divider`
+
+**Mid-year note:** Each rated question also needs an optional linked `long_text` notes field (see `MIDYEAR_REVIEW_QUESTIONS.md`).
 
 `config_json` shape — see `FORM_ENGINE_SPEC.md` §2.3 (options, validation, display).
 
@@ -279,7 +282,7 @@ No profile card required in 003A — can be a standalone test route or simple mo
 | Packet | Topic | Blocked by |
 |--------|--------|------------|
 | PACKET-003B | Certs + mid-year profile card + seed scripts | PACKET-003A |
-| PACKET-004 | Seed mid-year from Google Doc | F1 Google Doc + 003B |
+| PACKET-004 | Seed mid-year template + optional PDF answer entry | F1 ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`) + 003B |
 | PACKET-003C | Conditionals + coach check-in migration | 003B |
 | PACKET-005 | Unified notes feed | 003A ACL helpers |
 | PACKET-006 | Invites + `external_user_invites` enforcement | 005 optional |

@@ -103,7 +103,7 @@
 
 | # | Item | Owner | Status |
 |---|------|-------|--------|
-| F1 | **Google Doc — five mid-year questions** (exact text) | Allison / Sarah | ⏳ **Waiting on product** — blocks PACKET-004 / T4 seed only |
+| F1 | **Mid-year questions** (exact text) | Allison / Sarah | ✅ **Locked Aug 23** — see `MIDYEAR_REVIEW_QUESTIONS.md` (**6** questions; scale 1–5 + notes for Q1–5; long text for Q6) |
 | F2 | Mid-year staff-only visibility (B17) | Joe | ✅ **Locked** — no by default; configurable via `form_responses` permission |
 | F3 | Who can invite parents/coaches (D11) | Joe | ✅ **Locked** — Admin by default; configurable via `external_user_invites` permission |
 | F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ⏳ Replit PACKET-001 confirm |
@@ -143,11 +143,10 @@
 
 ## J. Blockers & parallel work
 
-### Blocked on Google Doc (F1)
-- **PACKET-004** — seed mid-year template with exact question text  
-- **T4** — entering collected meeting data into the five questions  
-
-Everything else proceeds. When the doc arrives, paste questions into F1 and run seed — no form-engine rework needed.
+### F1 resolved (Aug 23)
+- Content locked in **`MIDYEAR_REVIEW_QUESTIONS.md`** (6 questions).  
+- **PACKET-004** unblocked once PACKET-003A/003B ships (needs working `scale` type).  
+- Historical PDF answers = data-entry backlog for Allison after template exists — not a seed-script requirement.
 
 ### Can start now (Replit)
 | Packet | Work | Needs Google Doc? |
@@ -155,10 +154,11 @@ Everything else proceeds. When the doc arrives, paste questions into F1 and run 
 | PACKET-001 | T1 manager visibility | No |
 | PACKET-002 | T2 accommodations | No |
 | PACKET-003A | Form engine Phase 1 (schema, Admin CRUD, core types) | No |
-| PACKET-003B | Cert migration + empty mid-year template shell | No — placeholder questions ok until F1 |
+| PACKET-003B | Cert migration + mid-year template (seed from `MIDYEAR_REVIEW_QUESTIONS.md`) | No — F1 locked |
 | PACKET-003C+ | Check-ins, notes, invites | No |
+| PACKET-004 | Seed / data-entry of existing PDF answers (optional backlog) | Content ready |
 
-**Tip:** Admin can create/rename mid-year questions in the builder once 003B ships; the Google Doc is only needed to seed the *correct* initial wording in one shot.
+**Tip:** Seed template questions from `MIDYEAR_REVIEW_QUESTIONS.md` in 003B. Allison can then enter historical PDF scores into each scooper’s mid-year response.
 
 ---
 
@@ -167,6 +167,4 @@ Everything else proceeds. When the doc arrives, paste questions into F1 and run 
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-22 | Draft locked pending F1–F4 |
-
-**To finalize:** Confirm `[CONFIRM]` rows, provide F1 (Google Doc), complete F4 (Ali/T1).
+| Architect | Cursor | 2026-08-23 | F1–F3, F5 locked; F4 (Ali/T1) still pending |

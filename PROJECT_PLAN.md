@@ -249,8 +249,8 @@ Report back: what changed, how tested, any blockers
 
 ## 10. Next actions
 
-1. **Waiting (product):** Google Doc with five mid-year questions — blocks **PACKET-004 / T4 seed only**.  
-2. **Replit (now):** PACKET-001 (T1) → PACKET-002 (T2) → PACKET-003A (form engine core).  
-3. **Replit (after 003A):** PACKET-003B — certs + mid-year template shell (placeholder questions ok until doc arrives).  
-4. ~~Confirm with team: Admin-only invites v1 (D11). Mid-year staff-only (B17).~~ **Product decisions locked** — see `DESIGN_DECISIONS.md` §F.  
-5. **When doc arrives:** paste into `DESIGN_DECISIONS.md` F1 → PACKET-004 seed template → Allison enters meeting data.
+1. ~~Waiting on mid-year Google Doc~~ ✅ **Locked** — `MIDYEAR_REVIEW_QUESTIONS.md` (6 questions).  
+2. **Replit (now):** PACKET-001 (T1) → PACKET-002 (T2) → PACKET-003A (form engine core, **include `scale`**).  
+3. **Replit (after 003A):** PACKET-003B — certs + seed mid-year template from locked questions.  
+4. **Product decisions locked** — see `DESIGN_DECISIONS.md` §F (F4 Ali/T1 still pending).  
+5. **After template exists:** Allison enters collected PDF meeting data per Super Scooper.
