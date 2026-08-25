@@ -22,6 +22,9 @@ const FEATURE_DESCRIPTIONS: Record<PermissionFeature, string> = {
   guardian_notes: 'Notes written by Guardians about their linked family members.',
   contacts: 'Manage emergency contacts, parent/guardian info, and other contact records for employees.',
   past_assessments: 'View historical assessment session records and documented progress.',
+  employee_reviews: 'Create and manage individual employee performance reviews.',
+  form_responses: 'View and complete structured form, review, certification, and check-in responses.',
+  external_user_invites: 'Invite external reviewers to participate in future form workflows.',
 };
 
 const FEATURE_ROLE_NA: Partial<Record<PermissionFeature, string[]>> = {

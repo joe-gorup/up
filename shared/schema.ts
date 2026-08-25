@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, boolean, date, timestamp, jsonb, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, date, timestamp, jsonb, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -88,6 +88,128 @@ export const goal_template_steps = pgTable("goal_template_steps", {
   templateIdIdx: index("goal_template_steps_template_id_idx").on(table.template_id),
   stepOrderIdx: index("goal_template_steps_order_idx").on(table.template_id, table.step_order),
 }));
+
+// Form engine tables - reusable review/check-in/certification templates
+export const form_templates = pgTable("form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  form_type: text("form_type").notNull().default("custom"),
+  status: text("status").notNull().default("active"),
+  version: integer("version").notNull().default(1),
+  settings_json: jsonb("settings_json").notNull().default(sql`'{"allowed_fill_roles":["Administrator"],"lock_on_submit":true}'::jsonb`),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  statusIdx: index("form_templates_status_idx").on(table.status),
+  typeIdx: index("form_templates_form_type_idx").on(table.form_type),
+  createdByIdx: index("form_templates_created_by_idx").on(table.created_by),
+}));
+
+export const form_sections = pgTable("form_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("form_sections_template_id_idx").on(table.template_id),
+  sortOrderIdx: index("form_sections_sort_order_idx").on(table.template_id, table.sort_order),
+}));
+
+export const form_questions = pgTable("form_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  section_id: varchar("section_id").references(() => form_sections.id, { onDelete: "set null" }),
+  stable_key: text("stable_key").notNull(),
+  prompt: text("prompt").notNull(),
+  help_text: text("help_text"),
+  question_type: text("question_type").notNull().default("free_text"),
+  config_json: jsonb("config_json").notNull().default(sql`'{}'::jsonb`),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("form_questions_template_id_idx").on(table.template_id),
+  sectionIdIdx: index("form_questions_section_id_idx").on(table.section_id),
+  sortOrderIdx: index("form_questions_sort_order_idx").on(table.template_id, table.section_id, table.sort_order),
+  stableKeyIdx: index("form_questions_stable_key_idx").on(table.template_id, table.stable_key),
+}));
+
+export const form_response_sets = pgTable("form_response_sets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  template_version: integer("template_version").notNull().default(1),
+  employee_id: varchar("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  cycle_label: text("cycle_label"),
+  status: text("status").notNull().default("draft"),
+  template_snapshot_json: jsonb("template_snapshot_json"),
+  submitted_by: varchar("submitted_by").references(() => employees.id, { onDelete: "set null" }),
+  submitted_at: timestamp("submitted_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("form_response_sets_employee_id_idx").on(table.employee_id),
+  templateIdIdx: index("form_response_sets_template_id_idx").on(table.template_id),
+  statusIdx: index("form_response_sets_status_idx").on(table.status),
+  templateEmployeeCycleUnique: uniqueIndex("form_response_sets_template_employee_cycle_unique")
+    .on(table.template_id, table.employee_id, table.cycle_label)
+    .where(sql`${table.cycle_label} is not null`),
+}));
+
+export const form_answers = pgTable("form_answers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  response_set_id: varchar("response_set_id").notNull().references(() => form_response_sets.id, { onDelete: "cascade" }),
+  question_id: varchar("question_id").notNull().references(() => form_questions.id, { onDelete: "cascade" }),
+  value_json: jsonb("value_json").notNull().default(sql`'{}'::jsonb`),
+  snapshot_json: jsonb("snapshot_json"),
+  answered_by: varchar("answered_by").references(() => employees.id, { onDelete: "set null" }),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  responseSetIdIdx: index("form_answers_response_set_id_idx").on(table.response_set_id),
+  questionIdIdx: index("form_answers_question_id_idx").on(table.question_id),
+  responseQuestionUnique: unique("form_answers_response_question_unique").on(table.response_set_id, table.question_id),
+}));
+
+export const insertFormTemplateSchema = createInsertSchema(form_templates).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormSectionSchema = createInsertSchema(form_sections).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormQuestionSchema = createInsertSchema(form_questions).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormResponseSetSchema = createInsertSchema(form_response_sets).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormAnswerSchema = createInsertSchema(form_answers).omit({
+  id: true,
+  updated_at: true,
+});
+
+export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
+export type FormTemplate = typeof form_templates.$inferSelect;
+export type InsertFormSection = z.infer<typeof insertFormSectionSchema>;
+export type FormSection = typeof form_sections.$inferSelect;
+export type InsertFormQuestion = z.infer<typeof insertFormQuestionSchema>;
+export type FormQuestion = typeof form_questions.$inferSelect;
+export type InsertFormResponseSet = z.infer<typeof insertFormResponseSetSchema>;
+export type FormResponseSet = typeof form_response_sets.$inferSelect;
+export type InsertFormAnswer = z.infer<typeof insertFormAnswerSchema>;
+export type FormAnswer = typeof form_answers.$inferSelect;
 
 // Development goals table
 export const development_goals = pgTable("development_goals", {
@@ -591,6 +713,8 @@ export const PERMISSION_FEATURES = [
   'contacts',
   'past_assessments',
   'employee_reviews',
+  'form_responses',
+  'external_user_invites',
 ] as const;
 
 export type PermissionFeature = typeof PERMISSION_FEATURES[number];
@@ -613,6 +737,8 @@ export const PERMISSION_FEATURE_LABELS: Record<PermissionFeature, string> = {
   contacts: 'Contacts',
   past_assessments: 'Past Assessments',
   employee_reviews: 'Employee Reviews',
+  form_responses: 'Form & Review Responses',
+  external_user_invites: 'External User Invites',
 };
 
 export const CONFIGURABLE_ROLES = ['Shift Lead', 'Assistant Manager', 'Job Coach', 'Guardian'] as const;

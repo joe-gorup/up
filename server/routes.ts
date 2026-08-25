@@ -7,13 +7,15 @@ import {
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
   coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions, employee_reviews,
+  form_templates, form_sections, form_questions, form_response_sets, form_answers,
   insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
+  insertFormTemplateSchema, insertFormSectionSchema, insertFormQuestionSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration, canManageAccommodations, canUseAccommodations
 } from "@shared/schema";
 import crypto from "crypto";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 
 function parseCoachFilePath(path: string): { bucketName: string; objectName: string } {
@@ -27,6 +29,7 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
+import { canAccessScooper, canModifyScooperForms, canViewScooperForms, hasFormPermission } from "./formAccess";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
 // but whose parent development_goal references a template, look up the matching
@@ -75,7 +78,7 @@ async function ensureDefaultPermissions() {
         let can_delete = false;
 
         if (role === 'Shift Lead' || role === 'Assistant Manager') {
-          can_view = true;
+          can_view = feature !== 'external_user_invites' && (feature !== 'form_responses' || role === 'Shift Lead');
           can_modify = ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature);
           can_delete = false;
         } else if (role === 'Job Coach') {
@@ -4927,6 +4930,412 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error }, 'Failed to export reviews');
       res.status(500).json({ error: 'Failed to export reviews' });
+    }
+  });
+
+  // ===== Forms & Reviews =====
+  // Templates are intentionally admin-only in Phase 1. Response access is
+  // separately scoped to the employee relationship and form permissions.
+  const hydrateFormTemplate = async (templateId: string) => {
+    const [template] = await db.select().from(form_templates).where(eq(form_templates.id, templateId)).limit(1);
+    if (!template) return null;
+    const sections = await db.select().from(form_sections)
+      .where(eq(form_sections.template_id, templateId))
+      .orderBy(form_sections.sort_order);
+    const questions = await db.select().from(form_questions)
+      .where(eq(form_questions.template_id, templateId))
+      .orderBy(form_questions.sort_order);
+    return { ...template, sections: sections.map(section => ({
+      ...section,
+      questions: questions.filter(question => question.section_id === section.id),
+    })), questions };
+  };
+
+  const isMeaningfullyAnswered = (value: unknown) => {
+    if (value === null || value === undefined || value === '') return false;
+    if (Array.isArray(value)) return value.length > 0;
+    if (typeof value === 'object') return Object.keys(value as object).length > 0;
+    return true;
+  };
+
+  const templateAllowsFilling = (template: any, role: string) => {
+    const settings = (template.settings_json || {}) as Record<string, unknown>;
+    const allowedRoles = Array.isArray(settings.allowed_fill_roles)
+      ? settings.allowed_fill_roles as string[]
+      : ['Administrator'];
+    return role === 'Administrator' || allowedRoles.includes(role);
+  };
+
+  app.get("/api/form-templates", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const templates = await db.select().from(form_templates)
+        .where(status ? eq(form_templates.status, status) : undefined)
+        .orderBy(desc(form_templates.updated_at));
+      const result = await Promise.all(templates.map(template => hydrateFormTemplate(template.id)));
+      res.json(result.filter(Boolean));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form templates');
+      res.status(500).json({ error: 'Failed to load form templates' });
+    }
+  });
+
+  app.get("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const template = await hydrateFormTemplate(req.params.id);
+      if (!template) return res.status(404).json({ error: 'Form template not found' });
+      res.json(template);
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form template');
+      res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
+
+  app.post("/api/form-templates", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const parsed = insertFormTemplateSchema.safeParse({
+        name: body.name,
+        description: body.description || null,
+        form_type: body.form_type || 'custom',
+        status: body.status || 'active',
+        version: 1,
+        settings_json: body.settings_json || { allowed_fill_roles: ['Administrator'], lock_on_submit: true },
+        created_by: (req as any).user.id,
+      });
+      if (!parsed.success) return res.status(400).json({ error: 'Invalid form template', details: parsed.error.flatten() });
+      const [created] = await db.insert(form_templates).values(parsed.data).returning();
+      res.status(201).json(await hydrateFormTemplate(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to create form template');
+      res.status(500).json({ error: 'Failed to create form template' });
+    }
+  });
+
+  app.put("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const templateId = req.params.id;
+      const [existing] = await db.select().from(form_templates).where(eq(form_templates.id, templateId)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Form template not found' });
+      const body = req.body || {};
+      const incomingSections = Array.isArray(body.sections) ? body.sections : [];
+      const incomingQuestions = Array.isArray(body.questions)
+        ? body.questions
+        : incomingSections.flatMap((section: any) => (section.questions || []).map((question: any) => ({ ...question, section_id: question.section_id || section.id })));
+
+      await db.transaction(async (tx) => {
+        await tx.update(form_templates).set({
+          name: body.name ?? existing.name,
+          description: body.description ?? null,
+          form_type: body.form_type ?? existing.form_type,
+          status: body.status ?? existing.status,
+          settings_json: body.settings_json ?? existing.settings_json,
+          version: existing.version + 1,
+          updated_at: new Date(),
+        }).where(eq(form_templates.id, templateId));
+
+        const currentSections = await tx.select().from(form_sections).where(eq(form_sections.template_id, templateId));
+        const currentQuestions = await tx.select().from(form_questions).where(eq(form_questions.template_id, templateId));
+        const seenSectionIds = new Set<string>();
+        const sectionIdMap = new Map<string, string>();
+
+        for (const [index, section] of incomingSections.entries()) {
+          const stableId = typeof section.id === 'string' && currentSections.some(row => row.id === section.id) ? section.id : null;
+          const values = {
+            template_id: templateId,
+            title: String(section.title || `Section ${index + 1}`).trim(),
+            sort_order: Number.isFinite(Number(section.sort_order)) ? Number(section.sort_order) : index,
+            status: section.status || 'active',
+            updated_at: new Date(),
+          };
+          if (stableId) {
+            await tx.update(form_sections).set(values).where(eq(form_sections.id, stableId));
+            seenSectionIds.add(stableId);
+            sectionIdMap.set(String(section.id), stableId);
+          } else {
+            const [createdSection] = await tx.insert(form_sections).values(values).returning();
+            seenSectionIds.add(createdSection.id);
+            if (section.id) sectionIdMap.set(String(section.id), createdSection.id);
+          }
+        }
+        for (const section of currentSections) {
+          if (!seenSectionIds.has(section.id)) {
+            await tx.update(form_sections).set({ status: 'archived', updated_at: new Date() }).where(eq(form_sections.id, section.id));
+          }
+        }
+
+        const seenQuestionIds = new Set<string>();
+        for (const [index, question] of incomingQuestions.entries()) {
+          const stableId = typeof question.id === 'string' && currentQuestions.some(row => row.id === question.id) ? question.id : null;
+          const sectionId = question.section_id ? (sectionIdMap.get(String(question.section_id)) || String(question.section_id)) : null;
+          // An omitted/archived section cannot retain active questions. Skip it
+          // here; the cleanup loop below marks any prior question inactive.
+          if (sectionId && !seenSectionIds.has(sectionId)) continue;
+          const stableKey = String(question.stable_key || question.id || `question_${index + 1}`).trim();
+          const values = {
+            template_id: templateId,
+            section_id: sectionId,
+            stable_key: stableKey,
+            prompt: String(question.prompt || '').trim(),
+            help_text: question.help_text || null,
+            question_type: question.question_type || 'free_text',
+            config_json: question.config_json || {},
+            sort_order: Number.isFinite(Number(question.sort_order)) ? Number(question.sort_order) : index,
+            status: question.status || 'active',
+            updated_at: new Date(),
+          };
+          if (!values.prompt) continue;
+          if (stableId) {
+            await tx.update(form_questions).set(values).where(eq(form_questions.id, stableId));
+            seenQuestionIds.add(stableId);
+          } else {
+            const [createdQuestion] = await tx.insert(form_questions).values(values).returning();
+            seenQuestionIds.add(createdQuestion.id);
+          }
+        }
+        for (const question of currentQuestions) {
+          if (!seenQuestionIds.has(question.id)) {
+            await tx.update(form_questions).set({ status: 'inactive', updated_at: new Date() }).where(eq(form_questions.id, question.id));
+          }
+        }
+      });
+
+      res.json(await hydrateFormTemplate(templateId));
+    } catch (error) {
+      logger.error({ error }, 'Failed to update form template');
+      res.status(500).json({ error: 'Failed to update form template' });
+    }
+  });
+
+  app.post("/api/form-templates/:id/duplicate", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const source = await hydrateFormTemplate(req.params.id);
+      if (!source) return res.status(404).json({ error: 'Form template not found' });
+      const [created] = await db.insert(form_templates).values({
+        name: `${source.name} (Copy)`,
+        description: source.description,
+        form_type: source.form_type,
+        status: 'active',
+        version: 1,
+        settings_json: source.settings_json,
+        created_by: (req as any).user.id,
+      }).returning();
+      const sectionIds = new Map<string, string>();
+      for (const section of source.sections) {
+        const [newSection] = await db.insert(form_sections).values({
+          template_id: created.id,
+          title: section.title,
+          sort_order: section.sort_order,
+          status: section.status,
+        }).returning();
+        sectionIds.set(section.id, newSection.id);
+      }
+      for (const question of source.questions) {
+        await db.insert(form_questions).values({
+          template_id: created.id,
+          section_id: question.section_id ? sectionIds.get(question.section_id) || null : null,
+          stable_key: question.stable_key,
+          prompt: question.prompt,
+          help_text: question.help_text,
+          question_type: question.question_type,
+          config_json: question.config_json,
+          sort_order: question.sort_order,
+          status: question.status,
+        });
+      }
+      res.status(201).json(await hydrateFormTemplate(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to duplicate form template');
+      res.status(500).json({ error: 'Failed to duplicate form template' });
+    }
+  });
+
+  app.delete("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const [updated] = await db.update(form_templates)
+        .set({ status: 'archived', updated_at: new Date() })
+        .where(eq(form_templates.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Form template not found' });
+      res.json(await hydrateFormTemplate(updated.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to archive form template');
+      res.status(500).json({ error: 'Failed to archive form template' });
+    }
+  });
+
+  const responsePayload = async (responseId: string) => {
+    const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, responseId)).limit(1);
+    if (!responseSet) return null;
+    const template = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+    const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseId));
+    return { ...responseSet, template, answers };
+  };
+
+  app.get("/api/form-responses/:responseId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      const user = (req as any).user as AuthUser;
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+      if (!await canViewScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot view this form response' });
+      res.json(await responsePayload(responseSet.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form response');
+      res.status(500).json({ error: 'Failed to load form response' });
+    }
+  });
+
+  app.get(["/api/employees/:employeeId/form-responses", "/api/scoopers/:scooperId/form-responses"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = req.params.employeeId || req.params.scooperId;
+      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot view these form responses' });
+      const filters = [eq(form_response_sets.employee_id, employeeId)];
+      if (typeof req.query.template_id === 'string') filters.push(eq(form_response_sets.template_id, req.query.template_id));
+      if (typeof req.query.cycle_label === 'string') filters.push(eq(form_response_sets.cycle_label, req.query.cycle_label));
+      const responseSets = await db.select().from(form_response_sets).where(and(...filters)).orderBy(desc(form_response_sets.updated_at));
+      const hydrated = await Promise.all(responseSets.map(response => responsePayload(response.id)));
+      res.json(hydrated.filter(Boolean));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load employee form responses');
+      res.status(500).json({ error: 'Failed to load employee form responses' });
+    }
+  });
+
+  app.post(["/api/form-responses", "/api/form-response-sets"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { template_id, employee_id, cycle_label } = req.body || {};
+      if (!template_id || !employee_id) return res.status(400).json({ error: 'template_id and employee_id are required' });
+      if (!await canModifyScooperForms(user, employee_id)) return res.status(403).json({ error: 'You cannot fill forms for this employee' });
+      const [template] = await db.select().from(form_templates).where(eq(form_templates.id, template_id)).limit(1);
+      if (!template || template.status !== 'active') return res.status(404).json({ error: 'Active form template not found' });
+      if (!templateAllowsFilling(template, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      const normalizedCycleLabel = typeof cycle_label === 'string' && cycle_label.trim() ? cycle_label.trim() : null;
+      const existingFilters = [
+        eq(form_response_sets.template_id, template_id),
+        eq(form_response_sets.employee_id, employee_id),
+        normalizedCycleLabel ? eq(form_response_sets.cycle_label, normalizedCycleLabel) : isNull(form_response_sets.cycle_label),
+      ];
+      const [existing] = await db.select().from(form_response_sets).where(and(...existingFilters)).limit(1);
+      if (existing) return res.json(await responsePayload(existing.id));
+      const templateSnapshot = await hydrateFormTemplate(template.id);
+      const [created] = await db.insert(form_response_sets).values({
+        template_id,
+        template_version: template.version,
+        employee_id,
+        cycle_label: normalizedCycleLabel,
+        status: 'draft',
+        template_snapshot_json: templateSnapshot,
+      }).returning();
+      res.status(201).json(await responsePayload(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to create form response');
+      res.status(500).json({ error: 'Failed to create form response' });
+    }
+  });
+
+  app.put(["/api/form-responses/:responseId", "/api/form-response-sets/:responseId"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+      if (responseSet.status === 'submitted') return res.status(409).json({ error: 'Submitted responses are locked' });
+      if (!await canModifyScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot edit this form response' });
+      const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+      if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      // Drafts are versioned records: validate and snapshot against the template
+      // captured at creation, even if the reusable template has since changed.
+      const snapshotQuestions: any[] = Array.isArray(responseTemplate.questions)
+        ? responseTemplate.questions
+        : [];
+      const questionMap = new Map(snapshotQuestions.map((question: any) => [question.id, question]));
+      const incomingAnswers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+      for (const answer of incomingAnswers) {
+        const question = questionMap.get(answer.question_id);
+        if (!question) continue;
+        await db.insert(form_answers).values({
+          response_set_id: responseSet.id,
+          question_id: question.id,
+          value_json: answer.value_json ?? answer.value ?? null,
+          snapshot_json: {
+            stable_key: question.stable_key,
+            prompt: question.prompt,
+            help_text: question.help_text,
+            question_type: question.question_type,
+            config_json: question.config_json,
+          },
+          answered_by: user.id,
+          updated_at: new Date(),
+        }).onConflictDoUpdate({
+          target: [form_answers.response_set_id, form_answers.question_id],
+          set: {
+            value_json: answer.value_json ?? answer.value ?? null,
+            snapshot_json: {
+              stable_key: question.stable_key,
+              prompt: question.prompt,
+              help_text: question.help_text,
+              question_type: question.question_type,
+              config_json: question.config_json,
+            },
+            answered_by: user.id,
+            updated_at: new Date(),
+          },
+        });
+      }
+      await db.update(form_response_sets).set({ updated_at: new Date() }).where(eq(form_response_sets.id, responseSet.id));
+      res.json(await responsePayload(responseSet.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to save form response');
+      res.status(500).json({ error: 'Failed to save form response' });
+    }
+  });
+
+  app.post(["/api/form-responses/:responseId/submit", "/api/form-response-sets/:responseId/submit"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+      if (!await canViewScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot access this form response' });
+      if (responseSet.status === 'submitted') return res.json(await responsePayload(responseSet.id));
+      if (!await canModifyScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot submit this form response' });
+      const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+      if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      const questions: any[] = Array.isArray(responseTemplate.questions)
+        ? responseTemplate.questions
+        : [];
+      const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+      const answersByQuestion = new Map(answers.map(answer => [answer.question_id, answer.value_json]));
+      const missing = questions.filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(answersByQuestion.get(question.id)))
+        .map(question => question.prompt);
+      if (missing.length) return res.status(400).json({ error: 'Complete all required questions before submitting', missing });
+      const questionsById = new Map(questions.map(question => [question.id, question]));
+      for (const answer of answers) {
+        const question = questionsById.get(answer.question_id);
+        if (!question) continue;
+        await db.update(form_answers).set({
+          snapshot_json: {
+            stable_key: question.stable_key,
+            prompt: question.prompt,
+            help_text: question.help_text,
+            question_type: question.question_type,
+            options: (question.config_json as any)?.options || [],
+            config_json: question.config_json,
+            value: answer.value_json,
+          },
+          updated_at: new Date(),
+        }).where(eq(form_answers.id, answer.id));
+      }
+      const [submitted] = await db.update(form_response_sets).set({
+        status: 'submitted',
+        submitted_by: user.id,
+        submitted_at: new Date(),
+        updated_at: new Date(),
+      }).where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft'))).returning();
+      res.json(await responsePayload(submitted?.id || responseSet.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to submit form response');
+      res.status(500).json({ error: 'Failed to submit form response' });
     }
   });
 

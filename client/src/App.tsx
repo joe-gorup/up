@@ -20,6 +20,7 @@ import SessionWarning from './components/SessionWarning';
 import PermissionsManager from './components/PermissionsManager';
 import HelpGuide from './components/HelpGuide';
 import ReleaseIndicator from './components/ReleaseIndicator';
+import FormsAndReviews from './components/FormsAndReviews';
 
 // Map route paths to section IDs for sidebar active state
 const routeToSection: Record<string, string> = {
@@ -28,6 +29,7 @@ const routeToSection: Record<string, string> = {
   '/dashboard': 'dashboard',
   '/employees': 'employees',
   '/goal-templates': 'goal-templates',
+  '/forms-reviews': 'forms-reviews',
   '/bulk-upload': 'bulk-upload',
   '/permissions': 'permissions',
   '/employee-dashboard': 'employee-dashboard',
@@ -42,6 +44,7 @@ const sectionToRoute: Record<string, string> = {
   'dashboard': '/dashboard',
   'employees': '/employees',
   'goal-templates': '/goal-templates',
+  'forms-reviews': '/forms-reviews',
   'bulk-upload': '/bulk-upload',
   'permissions': '/permissions',
   'employee-dashboard': '/employee-dashboard',
@@ -101,6 +104,8 @@ function AppContent() {
         return { title: 'Employee Management', description: 'Manage employee profiles, goals, and support information' };
       case 'goal-templates':
         return { title: 'Goal Templates', description: 'Create and manage reusable goal templates for employee development' };
+      case 'forms-reviews':
+        return { title: 'Forms & Reviews', description: 'Create reusable forms and document structured employee reviews' };
       case 'bulk-upload':
         return { title: 'Bulk Data Upload', description: 'Import assessment data, mastered goals, and goal templates from CSV files' };
       case 'permissions':
@@ -187,6 +192,9 @@ function AppContent() {
             <Route path="/employees" component={EmployeeManagement} />
             <Route path="/goal-templates">
               {user?.role === 'Administrator' ? <GoalTemplates /> : <Dashboard />}
+            </Route>
+            <Route path="/forms-reviews">
+              {user?.role === 'Administrator' ? <FormsAndReviews /> : <Dashboard />}
             </Route>
             <Route path="/bulk-upload">
               {user?.role === 'Administrator' ? <BulkUpload /> : <Dashboard />}
