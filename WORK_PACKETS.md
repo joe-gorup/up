@@ -8,15 +8,15 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 
 ## Start here — recommended order
 
-| Order | Packet | Effort | Why this order |
-|-------|--------|--------|----------------|
-| **1** | **PACKET-001** | ~1 hour | Quick win for Ali; confirms T1 before bigger work |
-| **2** | **PACKET-002** | ~half day | Small schema + UI; independent of form engine |
-| **3** | **PACKET-003A** | multi-day | Form engine foundation — do **not** skip 001/002 unless Ali/accommodations are explicitly deferred |
-| 4 | PACKET-003B | multi-day | Certs + mid-year profile card (after 003A) |
-| … | PACKET-004 | small | Seed/enter mid-year answers — **content locked** (`MIDYEAR_REVIEW_QUESTIONS.md`) |
+| Order | Packet | Status | Effort |
+|-------|--------|--------|--------|
+| 1 | PACKET-001 | Confirm if done on Replit | ~1 hour |
+| 2 | PACKET-002 | Confirm if done on Replit | ~half day |
+| 3 | **PACKET-003A** | ✅ **Done** (Joe, Aug 25) | multi-day |
+| **4** | **PACKET-003B** | **Ready — do next** | multi-day |
+| 5 | PACKET-004 | After 003B | small |
 
-**Do not start with 003A alone** unless T1/T2 are already done or explicitly postponed.
+**Do next:** paste **PACKET-003B** into Replit.
 
 ---
 
@@ -277,12 +277,105 @@ No profile card required in 003A — can be a standalone test route or simple mo
 
 ---
 
+## PACKET-003B — Mid-year profile card + cert migration + seed
+
+**Status:** Ready — prerequisite PACKET-003A ✅ done  
+**Priority:** High  
+**Blocked by?** Mid-year question text — ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`)
+
+### Goal
+1. Seed the **Mid-Year Review** template from locked questions.  
+2. Add a **Reviews** card on Super Scooper profiles to draft/submit/view mid-year responses.  
+3. Migrate **promotion certification checklists** onto form templates (dual-read legacy JSON).
+
+### A. Seed Mid-Year Review template
+
+Create (or upsert) an **active** template:
+
+| Field | Value |
+|-------|--------|
+| name | Mid-Year Review |
+| form_type | `mid_year_review` |
+| cycle for new responses | `2026-mid-year` (or current year mid-year) |
+| settings | `allowed_fill_roles`: Administrator, Shift Lead; `lock_on_submit`: true |
+
+**Questions** — exact copy from `MIDYEAR_REVIEW_QUESTIONS.md`:
+
+| # | stable_key | type | Notes field |
+|---|------------|------|-------------|
+| 1 | `task_independence` | scale 1–5 | optional `task_independence_notes` long_text |
+| 2 | `communication` | scale 1–5 | optional `communication_notes` long_text |
+| 3 | `self_advocacy` | scale 1–5 | optional `self_advocacy_notes` long_text |
+| 4 | `feedback_acceptance` | scale 1–5 | optional `feedback_acceptance_notes` long_text |
+| 5 | `job_duty_consistency` | scale 1–5 | optional `job_duty_consistency_notes` long_text |
+| 6 | `milestones_celebrated` | long_text | — |
+
+Prefer a one-time seed script (`scripts/seed-midyear-review.ts` or Admin “Seed Mid-Year” once) so production gets the same wording.
+
+**Do not** bulk-import PDF scores in this packet — Allison enters those after UI exists (PACKET-004 / manual).
+
+### B. Reviews card on Super Scooper profile
+
+**New component** (do **not** dump into `EmployeeDetail.tsx` monolith): e.g. `client/src/components/EmployeeReviewsCard.tsx`
+
+Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
+
+**Behavior**
+- List response sets for this scooper for `form_type = mid_year_review` (and later other review types).
+- Actions: **Start** (creates draft for cycle), **Continue draft**, **View submitted**.
+- Fill UI: reuse `FormResponseFill` / question registry from 003A.
+- ACL: fill = Admin + Shift Lead (or template settings); view = `form_responses` permission (Guardian/Job Coach off by default).
+- After submit: read-only except Admin edit (per DESIGN_DECISIONS B7).
+
+**Empty state:** “No mid-year review yet” + Start button for allowed roles.
+
+### C. Promotion certification migration (dual-read)
+
+**Today:** Hardcoded `mentorChecklistItems` / `shiftManagerCategories` in `EmployeeDetail.tsx`; answers in `promotion_certifications.checklist_results` JSONB.
+
+**Approach**
+1. Seed two templates: `Mentor Certification` (`mentor_certification`), `Shift Lead Certification` (`shift_lead_certification`) from current hardcoded arrays (yes_no questions; Shift Lead uses **sections** matching categories).
+2. Additive column: `promotion_certifications.response_set_id` (nullable FK → `form_response_sets`).
+3. **New certs:** create form response set + checklist answers via form engine; store `response_set_id`; still write `checklist_results` for a short dual-write period **or** only response_set if review UI can read both.
+4. **Old certs:** keep displaying `checklist_results` when `response_set_id` is null.
+5. Cert create/review UI loads questions from template when available; fall back to hardcoded arrays only if template missing.
+
+**Do not** rewrite historical `checklist_results` into form_answers in this packet.
+
+### D. Out of scope
+
+- Conditionals / coach check-in migration (003C)
+- Bulk PDF answer import (004)
+- Notes feed, invites (005/006)
+- Removing hardcoded cert arrays entirely (only after dual-read proven in prod)
+- Advanced question types beyond what 003A already renders
+
+### Acceptance tests
+
+1. Admin opens Forms & Reviews → sees seeded **Mid-Year Review** with 6 prompts matching `MIDYEAR_REVIEW_QUESTIONS.md`.
+2. As Shift Lead: open Super Scooper → Reviews card → Start mid-year → rate 1–5 + notes → save draft → reload persists → submit → locked.
+3. Guardian linked to that scooper: **cannot** see mid-year answers (default). Admin enables `form_responses` View for Guardian → can see.
+4. Admin creates Mentor cert using template questions (not only hardcoded); old certs with only `checklist_results` still open and display answers.
+5. Shift Lead cert categories appear as sections.
+6. `npm run db:push` additive only (`response_set_id` nullable).
+
+### Deploy
+
+`npm run db:push` → run seed script → publish → smoke Admin + Shift Lead + Guardian.
+
+### Report back
+
+- Seed script path / how to re-run safely  
+- Screenshots: Reviews card draft + submitted; cert create from template; old cert still readable  
+- Confirm 001/002 status if not already reported  
+
+---
+
 ## Later packets
 
 | Packet | Topic | Blocked by |
 |--------|--------|------------|
-| PACKET-003B | Certs + mid-year profile card + seed scripts | PACKET-003A |
-| PACKET-004 | Seed mid-year template + optional PDF answer entry | F1 ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`) + 003B |
+| PACKET-004 | Enter historical PDF mid-year answers (optional bulk/manual) | 003B |
 | PACKET-003C | Conditionals + coach check-in migration | 003B |
 | PACKET-005 | Unified notes feed | 003A ACL helpers |
 | PACKET-006 | Invites + `external_user_invites` enforcement | 005 optional |

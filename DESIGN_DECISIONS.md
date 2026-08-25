@@ -167,4 +167,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-23 | F1–F3, F5 locked; F4 (Ali/T1) still pending |
+| Architect | Cursor | 2026-08-25 | F1–F3, F5 locked; **003A done**; F4 (Ali/T1) still pending if 001 not run |
