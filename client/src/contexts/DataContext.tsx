@@ -158,7 +158,7 @@ interface DataContextType {
   ensureProgressLoaded: () => void;
   loadUserDrafts: (userId: string) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => void;
-  updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  updateEmployee: (id: string, updates: Partial<Employee> & { password?: string }) => Promise<void>;
   createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
   endAssessmentSession: () => void;
   completeAssessmentSession: (sessionId: string) => Promise<void>;
@@ -601,7 +601,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
+  const updateEmployee = async (id: string, updates: Partial<Employee> & { password?: string }) => {
     try {
       const updateData: any = {};
       if (updates.first_name) updateData.first_name = updates.first_name;
@@ -630,35 +630,39 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(updateData),
       });
 
-      if (response.ok) {
-        const updatedEmployee = await response.json();
-        const mappedEmployee = {
-          id: updatedEmployee.id,
-          first_name: updatedEmployee.first_name,
-          last_name: updatedEmployee.last_name,
-          email: updatedEmployee.email,
-          role: updatedEmployee.role,
-          profileImageUrl: updatedEmployee.profile_image_url,
-          isActive: updatedEmployee.is_active,
-          hasSystemAccess: updatedEmployee.has_system_access || false,
-          allergies: updatedEmployee.allergies || [],
-          emergencyContacts: updatedEmployee.emergency_contacts || [],
-          interestsMotivators: updatedEmployee.interests_motivators || [],
-          challenges: updatedEmployee.challenges || [],
-          regulationStrategies: updatedEmployee.regulation_strategies || [],
-          accommodations: updatedEmployee.accommodations || [],
-          hasServiceProvider: updatedEmployee.has_service_provider || false,
-          serviceProviders: updatedEmployee.service_providers || [],
-          date_of_birth: updatedEmployee.date_of_birth || null,
-          last_login: updatedEmployee.last_login || null,
-          roi_status: updatedEmployee.roi_status || false,
-          createdAt: updatedEmployee.created_at,
-          updatedAt: updatedEmployee.updated_at
-        };
-        setEmployees(prev => prev.map(emp => emp.id === id ? mappedEmployee : emp));
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to update employee (${response.status})`);
       }
+
+      const updatedEmployee = await response.json();
+      const mappedEmployee = {
+        id: updatedEmployee.id,
+        first_name: updatedEmployee.first_name,
+        last_name: updatedEmployee.last_name,
+        email: updatedEmployee.email,
+        role: updatedEmployee.role,
+        profileImageUrl: updatedEmployee.profile_image_url,
+        isActive: updatedEmployee.is_active,
+        hasSystemAccess: updatedEmployee.has_system_access || false,
+        allergies: updatedEmployee.allergies || [],
+        emergencyContacts: updatedEmployee.emergency_contacts || [],
+        interestsMotivators: updatedEmployee.interests_motivators || [],
+        challenges: updatedEmployee.challenges || [],
+        regulationStrategies: updatedEmployee.regulation_strategies || [],
+        accommodations: updatedEmployee.accommodations || [],
+        hasServiceProvider: updatedEmployee.has_service_provider || false,
+        serviceProviders: updatedEmployee.service_providers || [],
+        date_of_birth: updatedEmployee.date_of_birth || null,
+        last_login: updatedEmployee.last_login || null,
+        roi_status: updatedEmployee.roi_status || false,
+        createdAt: updatedEmployee.created_at,
+        updatedAt: updatedEmployee.updated_at
+      };
+      setEmployees(prev => prev.map(emp => emp.id === id ? mappedEmployee : emp));
     } catch (error) {
       console.error('Error updating employee:', error);
+      throw error;
     }
   };
 

@@ -72,7 +72,9 @@ export default function EmployeeManagement() {
   };
 
   const handleInactivateEmployee = (employeeId: string) => {
-    updateEmployee(employeeId, { isActive: false });
+    void updateEmployee(employeeId, { isActive: false }).catch((error) => {
+      console.error('Failed to inactivate employee:', error);
+    });
   };
 
   if (selectedEmployee) {

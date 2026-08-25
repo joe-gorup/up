@@ -521,6 +521,43 @@ export function canUseAccommodations(role: string): boolean {
   return role === "Super Scooper";
 }
 
+export type AccommodationWriteError = {
+  status: 400 | 403;
+  message: string;
+};
+
+export function hasAccommodationUpdate(updates: Record<string, unknown>): boolean {
+  return updates.accommodations !== undefined;
+}
+
+/**
+ * Validate the two role constraints for accommodation writes.
+ *
+ * Keeping this policy separate from the employee route makes it harder for a
+ * future profile-permission change to accidentally broaden access to this
+ * sensitive field.
+ */
+export function getAccommodationWriteError(
+  actorRole: string,
+  targetRole: string,
+): AccommodationWriteError | null {
+  if (!canManageAccommodations(actorRole)) {
+    return {
+      status: 403,
+      message: "Only administrators can manage accommodations",
+    };
+  }
+
+  if (!canUseAccommodations(targetRole)) {
+    return {
+      status: 400,
+      message: "Accommodations can only be set for Super Scoopers",
+    };
+  }
+
+  return null;
+}
+
 export function canManageAssignments(role: string): boolean {
   return role === "Administrator";
 }

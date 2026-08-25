@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility } from 'lucide-react';
 import { PromotionCertification } from '../contexts/DataContext';
-import { normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
+import { canManageAccommodations, normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
 import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -79,7 +79,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
-  const canEditAccommodations = user?.role === 'Administrator';
+  const canEditAccommodations = user ? canManageAccommodations(user.role) : false;
   const canAssignGoal = canModify('goal_assignment');
   const canAssess = canModify('goal_assessment');
   const canViewGuardianNotes = canView('guardian_notes');

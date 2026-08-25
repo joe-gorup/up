@@ -12,7 +12,7 @@ import {
   insertFormTemplateSchema, insertFormSectionSchema, insertFormQuestionSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
-  calculateDateFromRelativeDuration, canManageAccommodations, canUseAccommodations
+  calculateDateFromRelativeDuration, getAccommodationWriteError, hasAccommodationUpdate
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
@@ -493,12 +493,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/employees", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
-      if (req.body.accommodations !== undefined) {
-        if (!canManageAccommodations(user.role)) {
-          return res.status(403).json({ error: 'Only administrators can set accommodations' });
-        }
-        if (!canUseAccommodations(req.body.role ?? 'Super Scooper')) {
-          return res.status(400).json({ error: 'Accommodations can only be set for Super Scoopers' });
+      if (hasAccommodationUpdate(req.body)) {
+        const accommodationError = getAccommodationWriteError(
+          user.role,
+          req.body.role ?? 'Super Scooper',
+        );
+        if (accommodationError) {
+          return res.status(accommodationError.status).json({ error: accommodationError.message });
         }
       }
 
@@ -552,9 +553,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
-      if (req.body.accommodations !== undefined) {
-        if (!canManageAccommodations(user.role)) {
-          return res.status(403).json({ error: 'Only administrators can update accommodations' });
+      if (hasAccommodationUpdate(req.body)) {
+        // Reject the sensitive-field write before looking up the target so a
+        // non-administrator consistently receives the authorization response.
+        const actorError = getAccommodationWriteError(user.role, 'Super Scooper');
+        if (actorError) {
+          return res.status(actorError.status).json({ error: actorError.message });
         }
 
         const [currentEmployee] = await db
@@ -562,12 +566,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from(employees)
           .where(eq(employees.id, id))
           .limit(1);
-        const targetRole = req.body.role ?? currentEmployee?.role;
         if (!currentEmployee) {
           return res.status(404).json({ error: 'Employee not found' });
         }
-        if (!canUseAccommodations(targetRole)) {
-          return res.status(400).json({ error: 'Accommodations can only be set for Super Scoopers' });
+        const accommodationError = getAccommodationWriteError(
+          user.role,
+          req.body.role ?? currentEmployee.role,
+        );
+        if (accommodationError) {
+          return res.status(accommodationError.status).json({ error: accommodationError.message });
         }
       }
 

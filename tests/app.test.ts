@@ -1,6 +1,11 @@
 import { test, describe, mock, beforeEach } from 'node:test';
 import assert from 'node:assert';
-import { canManageAccommodations, canUseAccommodations } from '../shared/schema';
+import {
+  canManageAccommodations,
+  canUseAccommodations,
+  getAccommodationWriteError,
+  hasAccommodationUpdate,
+} from '../shared/schema';
 
 // Mock database and logger for testing
 const mockDb = {
@@ -134,6 +139,36 @@ describe('Accommodations Access Policy', () => {
     assert.strictEqual(canUseAccommodations('Super Scooper'), true);
     assert.strictEqual(canUseAccommodations('Administrator'), false);
     assert.strictEqual(canUseAccommodations('Shift Lead'), false);
+  });
+
+  test('returns 403 for every non-administrator accommodation write', () => {
+    for (const role of ['Super Scooper', 'Job Coach', 'Shift Lead', 'Assistant Manager', 'Guardian']) {
+      assert.deepStrictEqual(
+        getAccommodationWriteError(role, 'Super Scooper'),
+        {
+          status: 403,
+          message: 'Only administrators can manage accommodations',
+        },
+        `expected ${role} to be denied`,
+      );
+    }
+  });
+
+  test('allows administrators to create and update Super Scooper accommodations', () => {
+    assert.strictEqual(getAccommodationWriteError('Administrator', 'Super Scooper'), null);
+  });
+
+  test('rejects accommodation writes for non-Super Scooper targets', () => {
+    assert.deepStrictEqual(getAccommodationWriteError('Administrator', 'Shift Lead'), {
+      status: 400,
+      message: 'Accommodations can only be set for Super Scoopers',
+    });
+  });
+
+  test('does not apply accommodation policy to existing support fields', () => {
+    const update = { challenges: ['Needs visual instructions'], regulation_strategies: ['Offer a short break'] };
+    assert.strictEqual(hasAccommodationUpdate(update), false);
+    assert.strictEqual(hasAccommodationUpdate({ ...update, accommodations: [] }), true);
   });
 });
 
