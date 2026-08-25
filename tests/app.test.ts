@@ -1,5 +1,6 @@
 import { test, describe, mock, beforeEach } from 'node:test';
 import assert from 'node:assert';
+import { canManageAccommodations, canUseAccommodations } from '../shared/schema';
 
 // Mock database and logger for testing
 const mockDb = {
@@ -118,6 +119,21 @@ describe('Employee Statistics', () => {
     assert.strictEqual(result.activeGoals, 2);
     assert.strictEqual(result.masteredGoals, 2);
     assert.strictEqual(result.totalGoals, 3);
+  });
+});
+
+describe('Accommodations Access Policy', () => {
+  test('allows only administrators to manage accommodations', () => {
+    assert.strictEqual(canManageAccommodations('Administrator'), true);
+    assert.strictEqual(canManageAccommodations('Shift Lead'), false);
+    assert.strictEqual(canManageAccommodations('Assistant Manager'), false);
+    assert.strictEqual(canManageAccommodations('Job Coach'), false);
+  });
+
+  test('allows accommodations only on Super Scooper profiles', () => {
+    assert.strictEqual(canUseAccommodations('Super Scooper'), true);
+    assert.strictEqual(canUseAccommodations('Administrator'), false);
+    assert.strictEqual(canUseAccommodations('Shift Lead'), false);
   });
 });
 

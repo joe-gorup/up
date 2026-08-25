@@ -1,1 +1,2 @@
 - [Collaborative assessment sessions](collab-assessment.md) — Option B chosen: presence indicator + session joining, no hard locks or WebSockets.
+- [Database schema sync](database-schema-sync.md) — Use the runtime-managed DATABASE_URL for development schema pushes; the separate Neon secret can target another database.

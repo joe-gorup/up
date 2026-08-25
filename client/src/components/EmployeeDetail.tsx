@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility } from 'lucide-react';
 import { PromotionCertification } from '../contexts/DataContext';
 import { normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
 import { useProgressData } from '../hooks/useProgressData';
@@ -79,6 +79,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
+  const canEditAccommodations = user?.role === 'Administrator';
   const canAssignGoal = canModify('goal_assignment');
   const canAssess = canModify('goal_assessment');
   const canViewGuardianNotes = canView('guardian_notes');
@@ -131,6 +132,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingSupportInterests, setEditingSupportInterests] = useState(false);
   const [editingSupportChallenges, setEditingSupportChallenges] = useState(false);
   const [editingSupportStrategies, setEditingSupportStrategies] = useState(false);
+  const [editingAccommodations, setEditingAccommodations] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
@@ -140,6 +142,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     challenges: [''],
     regulationStrategies: ['']
   });
+  const [accommodationsForm, setAccommodationsForm] = useState<string[]>(['']);
   const [serviceProviderForm, setServiceProviderForm] = useState<Array<{ name: string; type: string }>>([]);
 
   // Certification states
@@ -597,6 +600,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
         regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
       });
+      setAccommodationsForm(employee.accommodations.length > 0 ? [...employee.accommodations] : ['']);
       setServiceProviderForm(
         employee.serviceProviders?.length > 0 
           ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
@@ -672,6 +676,20 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   };
 
+  const handleSaveAccommodations = async () => {
+    setSavingProfile(true);
+    try {
+      await updateEmployee(employeeId, {
+        accommodations: accommodationsForm.filter(accommodation => accommodation.trim() !== '')
+      });
+      setEditingAccommodations(false);
+    } catch (error) {
+      console.error('Error saving accommodations:', error);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleCancelSafety = () => {
     setSafetyForm(employee?.allergies.length ? [...employee.allergies] : ['']);
     setEditingSafety(false);
@@ -689,6 +707,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     if (category === 'interestsMotivators') setEditingSupportInterests(false);
     if (category === 'challenges') setEditingSupportChallenges(false);
     if (category === 'regulationStrategies') setEditingSupportStrategies(false);
+  };
+
+  const handleCancelAccommodations = () => {
+    setAccommodationsForm(employee?.accommodations.length ? [...employee.accommodations] : ['']);
+    setEditingAccommodations(false);
   };
 
   const startEditingServiceProvider = () => {
@@ -1340,6 +1363,82 @@ const handleGenerateInvitation = async () => {
                   )}
                 </div>
               </div>
+              {employee.role === 'Super Scooper' && (
+                <section className="mt-5 pt-5 border-t border-gray-200" aria-labelledby="accommodations-heading">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 id="accommodations-heading" className="text-sm font-semibold text-gray-700 flex items-center">
+                        <Accessibility className="h-4 w-4 text-teal-600 mr-1.5" /> Accommodations
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Tools and environmental supports that help this employee succeed.</p>
+                    </div>
+                    {canEditAccommodations && !editingAccommodations && (
+                      <button
+                        onClick={() => setEditingAccommodations(true)}
+                        className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        title="Edit accommodations"
+                        data-testid="button-edit-accommodations"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {editingAccommodations ? (
+                    <div data-testid="form-edit-accommodations">
+                      <div className="space-y-1.5">
+                        {accommodationsForm.map((accommodation, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input
+                              type="text"
+                              value={accommodation}
+                              onChange={(e) => updateArrayItem(setAccommodationsForm, index, e.target.value)}
+                              className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
+                              placeholder="Accommodation or support"
+                              data-testid={`input-accommodation-${index}`}
+                            />
+                            {accommodationsForm.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeArrayItem(setAccommodationsForm, index)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+                                aria-label={`Remove accommodation ${index + 1}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addArrayItem(setAccommodationsForm)}
+                        className="flex items-center space-x-1 text-teal-700 hover:text-teal-800 text-xs font-medium mt-2 pt-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" /><span>Add accommodation</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                        <button onClick={handleCancelAccommodations} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={handleSaveAccommodations} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 text-xs font-medium disabled:opacity-50 transition-colors" data-testid="button-save-accommodations">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    employee.accommodations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5" data-testid="accommodation-chips">
+                        {employee.accommodations.map((accommodation, index) => (
+                          <span key={index} className="bg-teal-50 text-teal-800 border border-teal-100 px-2.5 py-1 rounded-full text-sm">
+                            {accommodation}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm italic" data-testid="text-empty-accommodations">No accommodations have been recorded.</p>
+                    )
+                  )}
+                </section>
+              )}
             </div>
 
             {/* Contacts, Service Provider & Job Coaches Row */}

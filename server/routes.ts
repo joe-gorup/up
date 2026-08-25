@@ -10,7 +10,7 @@ import {
   insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
-  calculateDateFromRelativeDuration
+  calculateDateFromRelativeDuration, canManageAccommodations, canUseAccommodations
 } from "@shared/schema";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
@@ -118,7 +118,7 @@ const EMPLOYEE_ALLOWED_FIELDS = [
   'first_name', 'last_name', 'email', 'role', 'date_of_birth',
   'is_active', 'has_system_access', 'password',
   'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
-  'regulation_strategies', 'has_service_provider', 'service_providers',
+  'regulation_strategies', 'accommodations', 'has_service_provider', 'service_providers',
   'profile_image_url', 'location',
   'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
   'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',
@@ -489,6 +489,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/employees", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user as AuthUser;
+      if (req.body.accommodations !== undefined) {
+        if (!canManageAccommodations(user.role)) {
+          return res.status(403).json({ error: 'Only administrators can set accommodations' });
+        }
+        if (!canUseAccommodations(req.body.role ?? 'Super Scooper')) {
+          return res.status(400).json({ error: 'Accommodations can only be set for Super Scoopers' });
+        }
+      }
+
       // Check for existing employee with same email to prevent duplicates (only if email provided)
       if (req.body.email && req.body.email.trim() !== '') {
         const existingEmployee = await db.select().from(employees).where(eq(employees.email, req.body.email)).limit(1);
@@ -538,6 +548,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/employees/:id", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (req.body.accommodations !== undefined) {
+        if (!canManageAccommodations(user.role)) {
+          return res.status(403).json({ error: 'Only administrators can update accommodations' });
+        }
+
+        const [currentEmployee] = await db
+          .select({ role: employees.role })
+          .from(employees)
+          .where(eq(employees.id, id))
+          .limit(1);
+        const targetRole = req.body.role ?? currentEmployee?.role;
+        if (!currentEmployee) {
+          return res.status(404).json({ error: 'Employee not found' });
+        }
+        if (!canUseAccommodations(targetRole)) {
+          return res.status(400).json({ error: 'Accommodations can only be set for Super Scoopers' });
+        }
+      }
+
       const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
       
       // Generate name field from first_name and last_name (legacy field requirement)
