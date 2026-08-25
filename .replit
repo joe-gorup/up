@@ -18,6 +18,10 @@ externalPort = 80
 localPort = 23636
 externalPort = 3000
 
+[[ports]]
+localPort = 23637
+externalPort = 3001
+
 [workflows]
 runButton = "Project"
 
@@ -43,4 +47,4 @@ waitForPort = 5000
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 120000
