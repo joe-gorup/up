@@ -601,6 +601,7 @@ export const promotion_certifications = pgTable("promotion_certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").notNull().references(() => employees.id),
   certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_lead'
+  response_set_id: varchar("response_set_id").references(() => form_response_sets.id, { onDelete: "set null" }),
   date_completed: text("date_completed").notNull(),
   score: integer("score").notNull(),
   passing_score: integer("passing_score").notNull(),
@@ -612,6 +613,10 @@ export const promotion_certifications = pgTable("promotion_certifications", {
 }, (table) => ({
   employeeIdx: index("promotion_certs_employee_idx").on(table.employee_id),
   typeIdx: index("promotion_certs_type_idx").on(table.certification_type),
+  responseSetIdx: index("promotion_certs_response_set_idx").on(table.response_set_id),
+  responseSetUnique: uniqueIndex("promotion_certs_response_set_unique")
+    .on(table.response_set_id)
+    .where(sql`${table.response_set_id} is not null`),
 }));
 
 export const insertPromotionCertificationSchema = createInsertSchema(promotion_certifications).omit({

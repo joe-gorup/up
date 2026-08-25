@@ -39,7 +39,7 @@ const questionTypes: Array<{ value: QuestionType; label: string; hint: string }>
   { value: 'help_text', label: 'Help text', hint: 'Read-only guidance' },
   { value: 'rich_text', label: 'Rich text', hint: 'Coming soon' },
   { value: 'number', label: 'Number', hint: 'Coming soon' },
-  { value: 'scale', label: 'Scale', hint: 'Coming soon' },
+  { value: 'scale', label: 'Scale', hint: 'Numeric range' },
   { value: 'email', label: 'Email', hint: 'Coming soon' },
   { value: 'phone', label: 'Phone', hint: 'Coming soon' },
   { value: 'time', label: 'Time', hint: 'Coming soon' },
@@ -316,18 +316,42 @@ function AnswerControl({ question, value, onChange }: { question: FormQuestion; 
   if (question.question_type === 'date') return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
   if (question.question_type === 'date_time') return <input type="datetime-local" value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
   if (question.question_type === 'yes_no') return <div className="flex gap-2">{['Yes', 'No'].map(option => <button key={option} onClick={() => onChange(option.toLowerCase())} className={`rounded-xl border px-4 py-2 text-sm font-medium ${value === option.toLowerCase() ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
+  if (question.question_type === 'scale') {
+    const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
+    const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
+    const labels = config.labels || {};
+    return (
+      <div className="grid grid-cols-5 gap-2 sm:flex sm:flex-wrap">
+        {Array.from({ length: Math.max(0, max - min + 1) }, (_, index) => min + index).map(option => (
+          <button
+            key={option}
+            type="button"
+            onClick={() => onChange(option)}
+            aria-pressed={Number(value) === option}
+            className={`min-w-12 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${Number(value) === option ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+          >
+            {labels[String(option)] || option}
+          </button>
+        ))}
+      </div>
+    );
+  }
   if (question.question_type === 'single_select' && config.display?.style !== 'chips') return <select value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass}><option value="">Choose an option…</option>{options.map((option: string) => <option key={option} value={option}>{option}</option>)}</select>;
   if (question.question_type === 'single_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => <button key={option} onClick={() => onChange(option)} className={`rounded-xl border px-3 py-2 text-left text-sm ${value === option ? 'border-amber-500 bg-amber-50 font-semibold text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
   if (question.question_type === 'multi_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => { const selected = Array.isArray(value) && value.includes(option); return <label key={option} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selected ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600'}`}><input type="checkbox" checked={selected} onChange={() => onChange(selected ? value.filter((item: string) => item !== option) : [...(value || []), option])} className="h-4 w-4 text-amber-600 focus:ring-amber-500" />{option}</label>; })}</div>;
   return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">This question type is registered and will be available in a future phase.</div>;
 }
 
-function ReadOnlyAnswer({ value }: { value: any }) {
+function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuestion }) {
+  if (question?.question_type === 'scale' && value !== undefined && value !== null && value !== '') {
+    const labels = question.config_json?.labels || {};
+    return <div className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">Rating: {labels[String(value)] || value}</div>;
+  }
   const rendered = Array.isArray(value) ? value.join(', ') : value === true ? 'Yes' : value === false ? 'No' : value;
   return <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">{rendered === undefined || rendered === null || rendered === '' ? 'No response provided.' : String(rendered)}</div>;
 }
 
-function FormFiller({ response, employee, onClose, onComplete }: { response: ResponseSet; employee: Employee; onClose: () => void; onComplete: () => void }) {
+export function FormFiller({ response, employee, onClose, onComplete }: { response: ResponseSet; employee: Employee; onClose: () => void; onComplete: (response?: ResponseSet) => void }) {
   const { toast } = useToast();
   const [answers, setAnswers] = useState<Record<string, any>>(() => Object.fromEntries(response.answers.map(answer => [answer.question_id, answer.value_json])));
   const [saving, setSaving] = useState(false);
@@ -343,8 +367,9 @@ function FormFiller({ response, employee, onClose, onComplete }: { response: Res
       if (submit) {
         const submitted = await apiRequest(`/api/form-responses/${response.id}/submit`, { method: 'POST' });
         if (!submitted.ok) throw new Error((await submitted.json()).error || 'Unable to submit response');
+        const submittedResponse = await submitted.json();
         toast({ title: 'Form submitted', description: 'This response is now locked for review.', type: 'success' });
-        onComplete();
+        onComplete(submittedResponse);
       } else toast({ title: 'Draft saved', description: 'You can come back and finish this form later.', type: 'success' });
     } catch (error) {
       toast({ title: submit ? 'Could not submit form' : 'Could not save draft', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
@@ -371,7 +396,7 @@ function FormFiller({ response, employee, onClose, onComplete }: { response: Res
                   return <div key={question.id || question.stable_key}>
                     <label className="mb-2 block text-sm font-semibold text-slate-800">{question.prompt || 'Untitled question'}{question.config_json?.required && <span className="ml-1 text-amber-700">*</span>}</label>
                     {question.help_text && <p className="mb-2 text-xs text-slate-500">{question.help_text}</p>}
-                    {isSubmitted ? <ReadOnlyAnswer value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
+                    {isSubmitted ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
                   </div>;
                 })}
               </div>

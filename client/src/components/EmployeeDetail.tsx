@@ -12,6 +12,9 @@ import TemplateVideoManager from './TemplateVideoManager';
 import StepVideoIcons from './StepVideoIcons';
 import CoachCheckin from './CoachCheckin';
 import EmployeeReviews from './EmployeeReviews';
+import EmployeeReviewsCard from './EmployeeReviewsCard';
+import CertificationTemplateFlow from './CertificationTemplateFlow';
+import { FormFiller } from './FormsAndReviews';
 import EmployeeProgress from './EmployeeProgress';
 import CertificationHistory from './CertificationHistory';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -75,7 +78,7 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, refreshCertifications, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
@@ -160,6 +163,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [checklistAnswers, setChecklistAnswers] = useState<Record<number, ChecklistAnswer>>({});
   const [collapsedCategories, setCollapsedCategories] = useState<Record<number, boolean>>({});
   const [reviewingCert, setReviewingCert] = useState<PromotionCertification | null>(null);
+  const [certificationFlowType, setCertificationFlowType] = useState<'mentor' | 'shift_lead' | null>(null);
+  const [certificationResponse, setCertificationResponse] = useState<any>(null);
 
   // Invitation and relationship states (from remote)
   const [invitationEmail, setInvitationEmail] = useState(employees.find(e => e.id === employeeId)?.email || '');
@@ -366,6 +371,20 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   };
 
   const employeeCerts = certifications.filter(c => c.employeeId === employeeId);
+
+  const openCertificationReview = async (cert: PromotionCertification) => {
+    if (!cert.responseSetId) {
+      setReviewingCert(cert);
+      return;
+    }
+    try {
+      const response = await apiRequest(`/api/form-responses/${cert.responseSetId}`);
+      if (!response.ok) throw new Error((await response.json()).error || 'Unable to load certification response');
+      setCertificationResponse(await response.json());
+    } catch {
+      setReviewingCert(cert);
+    }
+  };
 
   const handleSaveCertification = async () => {
     setSavingCert(true);
@@ -808,6 +827,10 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         </div>
       </div>
     );
+  }
+
+  if (certificationResponse) {
+    return <FormFiller response={certificationResponse} employee={employee} onClose={() => setCertificationResponse(null)} onComplete={() => setCertificationResponse(null)} />;
   }
 
   const activeGoals = employeeGoals.filter(goal => goal.status === 'active');
@@ -1832,7 +1855,7 @@ const handleGenerateInvitation = async () => {
                           </span>
                           <button
                             type="button"
-                            onClick={() => setReviewingCert(cert)}
+                            onClick={() => openCertificationReview(cert)}
                             className="p-1 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Review answers"
                           >
@@ -1857,21 +1880,11 @@ const handleGenerateInvitation = async () => {
 
                 {editingCerts && (
                   <div className="flex justify-between items-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        resetChecklistState();
-                        setCertNotes('');
-                        setCertDate(new Date().toISOString().split('T')[0]);
-                        setCertType('mentor');
-                        setShowCertForm(true);
-                      }}
-                      className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium"
-                      title="Add Certification"
-                    >
+                    <button type="button" onClick={() => setCertificationFlowType('mentor')} className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium" title="Start Mentor Certification">
                       <Plus className="h-3.5 w-3.5" />
-                      <span>Add</span>
+                      <span>Mentor</span>
                     </button>
+                    <button type="button" onClick={() => setCertificationFlowType('shift_lead')} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs font-medium" title="Start Shift Lead Certification"><Plus className="h-3.5 w-3.5" /><span>Shift Lead</span></button>
                     <div className="flex space-x-2">
                       <button onClick={() => setEditingCerts(false)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
                       <button onClick={() => setEditingCerts(false)} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium transition-colors">
@@ -2071,6 +2084,20 @@ const handleGenerateInvitation = async () => {
       </div>
 
       {/* Certification Review Modal */}
+      {certificationFlowType && (
+        <Modal isOpen={true} onClose={() => setCertificationFlowType(null)} title={`${certificationFlowType === 'mentor' ? 'Mentor' : 'Shift Lead'} Certification`} size="xl">
+          <CertificationTemplateFlow
+            employee={employee}
+            certificationType={certificationFlowType}
+            onClose={() => setCertificationFlowType(null)}
+            onCompleted={() => {
+              setCertificationFlowType(null);
+              refreshCertifications();
+            }}
+          />
+        </Modal>
+      )}
+
       {reviewingCert && (
         <Modal
           isOpen={true}
@@ -2505,7 +2532,10 @@ const handleGenerateInvitation = async () => {
 
           {/* Employee Reviews */}
           {employee.role === 'Super Scooper' && (
-            <EmployeeReviews employeeId={employeeId} />
+            <>
+              <EmployeeReviewsCard employee={employee} />
+              <EmployeeReviews employeeId={employeeId} />
+            </>
           )}
 
         </div>

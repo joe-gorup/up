@@ -110,6 +110,7 @@ export interface PromotionCertification {
   id: string;
   employeeId: string;
   certificationType: 'mentor' | 'shift_lead';
+  responseSetId?: string | null;
   dateCompleted: string;
   score: number;
   passingScore: number;
@@ -398,6 +399,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           id: cert.id,
           employeeId: cert.employee_id,
           certificationType: cert.certification_type,
+          responseSetId: cert.response_set_id,
           dateCompleted: cert.date_completed,
           score: cert.score,
           passingScore: cert.passing_score,
@@ -1374,6 +1376,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           id: cert.id,
           employeeId: cert.employee_id,
           certificationType: cert.certification_type,
+          responseSetId: cert.response_set_id,
           dateCompleted: cert.date_completed,
           score: cert.score,
           passingScore: cert.passing_score,
@@ -1398,6 +1401,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           employee_id: cert.employeeId,
           certification_type: cert.certificationType,
+          response_set_id: cert.responseSetId || null,
           date_completed: cert.dateCompleted,
           score: cert.score,
           passing_score: cert.passingScore,
@@ -1414,6 +1418,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           id: newCert.id,
           employeeId: newCert.employee_id,
           certificationType: newCert.certification_type,
+          responseSetId: newCert.response_set_id,
           dateCompleted: newCert.date_completed,
           score: newCert.score,
           passingScore: newCert.passing_score,

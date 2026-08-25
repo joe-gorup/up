@@ -79,7 +79,7 @@ async function ensureDefaultPermissions() {
 
         if (role === 'Shift Lead' || role === 'Assistant Manager') {
           can_view = feature !== 'external_user_invites' && (feature !== 'form_responses' || role === 'Shift Lead');
-          can_modify = ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature);
+          can_modify = ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'form_responses', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature);
           can_delete = false;
         } else if (role === 'Job Coach') {
           can_view = ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature);
@@ -101,6 +101,15 @@ async function ensureDefaultPermissions() {
       }
       logger.info({ count: toInsert.length }, 'Auto-filled missing default permission rows');
     }
+    // Form responses were introduced before Shift Leads were allowed to fill
+    // them. Upgrade only the former default (view enabled, modify disabled)
+    // while preserving a full opt-out that an Administrator intentionally set.
+    await db.update(role_permissions).set({ can_modify: true }).where(and(
+      eq(role_permissions.role, 'Shift Lead'),
+      eq(role_permissions.feature, 'form_responses'),
+      eq(role_permissions.can_view, true),
+      eq(role_permissions.can_modify, false),
+    ));
   } catch (error) {
     logger.error({ error }, 'Failed to auto-fill default permissions — non-fatal, continuing startup');
   }
@@ -3729,7 +3738,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/certifications", authenticateToken, requirePermission('promotion_certifications', 'can_modify'), async (req: Request, res: Response) => {
     try {
-      const parsed = insertPromotionCertificationSchema.parse(req.body);
+      const body = req.body || {};
+      if (body.response_set_id) {
+        const [responseSet] = await db.select().from(form_response_sets)
+          .where(eq(form_response_sets.id, body.response_set_id))
+          .limit(1);
+        if (!responseSet) return res.status(404).json({ error: 'Certification response not found' });
+        if (responseSet.status !== 'submitted') return res.status(409).json({ error: 'Submit the certification form before recording it' });
+        if (responseSet.employee_id !== body.employee_id) return res.status(400).json({ error: 'Certification response belongs to a different employee' });
+
+        const template: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+        const expectedFormType = body.certification_type === 'mentor' ? 'mentor_certification' : 'shift_lead_certification';
+        if (!template || template.form_type !== expectedFormType) return res.status(400).json({ error: 'Certification response does not match the selected certification type' });
+
+        const [existing] = await db.select().from(promotion_certifications)
+          .where(eq(promotion_certifications.response_set_id, responseSet.id))
+          .limit(1);
+        if (existing) return res.json(existing);
+
+        const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+        const scoredAnswers = answers.map(answer => String(answer.value_json || '').toLowerCase())
+          .filter(value => value === 'yes' || value === 'no');
+        const correct = scoredAnswers.filter(value => value === 'yes').length;
+        const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+        const passingScore = Number((template.settings_json || {}).passing_score || (body.certification_type === 'mentor' ? 84 : 90));
+        body.score = score;
+        body.passing_score = passingScore;
+        body.passed = score >= passingScore;
+        body.checklist_results = [];
+      }
+
+      const parsed = insertPromotionCertificationSchema.parse(body);
       const [cert] = await db.insert(promotion_certifications).values(parsed).returning();
       logger.info({ certId: cert.id, employeeId: cert.employee_id, type: cert.certification_type, score: cert.score, passed: cert.passed }, 'Promotion certification recorded');
       res.json(cert);
@@ -4965,6 +5004,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return true;
   };
 
+  const validateQuestionValue = (question: any, value: unknown): string | null => {
+    if (value === null || value === undefined || value === '') return null;
+    if (question.question_type !== 'scale') return null;
+    const config = (question.config_json || {}) as Record<string, unknown>;
+    const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
+    const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
+    const rating = Number(value);
+    if (!Number.isInteger(rating) || rating < min || rating > max) {
+      return `"${question.prompt}" must be a whole-number rating from ${min} to ${max}`;
+    }
+    return null;
+  };
+
   const templateAllowsFilling = (template: any, role: string) => {
     const settings = (template.settings_json || {}) as Record<string, unknown>;
     const allowedRoles = Array.isArray(settings.allowed_fill_roles)
@@ -4972,6 +5024,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
       : ['Administrator'];
     return role === 'Administrator' || allowedRoles.includes(role);
   };
+
+  // Profile workflows can discover only the active template they are allowed
+  // to use. Template administration remains restricted to Administrators.
+  app.get("/api/form-templates/by-type/:formType", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = typeof req.query.employee_id === 'string' ? req.query.employee_id : '';
+      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot access this form template' });
+      const [template] = await db.select().from(form_templates)
+        .where(and(eq(form_templates.form_type, req.params.formType), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at))
+        .limit(1);
+      if (!template) return res.status(404).json({ error: 'Active form template not found' });
+      res.json(await hydrateFormTemplate(template.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load profile form template');
+      res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
 
   app.get("/api/form-templates", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
     try {
@@ -5261,23 +5333,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const answer of incomingAnswers) {
         const question = questionMap.get(answer.question_id);
         if (!question) continue;
-        await db.insert(form_answers).values({
-          response_set_id: responseSet.id,
-          question_id: question.id,
-          value_json: answer.value_json ?? answer.value ?? null,
-          snapshot_json: {
-            stable_key: question.stable_key,
-            prompt: question.prompt,
-            help_text: question.help_text,
-            question_type: question.question_type,
-            config_json: question.config_json,
-          },
-          answered_by: user.id,
-          updated_at: new Date(),
-        }).onConflictDoUpdate({
-          target: [form_answers.response_set_id, form_answers.question_id],
-          set: {
-            value_json: answer.value_json ?? answer.value ?? null,
+        const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null);
+        if (validationError) return res.status(400).json({ error: validationError });
+      }
+      const saved = await db.transaction(async (tx) => {
+        // This conditional update is both the draft-state check and the row
+        // lock. A submission waits for any in-progress save, then scores the
+        // answers that save committed; later saves see the submitted state.
+        const [draft] = await tx.update(form_response_sets).set({ updated_at: new Date() })
+          .where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft')))
+          .returning();
+        if (!draft) return false;
+        for (const answer of incomingAnswers) {
+          const question = questionMap.get(answer.question_id);
+          if (!question) continue;
+          const value = answer.value_json ?? answer.value ?? null;
+          await tx.insert(form_answers).values({
+            response_set_id: responseSet.id,
+            question_id: question.id,
+            value_json: value,
             snapshot_json: {
               stable_key: question.stable_key,
               prompt: question.prompt,
@@ -5287,10 +5361,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
             },
             answered_by: user.id,
             updated_at: new Date(),
-          },
-        });
-      }
-      await db.update(form_response_sets).set({ updated_at: new Date() }).where(eq(form_response_sets.id, responseSet.id));
+          }).onConflictDoUpdate({
+            target: [form_answers.response_set_id, form_answers.question_id],
+            set: {
+              value_json: value,
+              snapshot_json: {
+                stable_key: question.stable_key,
+                prompt: question.prompt,
+                help_text: question.help_text,
+                question_type: question.question_type,
+                config_json: question.config_json,
+              },
+              answered_by: user.id,
+              updated_at: new Date(),
+            },
+          });
+        }
+        return true;
+      });
+      if (!saved) return res.status(409).json({ error: 'Submitted responses are locked' });
       res.json(await responsePayload(responseSet.id));
     } catch (error) {
       logger.error({ error }, 'Failed to save form response');
@@ -5311,37 +5400,72 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const questions: any[] = Array.isArray(responseTemplate.questions)
         ? responseTemplate.questions
         : [];
-      const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
-      const answersByQuestion = new Map(answers.map(answer => [answer.question_id, answer.value_json]));
-      const missing = questions.filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(answersByQuestion.get(question.id)))
-        .map(question => question.prompt);
-      if (missing.length) return res.status(400).json({ error: 'Complete all required questions before submitting', missing });
       const questionsById = new Map(questions.map(question => [question.id, question]));
-      for (const answer of answers) {
-        const question = questionsById.get(answer.question_id);
-        if (!question) continue;
-        await db.update(form_answers).set({
-          snapshot_json: {
-            stable_key: question.stable_key,
-            prompt: question.prompt,
-            help_text: question.help_text,
-            question_type: question.question_type,
-            options: (question.config_json as any)?.options || [],
-            config_json: question.config_json,
-            value: answer.value_json,
-          },
+      const submittedResponseId = await db.transaction(async (tx) => {
+        // Claim the draft before reading answers. This serializes submit with
+        // draft saves and prevents an already-started save from mutating a
+        // submitted response after the certification is scored.
+        const [submitted] = await tx.update(form_response_sets).set({
+          status: 'submitted',
+          submitted_by: user.id,
+          submitted_at: new Date(),
           updated_at: new Date(),
-        }).where(eq(form_answers.id, answer.id));
-      }
-      const [submitted] = await db.update(form_response_sets).set({
-        status: 'submitted',
-        submitted_by: user.id,
-        submitted_at: new Date(),
-        updated_at: new Date(),
-      }).where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft'))).returning();
-      res.json(await responsePayload(submitted?.id || responseSet.id));
+        }).where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft'))).returning();
+        if (!submitted) return null;
+        const answers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+        const answersByQuestion = new Map(answers.map(answer => [answer.question_id, answer.value_json]));
+        const missing = questions.filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(answersByQuestion.get(question.id)))
+          .map(question => question.prompt);
+        if (missing.length) {
+          throw Object.assign(new Error('Complete all required questions before submitting'), { status: 400, missing });
+        }
+        for (const answer of answers) {
+          const question = questionsById.get(answer.question_id);
+          if (!question) continue;
+          await tx.update(form_answers).set({
+            snapshot_json: {
+              stable_key: question.stable_key,
+              prompt: question.prompt,
+              help_text: question.help_text,
+              question_type: question.question_type,
+              options: (question.config_json as any)?.options || [],
+              config_json: question.config_json,
+              value: answer.value_json,
+            },
+            updated_at: new Date(),
+          }).where(eq(form_answers.id, answer.id));
+        }
+        const submittedId = submitted.id;
+
+        if (responseTemplate.form_type === 'mentor_certification' || responseTemplate.form_type === 'shift_lead_certification') {
+          const scoredAnswers = answers
+            .map(answer => String(answer.value_json || '').toLowerCase())
+            .filter(value => value === 'yes' || value === 'no');
+          const correct = scoredAnswers.filter(value => value === 'yes').length;
+          const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+          const certificationType = responseTemplate.form_type === 'mentor_certification' ? 'mentor' : 'shift_lead';
+          const passingScore = Number((responseTemplate.settings_json || {}).passing_score || (certificationType === 'mentor' ? 84 : 90));
+          await tx.insert(promotion_certifications).values({
+            employee_id: responseSet.employee_id,
+            certification_type: certificationType,
+            response_set_id: submittedId,
+            date_completed: new Date().toISOString().slice(0, 10),
+            score,
+            passing_score: passingScore,
+            passed: score >= passingScore,
+            checklist_results: [],
+            certified_by: user.id,
+          }).onConflictDoNothing();
+        }
+        return submittedId;
+      });
+      if (!submittedResponseId) return res.json(await responsePayload(responseSet.id));
+      res.json(await responsePayload(submittedResponseId));
     } catch (error) {
       logger.error({ error }, 'Failed to submit form response');
+      if ((error as any)?.status === 400) {
+        return res.status(400).json({ error: (error as Error).message, missing: (error as any).missing });
+      }
       res.status(500).json({ error: 'Failed to submit form response' });
     }
   });
