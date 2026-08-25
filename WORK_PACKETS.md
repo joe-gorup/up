@@ -10,9 +10,9 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 
 | Order | Packet | Status | Effort |
 |-------|--------|--------|--------|
-| 1 | PACKET-001 | Confirm if done on Replit | ~1 hour |
-| 2 | PACKET-002 | Confirm if done on Replit | ~half day |
-| 3 | **PACKET-003A** | ✅ **Done** (Joe, Aug 25) | multi-day |
+| 1 | PACKET-001 | ✅ **Done** (Joe, Aug 25) | ~1 hour |
+| 2 | PACKET-002 | ✅ **Done** (Joe, Aug 25) | ~half day |
+| 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
 | **4** | **PACKET-003B** | **Ready — do next** | multi-day |
 | 5 | PACKET-004 | After 003B | small |
 
@@ -22,7 +22,7 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 
 ## PACKET-001 — T1: Manager Service Provider / Job Coach visibility
 
-**Status:** Ready to issue after quick Replit confirm  
+**Status:** ✅ Done (Joe, Aug 25)  
 **Priority:** High (quick win)
 
 ### Goal
@@ -71,7 +71,7 @@ Result of confirm (A/B/C), diff summary, who tested.
 
 ## PACKET-002 — T2: Accommodations field (draft — issue after T1)
 
-**Status:** Draft — issue after T1 ships or in parallel if Option B  
+**Status:** ✅ Done (Joe, Aug 25)  
 **Priority:** Medium
 
 ### Goal
@@ -111,7 +111,7 @@ Migration result, screenshots or short notes, any leftover column from prior att
 
 ## PACKET-003A — Form engine Phase 1 (core)
 
-**Status:** Ready — design locked (`DESIGN_DECISIONS.md`)  
+**Status:** ✅ Done (Joe, Aug 25) — design locked (`DESIGN_DECISIONS.md`)  
 **Priority:** High — foundation for mid-year, certs, check-ins  
 **Prerequisite:** PACKET-001 + 002 recommended first (not strictly required)  
 **Blocked by Google Doc?** No
@@ -365,9 +365,8 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 ### Report back
 
-- Seed script path / how to re-run safely  
-- Screenshots: Reviews card draft + submitted; cert create from template; old cert still readable  
-- Confirm 001/002 status if not already reported  
+- Confirm seed script path / how to re-run safely  
+- Screenshots: Reviews card draft + submitted; cert create from template; old cert still readable
 
 ---
 

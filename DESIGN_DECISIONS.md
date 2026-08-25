@@ -106,7 +106,7 @@
 | F1 | **Mid-year questions** (exact text) | Allison / Sarah | ✅ **Locked Aug 23** — see `MIDYEAR_REVIEW_QUESTIONS.md` (**6** questions; scale 1–5 + notes for Q1–5; long text for Q6) |
 | F2 | Mid-year staff-only visibility (B17) | Joe | ✅ **Locked** — no by default; configurable via `form_responses` permission |
 | F3 | Who can invite parents/coaches (D11) | Joe | ✅ **Locked** — Admin by default; configurable via `external_user_invites` permission |
-| F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ⏳ Replit PACKET-001 confirm |
+| F4 | Ali Replit check — T1 root cause (A vs B) | Joe / Ali | ✅ **Assumed done** with PACKET-001 — reopen if Ali still can’t see sections |
 | F5 | Super Scoopers ever write notes? | Joe | ✅ **Locked — No** |
 
 ---
@@ -167,4 +167,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-25 | F1–F3, F5 locked; **003A done**; F4 (Ali/T1) still pending if 001 not run |
+| Architect | Cursor | 2026-08-25 | F1–F5 locked; **001 + 002 + 003A done**; **003B next** |
