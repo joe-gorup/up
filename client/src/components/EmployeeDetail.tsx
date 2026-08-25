@@ -89,6 +89,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [showSupportExpanded, setShowSupportExpanded] = useState(
     ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '')
   );
+  useEffect(() => {
+    setShowSupportExpanded(
+      ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '')
+    );
+  }, [employeeId, user?.role]);
   const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
   const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState(false);
