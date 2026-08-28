@@ -250,6 +250,6 @@ Report back: what changed, how tested, any blockers
 ## 10. Next actions
 
 1. ~~PACKET-001 / 002 / 003A~~ ✅ **Done** (Aug 25).  
-2. **Replit (now):** **PACKET-003B** — mid-year Reviews card + cert migration + seed template.  
+2. **Replit (now):** **PACKET-003B** — mid-year Reviews card + **Forms card (custom)** + cert migration + seed template.  
 3. **After 003B:** Allison enters PDF meeting data (PACKET-004); then 003C check-ins.  
 4. F4 (Ali confirm) assumed covered by completed PACKET-001 — note if anything odd remains.
