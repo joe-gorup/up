@@ -5319,7 +5319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as any).user as AuthUser;
       const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
       if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
-      if (responseSet.status === 'submitted') return res.status(409).json({ error: 'Submitted responses are locked' });
+      const editingSubmitted = responseSet.status === 'submitted' && user.role === 'Administrator';
+      if (responseSet.status === 'submitted' && !editingSubmitted) return res.status(409).json({ error: 'Submitted responses are locked' });
       if (!await canModifyScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot edit this form response' });
       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
       if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
@@ -5336,12 +5337,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null);
         if (validationError) return res.status(400).json({ error: validationError });
       }
+      if (editingSubmitted) {
+        const existingAnswers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+        const effectiveAnswers = new Map(existingAnswers.map(answer => [answer.question_id, answer.value_json]));
+        for (const answer of incomingAnswers) effectiveAnswers.set(answer.question_id, answer.value_json ?? answer.value ?? null);
+        const missing = snapshotQuestions
+          .filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(effectiveAnswers.get(question.id)))
+          .map(question => question.prompt);
+        if (missing.length) return res.status(400).json({ error: 'Complete all required questions before saving', missing });
+      }
       const saved = await db.transaction(async (tx) => {
         // This conditional update is both the draft-state check and the row
         // lock. A submission waits for any in-progress save, then scores the
         // answers that save committed; later saves see the submitted state.
         const [draft] = await tx.update(form_response_sets).set({ updated_at: new Date() })
-          .where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft')))
+          .where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, responseSet.status)))
           .returning();
         if (!draft) return false;
         for (const answer of incomingAnswers) {
@@ -5376,6 +5386,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
               updated_at: new Date(),
             },
           });
+        }
+        if (editingSubmitted && (responseTemplate.form_type === 'mentor_certification' || responseTemplate.form_type === 'shift_lead_certification')) {
+          const updatedAnswers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+          const scoredAnswers = updatedAnswers
+            .map(answer => String(answer.value_json || '').toLowerCase())
+            .filter(value => value === 'yes' || value === 'no');
+          const correct = scoredAnswers.filter(value => value === 'yes').length;
+          const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+          const certificationType = responseTemplate.form_type === 'mentor_certification' ? 'mentor' : 'shift_lead';
+          const passingScore = Number((responseTemplate.settings_json || {}).passing_score || (certificationType === 'mentor' ? 84 : 90));
+          await tx.update(promotion_certifications).set({
+            score,
+            passing_score: passingScore,
+            passed: score >= passingScore,
+          }).where(eq(promotion_certifications.response_set_id, responseSet.id));
         }
         return true;
       });

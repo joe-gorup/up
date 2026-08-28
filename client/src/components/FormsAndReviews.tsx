@@ -385,12 +385,15 @@ function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuesti
 }
 
 export function FormFiller({ response, employee, onClose, onComplete }: { response: ResponseSet; employee: Employee; onClose: () => void; onComplete: (response?: ResponseSet) => void }) {
+  const { user } = useAuth();
   const { toast } = useToast();
   const [answers, setAnswers] = useState<Record<string, any>>(() => Object.fromEntries(response.answers.map(answer => [answer.question_id, answer.value_json])));
   const [saving, setSaving] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [editingSubmitted, setEditingSubmitted] = useState(false);
   const questions = normalizeQuestions(response.template).filter(question => question.status !== 'inactive');
   const isSubmitted = response.status === 'submitted';
+  const isReadOnly = isSubmitted && !editingSubmitted;
   const save = async (submit = false) => {
     submit ? setSubmitting(true) : setSaving(true);
     try {
@@ -403,9 +406,16 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
         const submittedResponse = await submitted.json();
         toast({ title: 'Form submitted', description: 'This response is now locked for review.', type: 'success' });
         onComplete(submittedResponse);
-      } else toast({ title: 'Draft saved', description: 'You can come back and finish this form later.', type: 'success' });
+      } else {
+        toast({
+          title: isSubmitted ? 'Response updated' : 'Draft saved',
+          description: isSubmitted ? 'The submitted response changes were saved.' : 'You can come back and finish this form later.',
+          type: 'success',
+        });
+        if (isSubmitted) setEditingSubmitted(false);
+      }
     } catch (error) {
-      toast({ title: submit ? 'Could not submit form' : 'Could not save draft', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
+      toast({ title: submit ? 'Could not submit form' : isSubmitted ? 'Could not update response' : 'Could not save draft', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
     } finally {
       setSaving(false); setSubmitting(false);
     }
@@ -413,7 +423,7 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
   return (
     <div className="min-h-full bg-[#f7f7f5] p-4 sm:p-8">
       <div className="mx-auto max-w-3xl">
-        <div className="mb-6 flex items-start justify-between gap-4"><div><button onClick={onClose} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Back to Forms & Reviews</button><p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Standalone response</p><h2 className="mt-1 text-2xl font-semibold text-slate-900">{response.template.name}</h2><p className="mt-1 text-sm text-slate-500">For {employee.first_name} {employee.last_name} · {isSubmitted ? 'Submitted response' : 'Draft response'}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSubmitted ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>{isSubmitted ? 'Submitted · read only' : `Version ${response.template.version}`}</span></div>
+        <div className="mb-6 flex items-start justify-between gap-4"><div><button onClick={onClose} className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-slate-900"><ArrowLeft className="h-4 w-4" />Back to Forms & Reviews</button><p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Standalone response</p><h2 className="mt-1 text-2xl font-semibold text-slate-900">{response.template.name}</h2><p className="mt-1 text-sm text-slate-500">For {employee.first_name} {employee.last_name} · {isSubmitted ? 'Submitted response' : 'Draft response'}</p></div><span className={`rounded-full px-3 py-1 text-xs font-semibold ${isSubmitted ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-800'}`}>{isSubmitted ? editingSubmitted ? 'Submitted · editing' : 'Submitted · read only' : `Version ${response.template.version}`}</span></div>
         <div className="space-y-4">
           {response.template.sections.filter(section => section.status !== 'archived').map(section => (
             <section key={section.id || section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
@@ -429,14 +439,21 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
                   return <div key={question.id || question.stable_key}>
                     <label className="mb-2 block text-sm font-semibold text-slate-800">{question.prompt || 'Untitled question'}{question.config_json?.required && <span className="ml-1 text-amber-700">*</span>}</label>
                     {question.help_text && <p className="mb-2 text-xs text-slate-500">{question.help_text}</p>}
-                    {isSubmitted ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
+                    {isReadOnly ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
                   </div>;
                 })}
               </div>
             </section>
           ))}
         </div>
-        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white">{isSubmitted ? 'Back to forms' : 'Exit'}</button>{!isSubmitted && <><button onClick={() => save(false)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save draft'}</button><button onClick={() => save(true)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"><Send className="h-4 w-4" />{submitting ? 'Submitting…' : 'Submit response'}</button></>}</div>
+        <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white">{isSubmitted ? 'Back to forms' : 'Exit'}</button>
+          {!isSubmitted && <><button onClick={() => save(false)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save draft'}</button><button onClick={() => save(true)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"><Send className="h-4 w-4" />{submitting ? 'Submitting…' : 'Submit response'}</button></>}
+          {isSubmitted && user?.role === 'Administrator' && (editingSubmitted
+            ? <button onClick={() => save(false)} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"><Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save changes'}</button>
+            : <button onClick={() => setEditingSubmitted(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Edit className="h-4 w-4" />Edit submitted response</button>
+          )}
+        </div>
       </div>
     </div>
   );

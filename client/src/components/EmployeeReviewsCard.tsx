@@ -47,9 +47,10 @@ export default function EmployeeReviewsCard({ employee, children }: { employee: 
       if (!templateResponse.ok) throw new Error((await templateResponse.json()).error || 'Unable to load the review template');
       const loadedTemplate = await templateResponse.json();
       setTemplate(loadedTemplate);
-      const responsesResponse = await apiRequest(`/api/employees/${employee.id}/form-responses?template_id=${loadedTemplate.id}`);
+      const responsesResponse = await apiRequest(`/api/employees/${employee.id}/form-responses`);
       if (!responsesResponse.ok) throw new Error((await responsesResponse.json()).error || 'Unable to load reviews');
-      setResponses(await responsesResponse.json());
+      const loadedResponses = await responsesResponse.json();
+      setResponses(loadedResponses.filter((response: ResponseSet) => response.template?.form_type === 'mid_year_review'));
     } catch (error) {
       toast({ title: 'Could not load reviews', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
     } finally {
@@ -108,6 +109,9 @@ export default function EmployeeReviewsCard({ employee, children }: { employee: 
         <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">The Mid-Year Review template has not been seeded yet.</p>
       ) : (
         <div className="space-y-3">
+          {!currentDraft && submitted.length === 0 && (
+            <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">No mid-year review yet.</p>
+          )}
           {currentDraft ? (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
               <div><p className="text-sm font-semibold text-amber-900">Draft review</p><p className="text-xs text-amber-800">{currentDraft.cycle_label || 'Mid-year'} · Continue when ready</p></div>

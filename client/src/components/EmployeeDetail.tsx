@@ -830,7 +830,18 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   }
 
   if (certificationResponse) {
-    return <FormFiller response={certificationResponse} employee={employee} onClose={() => setCertificationResponse(null)} onComplete={() => setCertificationResponse(null)} />;
+    return <FormFiller
+      response={certificationResponse}
+      employee={employee}
+      onClose={() => {
+        setCertificationResponse(null);
+        refreshCertifications();
+      }}
+      onComplete={() => {
+        setCertificationResponse(null);
+        refreshCertifications();
+      }}
+    />;
   }
 
   const activeGoals = employeeGoals.filter(goal => goal.status === 'active');
@@ -1880,12 +1891,16 @@ const handleGenerateInvitation = async () => {
 
                 {editingCerts && (
                   <div className="flex justify-between items-center pt-1">
-                    <button type="button" onClick={() => setCertificationFlowType('mentor')} className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium" title="Start Mentor Certification">
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Mentor</span>
-                    </button>
-                    <button type="button" onClick={() => setCertificationFlowType('shift_lead')} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs font-medium" title="Start Shift Lead Certification"><Plus className="h-3.5 w-3.5" /><span>Shift Lead</span></button>
-                    <div className="flex space-x-2">
+                    {user?.role === 'Administrator' && (
+                      <>
+                        <button type="button" onClick={() => setCertificationFlowType('mentor')} className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium" title="Start Mentor Certification">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Mentor</span>
+                        </button>
+                        <button type="button" onClick={() => setCertificationFlowType('shift_lead')} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs font-medium" title="Start Shift Lead Certification"><Plus className="h-3.5 w-3.5" /><span>Shift Lead</span></button>
+                      </>
+                    )}
+                    <div className="ml-auto flex space-x-2">
                       <button onClick={() => setEditingCerts(false)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
                       <button onClick={() => setEditingCerts(false)} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium transition-colors">
                         <Save className="h-3 w-3" />
@@ -2090,6 +2105,14 @@ const handleGenerateInvitation = async () => {
             employee={employee}
             certificationType={certificationFlowType}
             onClose={() => setCertificationFlowType(null)}
+            onTemplateUnavailable={() => {
+              const legacyType = certificationFlowType;
+              setCertificationFlowType(null);
+              setCertType(legacyType);
+              resetChecklistState();
+              setCertNotes('');
+              setShowCertForm(true);
+            }}
             onCompleted={() => {
               setCertificationFlowType(null);
               refreshCertifications();

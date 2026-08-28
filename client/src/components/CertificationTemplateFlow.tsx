@@ -12,11 +12,13 @@ export default function CertificationTemplateFlow({
   certificationType,
   onClose,
   onCompleted,
+  onTemplateUnavailable,
 }: {
   employee: Employee;
   certificationType: CertificationType;
   onClose: () => void;
   onCompleted: () => void;
+  onTemplateUnavailable: () => void;
 }) {
   const { toast } = useToast();
   const [response, setResponse] = useState<any>(null);
@@ -28,6 +30,10 @@ export default function CertificationTemplateFlow({
       try {
         const formType = certificationType === 'mentor' ? 'mentor_certification' : 'shift_lead_certification';
         const templateResponse = await apiRequest(`/api/form-templates/by-type/${formType}?employee_id=${encodeURIComponent(employee.id)}`);
+        if (templateResponse.status === 404) {
+          if (!cancelled) onTemplateUnavailable();
+          return;
+        }
         if (!templateResponse.ok) throw new Error((await templateResponse.json()).error || 'Unable to load certification template');
         const template = await templateResponse.json();
         const responseResult = await apiRequest('/api/form-responses', {

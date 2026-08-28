@@ -238,7 +238,7 @@ const seeds: TemplateSeed[] = [
     description: 'Mentor promotion certification checklist.',
     form_type: 'mentor_certification',
     settings_json: {
-      allowed_fill_roles: ['Administrator', 'Shift Lead'],
+      allowed_fill_roles: ['Administrator'],
       lock_on_submit: true,
       allow_draft: true,
       passing_score: 84,
@@ -251,7 +251,7 @@ const seeds: TemplateSeed[] = [
     description: 'Shift Lead promotion certification checklist organized by competency category.',
     form_type: 'shift_lead_certification',
     settings_json: {
-      allowed_fill_roles: ['Administrator', 'Shift Lead'],
+      allowed_fill_roles: ['Administrator'],
       lock_on_submit: true,
       allow_draft: true,
       passing_score: 90,
