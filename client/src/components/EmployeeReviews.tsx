@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ClipboardList, Plus, Edit, Trash2, ChevronDown, ChevronUp, Download, X, Save } from 'lucide-react';
+import { ClipboardList, Edit, Trash2, ChevronDown, ChevronUp, Download, X, Save } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
 import { apiRequest } from '../lib/auth';
@@ -130,7 +130,7 @@ function ReviewForm({ initial = BLANK_FORM, onSave, onCancel, saving }: ReviewFo
   return (
     <div className="border border-blue-200 rounded-xl p-4 bg-blue-50 space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-gray-900">New Review</h3>
+        <h3 className="font-semibold text-gray-900">Edit Review</h3>
         <button onClick={onCancel} className="text-gray-400 hover:text-gray-600">
           <X className="h-4 w-4" />
         </button>
@@ -192,7 +192,6 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
   const [loading, setLoading] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingReview, setEditingReview] = useState<Review | null>(null);
   const [exporting, setExporting] = useState(false);
@@ -220,30 +219,6 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
     const next = !expanded;
     setExpanded(next);
     if (next && !loaded) load();
-  };
-
-  const handleCreate = async (form: FormState) => {
-    setSaving(true);
-    try {
-      const res = await apiRequest(`/api/employees/${employeeId}/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, employee_id: employeeId }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        toast({ title: err.error || 'Failed to save review', variant: 'destructive' });
-        return;
-      }
-      const created = await res.json();
-      setReviews(prev => [created, ...prev]);
-      setShowForm(false);
-      toast({ title: 'Review saved' });
-    } catch {
-      toast({ title: 'Failed to save review', variant: 'destructive' });
-    } finally {
-      setSaving(false);
-    }
   };
 
   const handleEdit = async (form: FormState) => {
@@ -318,7 +293,7 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
   } : undefined;
 
   return (
-    <div className={`${embedded ? 'rounded-lg border border-gray-200 bg-gray-50/50 p-3 sm:p-4' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6'}`}>
+    <div className={`${embedded ? 'rounded-xl border border-gray-200 bg-gray-50/50 p-3 sm:p-4' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6'}`}>
       <button
         onClick={handleToggle}
         className="flex items-center justify-between w-full text-left"
@@ -347,31 +322,13 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
 
       {expanded && (
         <div className="mt-4 space-y-4">
-          {(canModify || isAdmin) && !showForm && !editingReview && (
-            <button
-              onClick={() => setShowForm(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-medium hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              New Review
-            </button>
-          )}
-
-          {showForm && !editingReview && (
-            <ReviewForm
-              onSave={handleCreate}
-              onCancel={() => setShowForm(false)}
-              saving={saving}
-            />
-          )}
-
           {loading && (
             <div className="text-sm text-gray-500 py-4 text-center">Loading reviews...</div>
           )}
 
-          {!loading && loaded && reviews.length === 0 && !showForm && (
+          {!loading && loaded && reviews.length === 0 && (
             <div className="text-sm text-gray-500 py-6 text-center">
-              No reviews yet. {(canModify || isAdmin) ? 'Click "New Review" to create the first one.' : ''}
+              No previous reviews recorded.
             </div>
           )}
 
@@ -390,7 +347,7 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
                 review={review}
                 canEdit={(canModify || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
                 canDelete={(canDel || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
-                onEdit={() => { setShowForm(false); setEditingReview(review); }}
+                onEdit={() => setEditingReview(review)}
                 onDelete={() => handleDelete(review)}
               />
             )

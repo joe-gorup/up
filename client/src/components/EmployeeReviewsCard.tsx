@@ -91,13 +91,13 @@ export default function EmployeeReviewsCard({ employee, children }: { employee: 
     <section className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm sm:p-6">
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="rounded-lg bg-amber-50 p-2 text-amber-700"><ClipboardCheck className="h-5 w-5" /></div>
+          <div className="rounded-xl bg-amber-50 p-2 text-amber-700"><ClipboardCheck className="h-5 w-5" /></div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Reviews</h2>
             <p className="text-xs text-gray-500">Mid-Year Review</p>
           </div>
         </div>
-        <button type="button" onClick={load} className="rounded-lg p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-700" title="Refresh reviews">
+        <button type="button" onClick={load} className="rounded-xl p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-700" title="Refresh reviews">
           <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
@@ -105,13 +105,13 @@ export default function EmployeeReviewsCard({ employee, children }: { employee: 
       {loading ? (
         <div className="flex items-center gap-2 py-5 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Loading reviews…</div>
       ) : !template ? (
-        <p className="rounded-lg bg-slate-50 px-3 py-3 text-sm text-slate-500">The Mid-Year Review template has not been seeded yet.</p>
+        <p className="rounded-xl bg-slate-50 px-3 py-3 text-sm text-slate-500">The Mid-Year Review template has not been seeded yet.</p>
       ) : (
         <div className="space-y-3">
           {currentDraft ? (
             <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
               <div><p className="text-sm font-semibold text-amber-900">Draft review</p><p className="text-xs text-amber-800">{currentDraft.cycle_label || 'Mid-year'} · Continue when ready</p></div>
-              {mayModify && <button type="button" onClick={() => setActiveResponse(currentDraft)} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700"><Play className="h-3.5 w-3.5" />Continue</button>}
+              {mayModify && <button type="button" onClick={() => setActiveResponse(currentDraft)} className="inline-flex shrink-0 items-center gap-1.5 rounded-xl bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700"><Play className="h-3.5 w-3.5" />Continue</button>}
             </div>
           ) : mayModify && (
             <button type="button" onClick={startReview} disabled={starting} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60">
@@ -126,7 +126,7 @@ export default function EmployeeReviewsCard({ employee, children }: { employee: 
               {submitted.map(response => (
                 <div key={response.id} className="flex items-center justify-between gap-3 rounded-xl border border-emerald-100 bg-emerald-50/40 p-3">
                   <div><p className="text-sm font-medium text-gray-900">{response.cycle_label || 'Mid-Year Review'}</p><p className="text-xs text-emerald-700">Submitted · read only</p></div>
-                  <button type="button" onClick={() => setActiveResponse(response)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"><Eye className="h-3.5 w-3.5" />View</button>
+                  <button type="button" onClick={() => setActiveResponse(response)} className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-xs font-semibold text-emerald-800 hover:bg-emerald-50"><Eye className="h-3.5 w-3.5" />View</button>
                 </div>
               ))}
             </div>
