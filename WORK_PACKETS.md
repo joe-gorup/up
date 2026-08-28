@@ -286,7 +286,8 @@ No profile card required in 003A — can be a standalone test route or simple mo
 ### Goal
 1. Seed the **Mid-Year Review** template from locked questions.  
 2. Add a **Reviews** card on Super Scooper profiles to draft/submit/view mid-year responses.  
-3. Migrate **promotion certification checklists** onto form templates (dual-read legacy JSON).
+3. Add a **Forms** card on Super Scooper profiles for `form_type = custom` templates (separate from Reviews).  
+4. Migrate **promotion certification checklists** onto form templates (dual-read legacy JSON).
 
 ### A. Seed Mid-Year Review template
 
@@ -329,7 +330,22 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 **Empty state:** “No mid-year review yet” + Start button for allowed roles.
 
-### C. Promotion certification migration (dual-read)
+### C. Forms card on Super Scooper profile (custom forms)
+
+**New component:** e.g. `client/src/components/EmployeeCustomFormsCard.tsx` — mount alongside Reviews card in `EmployeeDetail`.
+
+**Behavior**
+- List **active** templates where `form_type = custom`.
+- For each template (or grouped list): show response sets for this scooper — **Start**, **Continue draft**, **View submitted**.
+- Fill UI: reuse `FormResponseFill` / question registry from 003A.
+- ACL: same as Reviews — fill per template `allowed_fill_roles`; view via `form_responses` permission.
+- After submit: read-only except Admin edit (DESIGN_DECISIONS B7).
+
+**Empty state:** “No custom forms yet” when no active custom templates exist; per-template empty state when template exists but scooper has no response.
+
+**Admin builder polish:** under **form type** dropdown on template edit, show helper text: “Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs.”
+
+### D. Promotion certification migration (dual-read)
 
 **Today:** Hardcoded `mentorChecklistItems` / `shiftManagerCategories` in `EmployeeDetail.tsx`; answers in `promotion_certifications.checklist_results` JSONB.
 
@@ -342,7 +358,7 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 **Do not** rewrite historical `checklist_results` into form_answers in this packet.
 
-### D. Out of scope
+### E. Out of scope
 
 - Conditionals / coach check-in migration (003C)
 - Bulk PDF answer import (004)
@@ -354,10 +370,11 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 1. Admin opens Forms & Reviews → sees seeded **Mid-Year Review** with 6 prompts matching `MIDYEAR_REVIEW_QUESTIONS.md`.
 2. As Shift Lead: open Super Scooper → Reviews card → Start mid-year → rate 1–5 + notes → save draft → reload persists → submit → locked.
-3. Guardian linked to that scooper: **cannot** see mid-year answers (default). Admin enables `form_responses` View for Guardian → can see.
-4. Admin creates Mentor cert using template questions (not only hardcoded); old certs with only `checklist_results` still open and display answers.
-5. Shift Lead cert categories appear as sections.
-6. `npm run db:push` additive only (`response_set_id` nullable).
+3. Admin creates a **Custom form** template → appears on Super Scooper **Forms** card (not Reviews) → Shift Lead can fill draft → submit → locked.
+4. Guardian linked to that scooper: **cannot** see mid-year or custom form answers (default). Admin enables `form_responses` View for Guardian → can see.
+5. Admin creates Mentor cert using template questions (not only hardcoded); old certs with only `checklist_results` still open and display answers.
+6. Shift Lead cert categories appear as sections.
+7. `npm run db:push` additive only (`response_set_id` nullable).
 
 ### Deploy
 
@@ -366,7 +383,7 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 ### Report back
 
 - Confirm seed script path / how to re-run safely  
-- Screenshots: Reviews card draft + submitted; cert create from template; old cert still readable
+- Screenshots: Reviews card draft + submitted; Forms card with custom template; cert create from template; old cert still readable
 
 ---
 

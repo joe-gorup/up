@@ -113,9 +113,9 @@ form_answers
 
 | Form type | Where it lives | Who fills |
 |-----------|----------------|-----------|
-| Mid-year review | New “Reviews” card on Super Scooper profile | Admin (+ Shift Lead if product says yes) |
+| Mid-year review | **Reviews** card on Super Scooper profile | Admin, Shift Lead |
 | Mentor / Shift Lead cert | Replace hardcoded checklist in existing cert flow | Same roles as today |
-| Custom | Profile or dedicated page later | TBD |
+| Custom | **Forms** card on Super Scooper profile (separate from Reviews) | Admin, Shift Lead (configurable per template) |
 
 ### 3.6 Migration path for T7 (certs)
 

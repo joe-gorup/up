@@ -209,7 +209,22 @@ employee_intake
 custom
 ```
 
-Each type can define **default nav placement** and **who can fill** in template settings.
+### `form_type` → profile placement (locked)
+
+The Admin **form type** dropdown sets `form_type` and determines where filled responses appear in the app.
+
+| `form_type` | Where it lives | Profile card |
+|-------------|----------------|--------------|
+| `mid_year_review`, `annual_review` | Super Scooper profile | **Reviews** card |
+| `mentor_certification`, `shift_lead_certification` | Existing promotion cert flow | — (cert UI, not a profile card) |
+| `coach_checkin` | Coach check-in flow | — (Phase 3) |
+| `roi_onboarding` | ROI onboarding flow | — |
+| `employee_intake` | TBD until product defines intake UX | — |
+| `custom` | Super Scooper profile | **Forms** card (separate from Reviews) |
+
+**Builder helper text (under dropdown):** “Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs, etc.”
+
+Each type can also define **who can fill** in template `settings_json.allowed_fill_roles`.
 
 ---
 
@@ -243,7 +258,8 @@ Aiming for “almost everything” does **not** mean one big bang. Ship in layer
 - **`scale` is required in Phase 1** — mid-year review uses 1–5 ratings (`MIDYEAR_REVIEW_QUESTIONS.md`)
 
 ### Phase 2 — First migrations (PACKET-003B)
-- Mid-year profile card (T4) seeded from `MIDYEAR_REVIEW_QUESTIONS.md`
+- **Reviews** profile card (T4) — `form_type` review types; seeded from `MIDYEAR_REVIEW_QUESTIONS.md`
+- **Forms** profile card — `form_type = custom` templates + responses (separate card from Reviews)
 - Cert checklists (T7) with dual-read legacy JSON
 - Seed scripts from hardcoded cert arrays + mid-year question file
 

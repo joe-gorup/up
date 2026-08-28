@@ -48,12 +48,14 @@
 | Mentor / Shift Lead cert | **Administrator** (same as today) | Staff with profile access |
 | Coach check-in | **Job Coach, Administrator** | Staff + assigned coach |
 | ROI onboarding | **Guardian / Super Scooper** (self) | Admin |
+| Custom form | **Administrator, Shift Lead** (configurable per template) | Staff by default; Guardian/Job Coach via `form_responses` permission |
 
 | # | Decision | Locked answer |
-|---|----------|---------------|
+|---|---|---|
 | B17 | Mid-year visible to Guardians / Job Coaches? | **No by default** — ✅ **Locked (Joe, Aug 22):** Guardians and Job Coaches do **not** see mid-year answers unless Admin grants it in **Permission Settings** |
 | B18 | Per-template fill roles configurable? | **Yes** — `settings_json.allowed_fill_roles` |
 | B19 | Permission feature for form/review answers | **Add `form_responses`** to `PERMISSION_FEATURES` — View (and optionally Modify for fill). Default: staff roles View **on**; Guardian + Job Coach View **off**. Admin toggles per role in Permissions Manager |
+| B20 | Custom form profile placement | ✅ **Locked (Joe, Aug 28):** **`form_type = custom`** → dedicated **Forms** card on Super Scooper profiles (separate from Reviews card). Builder dropdown routes each type to the correct profile area. |
 
 ---
 
@@ -167,4 +169,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-25 | F1–F5 locked; **001 + 002 + 003A done**; **003B next** |
+| Architect | Cursor | 2026-08-28 | B20 locked — custom forms get dedicated Forms card; **003B next** |
