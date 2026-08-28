@@ -2532,10 +2532,9 @@ const handleGenerateInvitation = async () => {
 
           {/* Employee Reviews */}
           {employee.role === 'Super Scooper' && (
-            <>
-              <EmployeeReviewsCard employee={employee} />
-              <EmployeeReviews employeeId={employeeId} />
-            </>
+            <EmployeeReviewsCard employee={employee}>
+              <EmployeeReviews employeeId={employeeId} embedded />
+            </EmployeeReviewsCard>
           )}
 
         </div>

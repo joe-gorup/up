@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { ClipboardCheck, Eye, FilePlus2, Loader2, Play, RefreshCw } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +18,7 @@ type ResponseSet = {
   answers: Array<{ question_id: string; value_json: unknown }>;
 };
 
-export default function EmployeeReviewsCard({ employee }: { employee: Employee }) {
+export default function EmployeeReviewsCard({ employee, children }: { employee: Employee; children?: ReactNode }) {
   const { user } = useAuth();
   const { canView, canModify } = usePermissions();
   const { toast } = useToast();
@@ -131,6 +131,12 @@ export default function EmployeeReviewsCard({ employee }: { employee: Employee }
               ))}
             </div>
           ) : !currentDraft && !mayModify ? <p className="text-sm text-gray-500">No submitted mid-year reviews yet.</p> : null}
+        </div>
+      )}
+
+      {children && (
+        <div className="mt-5 border-t border-gray-200 pt-5">
+          {children}
         </div>
       )}
     </section>

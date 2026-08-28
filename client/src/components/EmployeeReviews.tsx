@@ -183,7 +183,7 @@ function ReviewForm({ initial = BLANK_FORM, onSave, onCancel, saving }: ReviewFo
   );
 }
 
-export default function EmployeeReviews({ employeeId }: { employeeId: string }) {
+export default function EmployeeReviews({ employeeId, embedded = false }: { employeeId: string; embedded?: boolean }) {
   const { user } = useAuth();
   const { canView, canModify, canDelete: canDel } = usePermissions('employee_reviews');
   const { toast } = useToast();
@@ -318,7 +318,7 @@ export default function EmployeeReviews({ employeeId }: { employeeId: string }) 
   } : undefined;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6">
+    <div className={`${embedded ? 'rounded-lg border border-gray-200 bg-gray-50/50 p-3 sm:p-4' : 'bg-white rounded-xl shadow-sm border border-gray-200 p-4 sm:p-6'}`}>
       <button
         onClick={handleToggle}
         className="flex items-center justify-between w-full text-left"
@@ -326,7 +326,7 @@ export default function EmployeeReviews({ employeeId }: { employeeId: string }) 
         <div className="flex items-center gap-2">
           {expanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
           <ClipboardList className="h-5 w-5 text-indigo-500" />
-          <h2 className="text-lg font-semibold text-gray-900">Reviews</h2>
+          <h2 className="text-lg font-semibold text-gray-900">{embedded ? 'Previous Reviews' : 'Reviews'}</h2>
           {loaded && (
             <span className="bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full text-xs font-medium">
               {reviews.length}
