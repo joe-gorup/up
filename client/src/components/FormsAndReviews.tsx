@@ -9,6 +9,7 @@ import { type Employee } from '../contexts/DataContext';
 import { useToast } from '../hooks/use-toast';
 import AppSelect from './ui/AppSelect';
 import Modal from './ui/Modal';
+import { isQuestionRequired, isQuestionVisible } from '@shared/formLogic';
 
 type QuestionType =
   | 'free_text' | 'long_text' | 'yes_no' | 'single_select' | 'multi_select'
@@ -83,11 +84,81 @@ function isSameQuestion(candidate: FormQuestion, target: FormQuestion) {
   return target.id ? candidate.id === target.id : candidate.stable_key === target.stable_key;
 }
 
-function QuestionEditor({ question, onChange, onRemove, onMove }: {
-  question: FormQuestion; onChange: (next: FormQuestion) => void; onRemove: () => void; onMove: (direction: -1 | 1) => void;
+function optionParts(option: any): { key: string; label: string; icon?: string } {
+  if (typeof option === 'string') return { key: option, label: option };
+  return { key: String(option?.key || option?.value || ''), label: String(option?.label || option?.key || option?.value || ''), icon: option?.icon || undefined };
+}
+
+function optionText(option: any): string {
+  const item = optionParts(option);
+  return [item.key, item.label, item.icon].filter(Boolean).join(' | ');
+}
+
+function answerPrimitive(value: any): any {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value']) {
+      if (key in value) return value[key];
+    }
+  }
+  return value;
+}
+
+function QuestionEditor({ question, availableQuestions, onChange, onRemove, onMove }: {
+  question: FormQuestion; availableQuestions: FormQuestion[]; onChange: (next: FormQuestion) => void; onRemove: () => void; onMove: (direction: -1 | 1) => void;
 }) {
   const config = question.config_json || {};
   const updateConfig = (patch: Record<string, any>) => onChange({ ...question, config_json: { ...config, ...patch } });
+  const operators = [
+    { value: 'equals', label: 'equals' },
+    { value: 'not_equals', label: 'does not equal' },
+    { value: 'in', label: 'is one of' },
+    { value: 'not_in', label: 'is not one of' },
+    { value: 'is_empty', label: 'is empty' },
+    { value: 'is_not_empty', label: 'is not empty' },
+  ];
+  const updateCondition = (name: 'show_when' | 'required_when', patch: Record<string, any> | null) => {
+    const next = { ...config };
+    if (patch) next[name] = patch;
+    else delete next[name];
+    onChange({ ...question, config_json: next });
+  };
+  const renderCondition = (name: 'show_when' | 'required_when', label: string) => {
+    const condition = (config[name] || {}) as Record<string, any>;
+    const operator = condition.operator || 'equals';
+    const needsValue = operator !== 'is_empty' && operator !== 'is_not_empty';
+    return (
+      <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</p>
+          {condition.question_stable_key && <button type="button" onClick={() => updateCondition(name, null)} className="text-xs text-slate-400 hover:text-red-600">Clear</button>}
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
+          <AppSelect
+            value={condition.question_stable_key || ''}
+            onChange={value => updateCondition(name, { ...condition, question_stable_key: value, operator, ...(needsValue ? { value: condition.value ?? '' } : {}) })}
+            options={[{ value: '', label: 'Choose question…' }, ...availableQuestions.map(item => ({ value: item.stable_key, label: item.stable_key }))]}
+            aria-label={`${label} question`}
+          />
+          <AppSelect
+            value={operator}
+            onChange={value => updateCondition(name, { ...condition, operator: value, ...(value === 'is_empty' || value === 'is_not_empty' ? {} : { value: condition.value ?? '' }) })}
+            options={operators}
+            aria-label={`${label} operator`}
+          />
+          {needsValue && (
+            <input
+              value={Array.isArray(condition.value) ? condition.value.join(', ') : condition.value ?? ''}
+              onChange={event => updateCondition(name, { ...condition, operator, value: operator === 'in' || operator === 'not_in' ? event.target.value.split(',').map(item => item.trim()).filter(Boolean) : event.target.value })}
+              placeholder={operator === 'in' || operator === 'not_in' ? 'value 1, value 2' : 'Expected value'}
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"
+              aria-label={`${label} value`}
+            />
+          )}
+        </div>
+        <p className="mt-1.5 text-[11px] text-slate-400">Leave the question blank when this rule is not needed.</p>
+      </div>
+    );
+  };
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
       <div className="flex items-start gap-3">
@@ -113,15 +184,21 @@ function QuestionEditor({ question, onChange, onRemove, onMove }: {
             placeholder="Optional help text for the person completing this form"
             className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-600 outline-none focus:border-amber-500"
           />
-          {(question.question_type === 'single_select' || question.question_type === 'multi_select') && (
+           {(question.question_type === 'single_select' || question.question_type === 'multi_select') && (
             <textarea
-              value={(config.options || []).join('\n')}
-              onChange={e => updateConfig({ options: e.target.value.split('\n').map(value => value.trim()).filter(Boolean) })}
+               value={(config.options || []).map(optionText).join('\n')}
+               onChange={e => updateConfig({ options: e.target.value.split('\n').map(value => {
+                 const [key, label, icon] = value.split('|').map(part => part.trim());
+                 return label ? { key, label, ...(icon ? { icon } : {}) } : key;
+               }).filter(Boolean) })}
               placeholder="Options, one per line"
               rows={3}
               className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500"
             />
           )}
+           {(question.question_type === 'single_select' || question.question_type === 'multi_select') && (
+             <p className="text-[11px] text-slate-400">Use key | label | icon on each line. Existing plain option values remain supported.</p>
+           )}
           {question.question_type === 'single_select' && (
             <AppSelect
               value={config.display?.style || 'dropdown'}
@@ -137,6 +214,12 @@ function QuestionEditor({ question, onChange, onRemove, onMove }: {
             <input type="checkbox" checked={Boolean(config.required)} onChange={e => updateConfig({ required: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
             Required question
           </label>
+           {availableQuestions.length > 0 && (
+             <div className="space-y-2 border-t border-slate-100 pt-3">
+               {renderCondition('show_when', 'Show this question when')}
+               {renderCondition('required_when', 'Require this question when')}
+             </div>
+           )}
         </div>
         <div className="flex flex-shrink-0 gap-1">
           <button onClick={() => onMove(-1)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Move question up"><ArrowUp className="h-4 w-4" /></button>
@@ -319,7 +402,7 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
                 </div>
                 <div className="space-y-3">
                   {visibleQuestions.length === 0 && <div className="rounded-2xl border border-dashed border-slate-300 py-12 text-center text-sm text-slate-500">This section is empty. Add its first question.</div>}
-                  {visibleQuestions.map((question, index) => <QuestionEditor key={`${question.id || question.stable_key}-editor-${index}`} question={question} onChange={next => setDraft(prev => ({ ...prev, questions: normalizeQuestions(prev as FormTemplate).map(item => isSameQuestion(item, question) ? next : item) }))} onRemove={() => setDraft(prev => ({ ...prev, questions: normalizeQuestions(prev as FormTemplate).filter(item => !isSameQuestion(item, question)) }))} onMove={direction => moveQuestion(question, direction)} />)}
+                   {visibleQuestions.map((question, index) => <QuestionEditor key={`${question.id || question.stable_key}-editor-${index}`} question={question} availableQuestions={questions.filter(item => !isSameQuestion(item, question))} onChange={next => setDraft(prev => ({ ...prev, questions: normalizeQuestions(prev as FormTemplate).map(item => isSameQuestion(item, question) ? next : item) }))} onRemove={() => setDraft(prev => ({ ...prev, questions: normalizeQuestions(prev as FormTemplate).filter(item => !isSameQuestion(item, question)) }))} onMove={direction => moveQuestion(question, direction)} />)}
                 </div>
               </>
             ) : <div className="py-20 text-center text-sm text-slate-500">Add a section to start building this form.</div>}
@@ -333,12 +416,17 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
 function AnswerControl({ question, value, onChange }: { question: FormQuestion; value: any; onChange: (value: any) => void }) {
   const config = question.config_json || {};
   const options = config.options || ['Option 1', 'Option 2'];
+  const normalizedOptions = (Array.isArray(options) ? options : [])
+    .map((option: any) => optionParts(option))
+    .filter((option: { key: string }) => option.key);
+  const primitiveValue = answerPrimitive(value);
+  const selectedValues = Array.isArray(value) ? value : Array.isArray(primitiveValue) ? primitiveValue : [];
   const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100';
-  if (question.question_type === 'free_text') return <input type="text" value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
-  if (question.question_type === 'long_text') return <textarea rows={5} value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
-  if (question.question_type === 'date') return <input type="date" value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
-  if (question.question_type === 'date_time') return <input type="datetime-local" value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
-  if (question.question_type === 'yes_no') return <div className="flex gap-2">{['Yes', 'No'].map(option => <button key={option} onClick={() => onChange(option.toLowerCase())} className={`rounded-xl border px-4 py-2 text-sm font-medium ${value === option.toLowerCase() ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
+  if (question.question_type === 'free_text') return <input type="text" value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
+  if (question.question_type === 'long_text') return <textarea rows={5} value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
+  if (question.question_type === 'date') return <input type="date" value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
+  if (question.question_type === 'date_time') return <input type="datetime-local" value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
+  if (question.question_type === 'yes_no') return <div className="flex gap-2">{['Yes', 'No'].map(option => <button type="button" key={option} onClick={() => onChange(option.toLowerCase())} className={`rounded-xl border px-4 py-2 text-sm font-medium ${primitiveValue === option.toLowerCase() ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
   if (question.question_type === 'scale') {
     const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
     const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
@@ -350,8 +438,8 @@ function AnswerControl({ question, value, onChange }: { question: FormQuestion; 
             key={option}
             type="button"
             onClick={() => onChange(option)}
-            aria-pressed={Number(value) === option}
-            className={`min-w-12 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${Number(value) === option ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
+             aria-pressed={Number(primitiveValue) === option}
+             className={`min-w-12 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${Number(primitiveValue) === option ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
           >
             {labels[String(option)] || option}
           </button>
@@ -362,16 +450,16 @@ function AnswerControl({ question, value, onChange }: { question: FormQuestion; 
   if (question.question_type === 'single_select' && config.display?.style !== 'chips') {
     return (
       <AppSelect
-        value={value || ''}
+         value={primitiveValue || ''}
         onChange={onChange}
-        options={options.map((option: string) => ({ value: option, label: option }))}
+         options={normalizedOptions.map((option: { key: string; label: string }) => ({ value: option.key, label: option.label }))}
         placeholder="Choose an option…"
         aria-label={question.prompt || 'Choose an option'}
       />
     );
   }
-  if (question.question_type === 'single_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => <button key={option} onClick={() => onChange(option)} className={`rounded-xl border px-3 py-2 text-left text-sm ${value === option ? 'border-amber-500 bg-amber-50 font-semibold text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
-  if (question.question_type === 'multi_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => { const selected = Array.isArray(value) && value.includes(option); return <label key={option} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selected ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600'}`}><input type="checkbox" checked={selected} onChange={() => onChange(selected ? value.filter((item: string) => item !== option) : [...(value || []), option])} className="h-4 w-4 text-amber-600 focus:ring-amber-500" />{option}</label>; })}</div>;
+   if (question.question_type === 'single_select') return <div className="grid gap-2 sm:grid-cols-2">{normalizedOptions.map((option: { key: string; label: string; icon?: string }) => <button type="button" key={option.key} onClick={() => onChange(option.key)} className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm ${primitiveValue === option.key ? 'border-amber-500 bg-amber-50 font-semibold text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{config.display?.show_icons && option.icon && <span className="text-base">{option.icon}</span>}{option.label}</button>)}</div>;
+   if (question.question_type === 'multi_select') return <div className="grid gap-2 sm:grid-cols-2">{normalizedOptions.map((option: { key: string; label: string }) => { const selected = selectedValues.includes(option.key); return <label key={option.key} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selected ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600'}`}><input type="checkbox" checked={selected} onChange={() => onChange(selected ? selectedValues.filter((item: string) => item !== option.key) : [...selectedValues, option.key])} className="h-4 w-4 text-amber-600 focus:ring-amber-500" />{option.label}</label>; })}</div>;
   return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">This question type is registered and will be available in a future phase.</div>;
 }
 
@@ -380,11 +468,23 @@ function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuesti
     const labels = question.config_json?.labels || {};
     return <div className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">Rating: {labels[String(value)] || value}</div>;
   }
-  const rendered = Array.isArray(value) ? value.join(', ') : value === true ? 'Yes' : value === false ? 'No' : value;
+  const primitiveValue = answerPrimitive(value);
+  const options = question?.config_json?.options;
+  const labels = Array.isArray(options)
+    ? new Map(options.map((option: any) => {
+      const item = optionParts(option);
+      return [item.key, `${question?.config_json?.display?.show_icons && item.icon ? `${item.icon} ` : ''}${item.label}`];
+    }))
+    : new Map<string, string>();
+  const rendered = Array.isArray(primitiveValue)
+    ? primitiveValue.map(item => labels.get(String(item)) || item).join(', ')
+    : question?.question_type === 'yes_no'
+      ? primitiveValue === true || primitiveValue === 'yes' ? 'Yes' : primitiveValue === false || primitiveValue === 'no' ? 'No' : primitiveValue
+      : labels.get(String(primitiveValue)) || primitiveValue;
   return <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">{rendered === undefined || rendered === null || rendered === '' ? 'No response provided.' : String(rendered)}</div>;
 }
 
-export function FormFiller({ response, employee, onClose, onComplete }: { response: ResponseSet; employee: Employee; onClose: () => void; onComplete: (response?: ResponseSet) => void }) {
+export function FormFiller({ response, employee, onClose, onComplete, allowAdminEditSubmitted = true }: { response: ResponseSet; employee: Pick<Employee, 'first_name' | 'last_name'>; onClose: () => void; onComplete: (response?: ResponseSet) => void; allowAdminEditSubmitted?: boolean }) {
   const { user } = useAuth();
   const { toast } = useToast();
   const [answers, setAnswers] = useState<Record<string, any>>(() => Object.fromEntries(response.answers.map(answer => [answer.question_id, answer.value_json])));
@@ -393,7 +493,20 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
   const [editingSubmitted, setEditingSubmitted] = useState(false);
   const questions = normalizeQuestions(response.template).filter(question => question.status !== 'inactive');
   const isSubmitted = response.status === 'submitted';
-  const isReadOnly = isSubmitted && !editingSubmitted;
+  const answerLookup = useMemo(() => {
+    const lookup = new Map<string, any>();
+    for (const question of questions) lookup.set(question.stable_key, answers[question.id || question.stable_key]);
+    return lookup;
+  }, [answers, questions]);
+  const visibleQuestions = useMemo(() => questions.filter(question => isQuestionVisible(question, answerLookup)), [questions, answerLookup]);
+  useEffect(() => {
+    const visibleKeys = new Set(visibleQuestions.map(question => question.id || question.stable_key));
+    setAnswers(previous => {
+      const next = Object.fromEntries(Object.entries(previous).filter(([key]) => visibleKeys.has(key) || !questions.some(question => (question.id || question.stable_key) === key)));
+      return Object.keys(next).length === Object.keys(previous).length ? previous : next;
+    });
+  }, [visibleQuestions, questions]);
+  const isReadOnly = isSubmitted && (!allowAdminEditSubmitted || !editingSubmitted);
   const save = async (submit = false) => {
     submit ? setSubmitting(true) : setSaving(true);
     try {
@@ -429,7 +542,7 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
             <section key={section.id || section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
               <h3 className="mb-5 text-lg font-semibold text-slate-900">{section.title}</h3>
               <div className="space-y-5">
-                {questions.filter(question => (question.section_id || null) === section.id).map(question => {
+                 {visibleQuestions.filter(question => (question.section_id || null) === section.id).map(question => {
                   if (question.question_type === 'section_header') {
                     return <h4 key={question.id || question.stable_key} className="border-b border-slate-100 pb-2 text-base font-semibold text-slate-800">{question.prompt}</h4>;
                   }
@@ -437,7 +550,7 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
                     return <p key={question.id || question.stable_key} className="rounded-xl bg-slate-50 px-4 py-3 text-sm leading-6 text-slate-600">{question.prompt || question.help_text}</p>;
                   }
                   return <div key={question.id || question.stable_key}>
-                    <label className="mb-2 block text-sm font-semibold text-slate-800">{question.prompt || 'Untitled question'}{question.config_json?.required && <span className="ml-1 text-amber-700">*</span>}</label>
+                     <label className="mb-2 block text-sm font-semibold text-slate-800">{question.prompt || 'Untitled question'}{isQuestionRequired(question, answerLookup) && <span className="ml-1 text-amber-700">*</span>}</label>
                     {question.help_text && <p className="mb-2 text-xs text-slate-500">{question.help_text}</p>}
                     {isReadOnly ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
                   </div>;
@@ -449,7 +562,7 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
           <button onClick={onClose} className="rounded-xl px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-white">{isSubmitted ? 'Back to forms' : 'Exit'}</button>
           {!isSubmitted && <><button onClick={() => save(false)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"><Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save draft'}</button><button onClick={() => save(true)} disabled={saving || submitting} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"><Send className="h-4 w-4" />{submitting ? 'Submitting…' : 'Submit response'}</button></>}
-          {isSubmitted && user?.role === 'Administrator' && (editingSubmitted
+           {isSubmitted && allowAdminEditSubmitted && user?.role === 'Administrator' && (editingSubmitted
             ? <button onClick={() => save(false)} disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-60"><Save className="h-4 w-4" />{saving ? 'Saving…' : 'Save changes'}</button>
             : <button onClick={() => setEditingSubmitted(true)} className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Edit className="h-4 w-4" />Edit submitted response</button>
           )}

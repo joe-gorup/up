@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
 import { invalidateProfileCache } from '../lib/apiCache';
 import RichTextEditor, { RichTextViewer } from './RichTextEditor';
+import { FormFiller } from './FormsAndReviews';
+import { type Employee } from '../contexts/DataContext';
 
 interface CheckinData {
   id: string;
@@ -53,77 +55,16 @@ interface CoachCheckinProps {
   onClose: () => void;
 }
 
-type TabType = 'checkins' | 'notes' | 'files';
-
-const SETTING_OPTIONS = [
-  { value: 'work_shift', label: 'Work Shift' },
-  { value: 'training', label: 'Training' },
-  { value: 'event', label: 'Event' },
-];
-
-const TODAY_OPTIONS = [
-  { value: 'good', label: 'Good', icon: '👍' },
-  { value: 'okay', label: 'Okay', icon: '😐' },
-  { value: 'hard', label: 'Hard', icon: '👎' },
-];
-
-const INDEPENDENCE_OPTIONS = [
-  { value: 'yes', label: 'Yes', icon: '✅' },
-  { value: 'a_little_help', label: 'A little help', icon: '🤏' },
-  { value: 'a_lot_of_help', label: 'A lot of help', icon: '🆘' },
-];
-
-const ENGAGEMENT_OPTIONS = [
-  { value: 'yes', label: 'Yes', icon: '😀' },
-  { value: 'some', label: 'Some', icon: '😐' },
-  { value: 'no', label: 'No', icon: '😞' },
-];
-
-const WIN_TYPE_OPTIONS = [
-  { value: 'task_alone', label: 'Did a task alone' },
-  { value: 'tried_new', label: 'Tried something new' },
-  { value: 'worked_with_others', label: 'Worked well with others' },
-  { value: 'felt_proud', label: 'Felt proud/confident' },
-];
-
-const CHALLENGE_OPTIONS = [
-  { value: 'none', label: 'None', icon: '❌' },
-  { value: 'focus', label: 'Focus', icon: '🧠' },
-  { value: 'communication', label: 'Communication', icon: '🗣️' },
-  { value: 'transitions', label: 'Transitions', icon: '🔄' },
-  { value: 'environment', label: 'Environment', icon: '🌪️' },
-];
-
-const COMPARED_OPTIONS = [
-  { value: 'better', label: 'Better', icon: '⬆️' },
-  { value: 'same', label: 'Same', icon: '➡️' },
-  { value: 'harder', label: 'Harder', icon: '⬇️' },
-];
-
-const SUPPORT_OPTIONS = [
-  { value: 'reminders', label: 'Reminders', icon: '🗣️' },
-  { value: 'visuals', label: 'Visuals', icon: '👀' },
-  { value: 'peer_help', label: 'Peer help', icon: '👥' },
-  { value: 'coach_help', label: 'Coach help', icon: '👤' },
-  { value: 'none_needed', label: 'None needed', icon: '❌' },
-];
-
-function OptionButton({ selected, onClick, label, icon }: { selected: boolean; onClick: () => void; label: string; icon?: string }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex items-center gap-2 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all ${
-        selected
-          ? 'bg-blue-50 border-blue-400 text-blue-700 shadow-sm'
-          : 'bg-white border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-50'
-      }`}
-    >
-      {icon && <span className="text-base">{icon}</span>}
-      {label}
-    </button>
-  );
+interface CoachFormResponse {
+  id: string;
+  status: string;
+  submitted_at?: string | null;
+  updated_at?: string;
+  template: any;
+  answers: Array<{ question_id: string; value_json: any }>;
 }
+
+type TabType = 'checkins' | 'notes' | 'files';
 
 function formatLabel(value: string): string {
   const map: Record<string, string> = {
@@ -569,91 +510,66 @@ export default function CoachCheckin({ employeeId, employeeName, onClose }: Coac
   const [activeTab, setActiveTab] = useState<TabType>('checkins');
   const [view, setView] = useState<'list' | 'form'>('list');
   const [checkins, setCheckins] = useState<CheckinData[]>([]);
+  const [template, setTemplate] = useState<any | null>(null);
+  const [responses, setResponses] = useState<CoachFormResponse[]>([]);
+  const [activeResponse, setActiveResponse] = useState<CoachFormResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const [setting, setSetting] = useState('');
-  const [howWasToday, setHowWasToday] = useState('');
-  const [independence, setIndependence] = useState('');
-  const [engagement, setEngagement] = useState('');
-  const [bigWin, setBigWin] = useState<boolean | null>(null);
-  const [bigWinType, setBigWinType] = useState('');
-  const [challenge, setChallenge] = useState('');
-  const [safetyConcern, setSafetyConcern] = useState<boolean | null>(null);
-  const [safetyDetails, setSafetyDetails] = useState('');
-  const [comparedToLast, setComparedToLast] = useState('');
-  const [supportHelped, setSupportHelped] = useState('');
-  const [notes, setNotes] = useState('');
-
   const isCoachOrAdmin = user?.role === 'Job Coach' || user?.role === 'Administrator';
 
   useEffect(() => {
-    fetchCheckins();
+    fetchCoachCheckins();
   }, [employeeId]);
 
-  async function fetchCheckins() {
+  async function fetchCoachCheckins() {
     try {
-      const res = await apiRequest(`/api/checkins/${employeeId}`);
+      const res = await apiRequest(`/api/coach-checkins/${employeeId}`);
       if (res.ok) {
         const data = await res.json();
-        setCheckins(data);
+        setCheckins(data.legacy || []);
+        setTemplate(data.template || null);
+        setResponses(data.responses || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || 'Failed to load check-ins');
       }
     } catch (err) {
       console.error('Failed to fetch check-ins', err);
+      setError('Failed to load check-ins');
     } finally {
       setLoading(false);
     }
   }
 
-  function resetForm() {
-    setSetting(''); setHowWasToday(''); setIndependence(''); setEngagement('');
-    setBigWin(null); setBigWinType(''); setChallenge('');
-    setSafetyConcern(null); setSafetyDetails(''); setComparedToLast('');
-    setSupportHelped(''); setNotes('');
-  }
-
-  const isFormValid = setting && howWasToday && independence && engagement &&
-    bigWin !== null && challenge && safetyConcern !== null && comparedToLast && supportHelped;
-
-  async function handleSubmit() {
-    if (!isFormValid) return;
+  async function startCheckin() {
+    if (!template) {
+      setError('The Coach Check-In template has not been seeded yet.');
+      return;
+    }
+    const draft = responses.find(response => response.status === 'draft');
+    if (draft) {
+      setActiveResponse(draft);
+      setView('form');
+      return;
+    }
     setSaving(true);
     setError('');
-
     try {
-      const body = {
-        employee_id: employeeId,
-        setting,
-        how_was_today: howWasToday,
-        independence,
-        engagement,
-        big_win: bigWin,
-        big_win_type: bigWin ? bigWinType || null : null,
-        challenge,
-        safety_concern: safetyConcern,
-        safety_details: safetyConcern ? safetyDetails || null : null,
-        compared_to_last: comparedToLast,
-        support_helped: supportHelped,
-        notes: notes || null,
-      };
-
-      const res = await apiRequest('/api/checkins', {
+      const res = await apiRequest('/api/form-responses', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ template_id: template.id, employee_id: employeeId }),
       });
-
       if (res.ok) {
-        resetForm();
-        setView('list');
-        fetchCheckins();
+        setActiveResponse(await res.json());
+        setView('form');
       } else {
         const data = await res.json();
-        setError(data.error || 'Failed to save check-in');
+        setError(data.error || 'Failed to start check-in');
       }
-    } catch (err) {
-      setError('Failed to save check-in');
+    } catch {
+      setError('Failed to start check-in');
     } finally {
       setSaving(false);
     }
@@ -663,7 +579,7 @@ export default function CoachCheckin({ employeeId, employeeName, onClose }: Coac
     if (!confirm('Delete this check-in?')) return;
     try {
       await apiRequest(`/api/checkins/${id}`, { method: 'DELETE' });
-      fetchCheckins();
+      fetchCoachCheckins();
     } catch (err) {
       console.error('Failed to delete', err);
     }
@@ -710,174 +626,54 @@ export default function CoachCheckin({ employeeId, employeeName, onClose }: Coac
             <div>
               {isCoachOrAdmin && (
                 <button
-                  onClick={() => setView('form')}
-                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors mb-4"
+                  onClick={startCheckin}
+                  disabled={saving || !template}
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors mb-4 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <Plus className="h-4 w-4" />
-                  New Check-In
+                  {saving ? 'Starting…' : 'New Check-In'}
                 </button>
               )}
+              {error && <div className="mb-4 flex items-center gap-2 rounded-xl bg-red-50 p-3 text-sm text-red-600"><AlertTriangle className="h-4 w-4 flex-shrink-0" />{error}</div>}
               {loading ? (
                 <div className="text-center py-12 text-gray-400">Loading...</div>
-              ) : checkins.length === 0 ? (
+              ) : checkins.length === 0 && responses.length === 0 ? (
                 <div className="text-center py-12">
                   <ClipboardCheck className="h-12 w-12 text-gray-300 mx-auto mb-3" />
                   <p className="text-gray-500 mb-1">No check-ins yet</p>
-                  {isCoachOrAdmin && (
-                    <p className="text-sm text-gray-400">Tap "New Check-In" to record the first one.</p>
-                  )}
+                  {isCoachOrAdmin && <p className="text-sm text-gray-400">{template ? 'Tap "New Check-In" to record the first one.' : 'The Coach Check-In template has not been seeded yet.'}</p>}
                 </div>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-4">
+                  {responses.filter(response => response.status === 'draft').map(response => (
+                    <div key={response.id} className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                      <div><p className="text-sm font-semibold text-amber-900">Draft check-in</p><p className="text-xs text-amber-800">Continue where you left off</p></div>
+                      <button type="button" onClick={() => { setActiveResponse(response); setView('form'); }} className="rounded-xl bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-700">Continue</button>
+                    </div>
+                  ))}
+                  {responses.filter(response => response.status === 'submitted').map(response => (
+                    <button key={response.id} type="button" onClick={() => { setActiveResponse(response); setView('form'); }} className="flex w-full items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50/40 p-4 text-left hover:bg-emerald-50">
+                      <div><p className="text-sm font-semibold text-gray-900">Coach Check-In</p><p className="text-xs text-emerald-700">Submitted · {response.submitted_at ? new Date(response.submitted_at).toLocaleDateString() : 'read only'}</p></div>
+                      <span className="text-xs font-semibold text-emerald-800">View</span>
+                    </button>
+                  ))}
+                  {checkins.length > 0 && <p className="pt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Legacy check-in history</p>}
                   {checkins.map(checkin => (
-                    <CheckinCard
-                      key={checkin.id}
-                      checkin={checkin}
-                      isOwner={checkin.coach_id === user?.id}
-                      onDelete={() => handleDelete(checkin.id)}
-                    />
+                    <CheckinCard key={checkin.id} checkin={checkin} isOwner={checkin.coach_id === user?.id} onDelete={() => handleDelete(checkin.id)} />
                   ))}
                 </div>
               )}
             </div>
           )}
 
-          {view === 'form' && (
-            <div className="space-y-6">
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">1. Where were we today?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {SETTING_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={setting === opt.value} onClick={() => setSetting(opt.value)} label={opt.label} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">2. How was today?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {TODAY_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={howWasToday === opt.value} onClick={() => setHowWasToday(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">3. Did they do most tasks on their own?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {INDEPENDENCE_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={independence === opt.value} onClick={() => setIndependence(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">4. Were they engaged?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {ENGAGEMENT_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={engagement === opt.value} onClick={() => setEngagement(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">5. Any big wins today?</h3>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <OptionButton selected={bigWin === true} onClick={() => setBigWin(true)} label="Yes" icon="🏆" />
-                  <OptionButton selected={bigWin === false} onClick={() => { setBigWin(false); setBigWinType(''); }} label="No" icon="❌" />
-                </div>
-                {bigWin && (
-                  <div className="pl-4 border-l-2 border-blue-200">
-                    <p className="text-xs text-gray-500 mb-2">Pick one:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {WIN_TYPE_OPTIONS.map(opt => (
-                        <OptionButton key={opt.value} selected={bigWinType === opt.value} onClick={() => setBigWinType(opt.value)} label={opt.label} />
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">6. Any challenges?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {CHALLENGE_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={challenge === opt.value} onClick={() => setChallenge(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">7. Did anything unsafe happen?</h3>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <OptionButton selected={safetyConcern === false} onClick={() => setSafetyConcern(false)} label="No" icon="❌" />
-                  <OptionButton selected={safetyConcern === true} onClick={() => setSafetyConcern(true)} label="Yes" icon="⚠️" />
-                </div>
-                {safetyConcern && (
-                  <div className="pl-4 border-l-2 border-red-200">
-                    <textarea
-                      value={safetyDetails}
-                      onChange={(e) => setSafetyDetails(e.target.value)}
-                      placeholder="Describe what happened..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      rows={3}
-                    />
-                  </div>
-                )}
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">8. Compared to last time, today was:</h3>
-                <div className="flex flex-wrap gap-2">
-                  {COMPARED_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={comparedToLast === opt.value} onClick={() => setComparedToLast(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-3">9. What support helped most?</h3>
-                <div className="flex flex-wrap gap-2">
-                  {SUPPORT_OPTIONS.map(opt => (
-                    <OptionButton key={opt.value} selected={supportHelped === opt.value} onClick={() => setSupportHelped(opt.value)} label={opt.label} icon={opt.icon} />
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <h3 className="text-sm font-semibold text-gray-800 mb-2">Additional Notes (optional)</h3>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Anything else to note..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  rows={3}
-                />
-              </div>
-
-              {error && (
-                <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-xl">
-                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => { resetForm(); setView('list'); }}
-                  className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={!isFormValid || saving}
-                  className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {saving ? 'Saving...' : 'Save Check-In'}
-                </button>
-              </div>
-            </div>
+          {view === 'form' && activeResponse && (
+            <FormFiller
+              response={activeResponse as any}
+              employee={{ first_name: employeeName, last_name: '' } as Pick<Employee, 'first_name' | 'last_name'>}
+              allowAdminEditSubmitted={false}
+              onClose={() => { setActiveResponse(null); setView('list'); fetchCoachCheckins(); }}
+              onComplete={() => { setActiveResponse(null); setView('list'); fetchCoachCheckins(); }}
+            />
           )}
         </>
       )}

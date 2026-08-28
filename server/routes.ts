@@ -30,6 +30,7 @@ import {
   type AuthUser 
 } from "./auth";
 import { canAccessScooper, canModifyScooperForms, canViewScooperForms, hasFormPermission } from "./formAccess";
+import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible } from "@shared/formLogic";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
 // but whose parent development_goal references a template, look up the matching
@@ -4017,6 +4018,49 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // New check-ins are form responses. This endpoint intentionally also returns
+  // legacy rows so history remains complete while the old table is retained.
+  app.get("/api/coach-checkins/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { employeeId } = req.params;
+      if (!['Job Coach', 'Administrator'].includes(user.role) || !await canAccessScooper(user, employeeId)) {
+        return res.status(403).json({ error: 'You cannot access check-ins for this employee' });
+      }
+
+      const [template] = await db.select().from(form_templates)
+        .where(and(eq(form_templates.form_type, 'coach_checkin'), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at))
+        .limit(1);
+      const responseSets = template
+        ? await db.select().from(form_response_sets)
+          .where(and(eq(form_response_sets.template_id, template.id), eq(form_response_sets.employee_id, employeeId)))
+          .orderBy(desc(form_response_sets.updated_at))
+        : [];
+      const responses = await Promise.all(responseSets.map(response => responsePayload(response.id)));
+
+      const legacyRows = await db.select().from(coach_checkins)
+        .where(eq(coach_checkins.employee_id, employeeId))
+        .orderBy(desc(coach_checkins.checkin_date));
+      const coachIds = Array.from(new Set(legacyRows.map(checkin => checkin.coach_id)));
+      const coaches = coachIds.length > 0
+        ? await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds))
+        : [];
+      const coachMap = Object.fromEntries(coaches.map(coach => [coach.id, `${coach.first_name || ''} ${coach.last_name || ''}`.trim()]));
+      const legacy = legacyRows.map(checkin => ({ ...checkin, coach_name: coachMap[checkin.coach_id] || 'Unknown' }));
+
+      res.json({
+        template: template ? await hydrateFormTemplate(template.id) : null,
+        responses: responses.filter(Boolean),
+        legacy,
+      });
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach check-ins');
+      res.status(500).json({ error: 'Failed to fetch coach check-ins' });
+    }
+  });
+
   app.post("/api/checkins", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
@@ -4997,13 +5041,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })), questions };
   };
 
-  const isMeaningfullyAnswered = (value: unknown) => {
-    if (value === null || value === undefined || value === '') return false;
-    if (Array.isArray(value)) return value.length > 0;
-    if (typeof value === 'object') return Object.keys(value as object).length > 0;
-    return true;
-  };
-
   const validateQuestionValue = (question: any, value: unknown): string | null => {
     if (value === null || value === undefined || value === '') return null;
     if (question.question_type !== 'scale') return null;
@@ -5025,6 +5062,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return role === 'Administrator' || allowedRoles.includes(role);
   };
 
+  const canViewTemplateResponse = async (user: AuthUser, employeeId: string, template: any) => {
+    if (template?.form_type === 'coach_checkin') {
+      return (user.role === 'Administrator' || user.role === 'Job Coach') && await canAccessScooper(user, employeeId);
+    }
+    return canViewScooperForms(user, employeeId);
+  };
+
+  const canFillTemplateResponse = async (user: AuthUser, employeeId: string, template: any) => {
+    if (template?.form_type === 'coach_checkin') {
+      return (user.role === 'Administrator' || user.role === 'Job Coach') && await canAccessScooper(user, employeeId);
+    }
+    return canModifyScooperForms(user, employeeId);
+  };
+
+  const answerLookup = (questions: any[], answers: Map<string, unknown>) => {
+    const byStableKey = new Map<string, unknown>();
+    for (const question of questions) {
+      byStableKey.set(question.stable_key, answers.get(question.id));
+    }
+    return byStableKey;
+  };
+
+  const normalizeConditionalAnswers = (questions: any[], answers: Map<string, unknown>) => {
+    const visibleAnswers = new Map(answers);
+    // A hidden answer must not keep a later dependent question visible. Walk
+    // until the visibility graph settles, bounded by the number of questions.
+    for (let pass = 0; pass <= questions.length; pass += 1) {
+      const lookup = answerLookup(questions, visibleAnswers);
+      let removed = false;
+      for (const question of questions) {
+        if (!isQuestionVisible(question, lookup) && visibleAnswers.delete(question.id)) removed = true;
+      }
+      if (!removed) return { answers: visibleAnswers, lookup };
+    }
+    return { answers: visibleAnswers, lookup: answerLookup(questions, visibleAnswers) };
+  };
+
+  const missingRequiredQuestions = (questions: any[], answers: Map<string, unknown>) => {
+    const normalized = normalizeConditionalAnswers(questions, answers);
+    return questions
+      .filter(question => isQuestionVisible(question, normalized.lookup) && isQuestionRequired(question, normalized.lookup))
+      .filter(question => !isMeaningfullyAnswered(normalized.answers.get(question.id)))
+      .map(question => question.prompt);
+  };
+
   // Profile workflows can discover only the active template they are allowed
   // to use. Template administration remains restricted to Administrators.
   app.get("/api/form-templates/by-type/:formType", authenticateToken, async (req: Request, res: Response) => {
@@ -5032,12 +5114,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as any).user as AuthUser;
       const employeeId = typeof req.query.employee_id === 'string' ? req.query.employee_id : '';
       if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
-      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot access this form template' });
       const [template] = await db.select().from(form_templates)
         .where(and(eq(form_templates.form_type, req.params.formType), eq(form_templates.status, 'active')))
         .orderBy(desc(form_templates.updated_at))
         .limit(1);
       if (!template) return res.status(404).json({ error: 'Active form template not found' });
+       if (!await canViewTemplateResponse(user, employeeId, template)) return res.status(403).json({ error: 'You cannot access this form template' });
       res.json(await hydrateFormTemplate(template.id));
     } catch (error) {
       logger.error({ error }, 'Failed to load profile form template');
@@ -5256,7 +5338,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
       const user = (req as any).user as AuthUser;
       if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
-      if (!await canViewScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot view this form response' });
+       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canViewTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot view this form response' });
       res.json(await responsePayload(responseSet.id));
     } catch (error) {
       logger.error({ error }, 'Failed to load form response');
@@ -5286,9 +5369,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as any).user as AuthUser;
       const { template_id, employee_id, cycle_label } = req.body || {};
       if (!template_id || !employee_id) return res.status(400).json({ error: 'template_id and employee_id are required' });
-      if (!await canModifyScooperForms(user, employee_id)) return res.status(403).json({ error: 'You cannot fill forms for this employee' });
       const [template] = await db.select().from(form_templates).where(eq(form_templates.id, template_id)).limit(1);
       if (!template || template.status !== 'active') return res.status(404).json({ error: 'Active form template not found' });
+       if (!await canFillTemplateResponse(user, employee_id, template)) return res.status(403).json({ error: 'You cannot fill forms for this employee' });
       if (!templateAllowsFilling(template, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
       const normalizedCycleLabel = typeof cycle_label === 'string' && cycle_label.trim() ? cycle_label.trim() : null;
       const existingFilters = [
@@ -5321,29 +5404,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
       const editingSubmitted = responseSet.status === 'submitted' && user.role === 'Administrator';
       if (responseSet.status === 'submitted' && !editingSubmitted) return res.status(409).json({ error: 'Submitted responses are locked' });
-      if (!await canModifyScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot edit this form response' });
       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canFillTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot edit this form response' });
       if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
       // Drafts are versioned records: validate and snapshot against the template
       // captured at creation, even if the reusable template has since changed.
       const snapshotQuestions: any[] = Array.isArray(responseTemplate.questions)
         ? responseTemplate.questions
         : [];
-      const questionMap = new Map(snapshotQuestions.map((question: any) => [question.id, question]));
+       const questionMap = new Map(snapshotQuestions.map((question: any) => [question.id, question]));
       const incomingAnswers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+       const existingAnswers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+       const effectiveAnswers = new Map(existingAnswers.map(answer => [answer.question_id, answer.value_json]));
+       for (const answer of incomingAnswers) {
+         if (questionMap.has(answer.question_id)) effectiveAnswers.set(answer.question_id, answer.value_json ?? answer.value ?? null);
+       }
+       const normalizedAnswers = normalizeConditionalAnswers(snapshotQuestions, effectiveAnswers);
+       const lookup = normalizedAnswers.lookup;
       for (const answer of incomingAnswers) {
         const question = questionMap.get(answer.question_id);
         if (!question) continue;
+         if (!isQuestionVisible(question, lookup)) continue;
         const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null);
         if (validationError) return res.status(400).json({ error: validationError });
       }
       if (editingSubmitted) {
-        const existingAnswers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
-        const effectiveAnswers = new Map(existingAnswers.map(answer => [answer.question_id, answer.value_json]));
-        for (const answer of incomingAnswers) effectiveAnswers.set(answer.question_id, answer.value_json ?? answer.value ?? null);
-        const missing = snapshotQuestions
-          .filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(effectiveAnswers.get(question.id)))
-          .map(question => question.prompt);
+         const missing = missingRequiredQuestions(snapshotQuestions, effectiveAnswers);
         if (missing.length) return res.status(400).json({ error: 'Complete all required questions before saving', missing });
       }
       const saved = await db.transaction(async (tx) => {
@@ -5357,6 +5443,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const answer of incomingAnswers) {
           const question = questionMap.get(answer.question_id);
           if (!question) continue;
+           if (!isQuestionVisible(question, lookup)) {
+             await tx.delete(form_answers).where(and(
+               eq(form_answers.response_set_id, responseSet.id),
+               eq(form_answers.question_id, question.id),
+             ));
+             continue;
+           }
           const value = answer.value_json ?? answer.value ?? null;
           await tx.insert(form_answers).values({
             response_set_id: responseSet.id,
@@ -5417,10 +5510,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = (req as any).user as AuthUser;
       const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
       if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
-      if (!await canViewScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot access this form response' });
+       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canViewTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot access this form response' });
       if (responseSet.status === 'submitted') return res.json(await responsePayload(responseSet.id));
-      if (!await canModifyScooperForms(user, responseSet.employee_id)) return res.status(403).json({ error: 'You cannot submit this form response' });
-      const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canFillTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot submit this form response' });
       if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
       const questions: any[] = Array.isArray(responseTemplate.questions)
         ? responseTemplate.questions
@@ -5437,10 +5530,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           updated_at: new Date(),
         }).where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft'))).returning();
         if (!submitted) return null;
-        const answers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
-        const answersByQuestion = new Map(answers.map(answer => [answer.question_id, answer.value_json]));
-        const missing = questions.filter(question => Boolean((question.config_json as any)?.required) && !isMeaningfullyAnswered(answersByQuestion.get(question.id)))
-          .map(question => question.prompt);
+         const allAnswers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+         const answersByQuestion = new Map(allAnswers.map(answer => [answer.question_id, answer.value_json]));
+         const normalizedAnswers = normalizeConditionalAnswers(questions, answersByQuestion);
+         const answers = allAnswers.filter(answer => normalizedAnswers.answers.has(answer.question_id));
+         for (const answer of allAnswers) {
+           if (!normalizedAnswers.answers.has(answer.question_id)) {
+             await tx.delete(form_answers).where(eq(form_answers.id, answer.id));
+           }
+         }
+         const missing = missingRequiredQuestions(questions, normalizedAnswers.answers);
         if (missing.length) {
           throw Object.assign(new Error('Complete all required questions before submitting'), { status: 400, missing });
         }

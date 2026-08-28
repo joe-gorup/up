@@ -261,6 +261,132 @@ const seeds: TemplateSeed[] = [
       category.items.map((prompt, index) => yesNo(category.name, `${category.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}_${index + 1}`, prompt)),
     ),
   },
+  {
+    name: 'Coach Check-In',
+    description: 'Structured check-in for Job Coaches to record the scooper’s day, wins, challenges, safety, and support needs.',
+    form_type: 'coach_checkin',
+    settings_json: {
+      allowed_fill_roles: ['Administrator', 'Job Coach'],
+      lock_on_submit: true,
+      allow_draft: true,
+    },
+    sections: ['Today', 'Wins & Challenges', 'Reflection'],
+    questions: [
+      {
+        section: 'Today',
+        stable_key: 'setting',
+        prompt: 'Where were we today?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: false }, options: [
+          { key: 'work_shift', label: 'Work Shift' }, { key: 'training', label: 'Training' }, { key: 'event', label: 'Event' },
+        ] },
+      },
+      {
+        section: 'Today',
+        stable_key: 'how_was_today',
+        prompt: 'How was today?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'good', label: 'Good', icon: '👍' }, { key: 'okay', label: 'Okay', icon: '😐' }, { key: 'hard', label: 'Hard', icon: '👎' },
+        ] },
+      },
+      {
+        section: 'Today',
+        stable_key: 'independence',
+        prompt: 'Did they do most tasks on their own?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'yes', label: 'Yes', icon: '✅' }, { key: 'a_little_help', label: 'A little help', icon: '🤏' }, { key: 'a_lot_of_help', label: 'A lot of help', icon: '🆘' },
+        ] },
+      },
+      {
+        section: 'Today',
+        stable_key: 'engagement',
+        prompt: 'Were they engaged?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'yes', label: 'Yes', icon: '😀' }, { key: 'some', label: 'Some', icon: '😐' }, { key: 'no', label: 'No', icon: '😞' },
+        ] },
+      },
+      {
+        section: 'Wins & Challenges',
+        stable_key: 'big_win',
+        prompt: 'Any big wins today?',
+        question_type: 'yes_no',
+        config_json: { required: true, display: { style: 'chips', show_icons: true } },
+      },
+      {
+        section: 'Wins & Challenges',
+        stable_key: 'big_win_type',
+        prompt: 'What kind of win was it?',
+        question_type: 'single_select',
+        config_json: {
+          display: { style: 'chips', show_icons: false },
+          options: [
+            { key: 'task_alone', label: 'Did a task alone' }, { key: 'tried_new', label: 'Tried something new' },
+            { key: 'worked_with_others', label: 'Worked well with others' }, { key: 'felt_proud', label: 'Felt proud/confident' },
+          ],
+          show_when: { question_stable_key: 'big_win', operator: 'equals', value: 'yes' },
+          required_when: { question_stable_key: 'big_win', operator: 'equals', value: 'yes' },
+        },
+      },
+      {
+        section: 'Wins & Challenges',
+        stable_key: 'challenge',
+        prompt: 'Any challenges?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'none', label: 'None', icon: '❌' }, { key: 'focus', label: 'Focus', icon: '🧠' },
+          { key: 'communication', label: 'Communication', icon: '🗣️' }, { key: 'transitions', label: 'Transitions', icon: '🔄' },
+          { key: 'environment', label: 'Environment', icon: '🌪️' },
+        ] },
+      },
+      {
+        section: 'Wins & Challenges',
+        stable_key: 'safety_concern',
+        prompt: 'Did anything unsafe happen?',
+        question_type: 'yes_no',
+        config_json: { required: true, display: { style: 'chips', show_icons: true } },
+      },
+      {
+        section: 'Wins & Challenges',
+        stable_key: 'safety_details',
+        prompt: 'Describe what happened.',
+        question_type: 'long_text',
+        config_json: {
+          show_when: { question_stable_key: 'safety_concern', operator: 'equals', value: 'yes' },
+          required_when: { question_stable_key: 'safety_concern', operator: 'equals', value: 'yes' },
+        },
+      },
+      {
+        section: 'Reflection',
+        stable_key: 'compared_to_last',
+        prompt: 'Compared to last time, today was:',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'better', label: 'Better', icon: '⬆️' }, { key: 'same', label: 'Same', icon: '➡️' }, { key: 'harder', label: 'Harder', icon: '⬇️' },
+        ] },
+      },
+      {
+        section: 'Reflection',
+        stable_key: 'support_helped',
+        prompt: 'What support helped most?',
+        question_type: 'single_select',
+        config_json: { required: true, display: { style: 'chips', show_icons: true }, options: [
+          { key: 'reminders', label: 'Reminders', icon: '🗣️' }, { key: 'visuals', label: 'Visuals', icon: '👀' },
+          { key: 'peer_help', label: 'Peer help', icon: '👥' }, { key: 'coach_help', label: 'Coach help', icon: '👤' },
+          { key: 'none_needed', label: 'None needed', icon: '❌' },
+        ] },
+      },
+      {
+        section: 'Reflection',
+        stable_key: 'notes',
+        prompt: 'Additional notes',
+        question_type: 'long_text',
+        config_json: { required: false },
+      },
+    ],
+  },
 ];
 
 async function seedTemplate(seed: TemplateSeed) {
