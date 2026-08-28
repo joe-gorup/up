@@ -39,7 +39,7 @@ T1 (manager View Details default) and T2 (accommodations) were briefly merged to
 |----|--------|--------|------|-------|
 | **T1** | Manager (Ali) missing Service Provider / Job Coach sections | ✅ **Done** (Replit PACKET-001) | Bug / UX | View Details expands for Admin, Shift Lead, Assistant Manager |
 | **T2** | Accommodations on profile | ✅ **Done** (Replit PACKET-002) | Feature | Dedicated field (separate from regulation strategies) |
-| **T3** | Admin-controllable configuration (forms, checklists, field names) | **In progress** — 003A + 003A-UX ✅; **003B next** | Platform | See `FORM_ENGINE_SPEC.md` — almost-full type catalog + 6 phases |
+| **T3** | Admin-controllable configuration (forms, checklists, field names) | **In progress** — through 003B ✅; **003C next** | Platform | See `FORM_ENGINE_SPEC.md` |
 | **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | First use of Admin form builder (T3) |
 | **T5** | Unified notes feed (name, date, all authorized users) | Planned | Feature | Replace siloed guardian/coach note UIs |
 | **T6** | Lightweight parent / job coach users (view + notes) | Planned | Feature | Streamlined invite; not full employee profile |
@@ -249,7 +249,7 @@ Report back: what changed, how tested, any blockers
 
 ## 10. Next actions
 
-1. ~~PACKET-001 / 002 / 003A / 003A-UX~~ ✅ **Done** (003A-UX Aug 28).  
-2. **Replit (now):** **PACKET-003B** — mid-year Reviews card + **Forms card (custom)** + cert migration + seed template.  
-3. **After 003B:** Allison enters PDF meeting data (PACKET-004); then 003C check-ins.
-4. F4 (Ali confirm) assumed covered by completed PACKET-001 — note if anything odd remains.
+1. ~~PACKET-001 / 002 / 003A / 003A-UX / 003B~~ ✅ **Done** (003B Aug 28).  
+2. **Replit (now):** **PACKET-003C** — conditionals + migrate `CoachCheckin` to form templates.  
+3. **Product (parallel):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
+4. **Then:** PACKET-005 notes feed → PACKET-006 invites → PACKET-003D advanced types.

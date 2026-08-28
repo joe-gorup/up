@@ -14,10 +14,13 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 2 | PACKET-002 | ✅ **Done** (Joe, Aug 25) | ~half day |
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
 | **3b** | **PACKET-003A-UX** | ✅ **Done** (Joe, Aug 28) | ~half day |
-| **4** | **PACKET-003B** | **Ready — do next** | multi-day |
-| 5 | PACKET-004 | After 003B | small |
+| **4** | **PACKET-003B** | ✅ **Done** (Joe, Aug 28) | multi-day |
+| 5 | PACKET-004 | Optional — historical mid-year data entry | small |
+| **6** | **PACKET-003C** | **Ready — do next (engineering)** | multi-day |
+| 7 | PACKET-005 | Notes feed (can parallel) | multi-day |
 
-**Do next:** paste **PACKET-003B** into Replit.
+**Do next (Replit):** **PACKET-003C** — conditionals + coach check-in migration.  
+**Parallel (product):** **PACKET-004** — Allison enters historical PDF mid-year scores via Reviews UI.
 
 ---
 
@@ -398,7 +401,7 @@ Create `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `F
 
 ## PACKET-003B — Mid-year profile card + cert migration + seed
 
-**Status:** Ready — prerequisites PACKET-003A ✅ + PACKET-003A-UX ✅ done  
+**Status:** ✅ Done (Joe, Aug 28)  
 **Priority:** High  
 **Blocked by?** Mid-year question text — ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`)
 
@@ -508,11 +511,11 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 ## Later packets
 
-| Packet | Topic | Blocked by |
-|--------|--------|------------|
-| PACKET-004 | Enter historical PDF mid-year answers (optional bulk/manual) | 003B |
-| PACKET-003C | Conditionals + coach check-in migration | 003B |
-| PACKET-005 | Unified notes feed | 003A ACL helpers |
-| PACKET-006 | Invites + `external_user_invites` enforcement | 005 optional |
-| PACKET-003D | Advanced types + ROI subset | 003C |
-| PACKET-007 | Profile catalog (T3-B) | 003A |
+| Packet | Topic | Blocked by | Next? |
+|--------|--------|------------|-------|
+| PACKET-004 | Enter historical PDF mid-year answers (Allison / manual; optional bulk script) | 003B ✅ | **Product — can start now** |
+| **PACKET-003C** | Conditionals + coach check-in migration | 003B ✅ | **Replit — do next** |
+| PACKET-005 | Unified notes feed (T5) | 003A ACL ✅ | Can parallel after 003C or stagger |
+| PACKET-006 | Invites + `external_user_invites` enforcement (T6) | 005 optional | After 005 or parallel |
+| PACKET-003D | Advanced types + ROI subset | 003C | |
+| PACKET-007 | Profile catalog (T3-B) | 003A | |

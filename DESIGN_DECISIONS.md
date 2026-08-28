@@ -138,9 +138,9 @@
 2. PACKET-002  T2 accommodations
 3. PACKET-003A Form engine Phase 1 (schema, Admin CRUD, core types)
 4. PACKET-003A-UX Form builder UX parity with Goal Templates ✅
-5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts **← next**
-6. PACKET-004  T4 seed mid-year template (needs F1 Google Doc)
-7. PACKET-003C Phase 3 — conditionals + coach check-in migration
+5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts ✅
+6. PACKET-004  Historical PDF mid-year answer entry (Allison / optional Replit bulk script)
+7. PACKET-003C Phase 3 — conditionals + coach check-in migration **← Replit next**
 8. PACKET-005  T5 notes aggregator + timeline guardian notes
 9. PACKET-006  T6 invites + permission enforcement
 10. PACKET-003D Phase 4 — signature, file, rich text, ROI subset
@@ -153,7 +153,7 @@
 
 ### F1 resolved (Aug 23)
 - Content locked in **`MIDYEAR_REVIEW_QUESTIONS.md`** (6 questions).  
-- **PACKET-004** unblocked once PACKET-003A/003B ships (needs working `scale` type).  
+- **PACKET-004** unblocked — historical PDF scores via Reviews UI (product data entry).  
 - Historical PDF answers = data-entry backlog for Allison after template exists — not a seed-script requirement.
 
 ### Can start now (Replit)
@@ -162,10 +162,10 @@
 | PACKET-001 | T1 manager visibility | No |
 | PACKET-002 | T2 accommodations | No |
 | PACKET-003A | Form engine Phase 1 (schema, Admin CRUD, core types) | No |
-| PACKET-003A-UX | Form builder UX + AppSelect | No — ✅ done Aug 28 |
-| PACKET-003B | Cert migration + mid-year template (seed from `MIDYEAR_REVIEW_QUESTIONS.md`) | No — F1 locked |
-| PACKET-003C+ | Check-ins, notes, invites | No |
-| PACKET-004 | Seed / data-entry of existing PDF answers (optional backlog) | Content ready |
+| PACKET-003B | Reviews + Forms cards + cert migration + mid-year seed | No — ✅ done Aug 28 |
+| PACKET-003C | Conditionals + coach check-in migration | No — **next** |
+| PACKET-004 | Historical PDF mid-year data entry | Content ready — product |
+| PACKET-005+ | Notes, invites, advanced types, profile catalog | No |
 
 **Tip:** Seed template questions from `MIDYEAR_REVIEW_QUESTIONS.md` in 003B. Allison can then enter historical PDF scores into each scooper’s mid-year response.
 
@@ -176,4 +176,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-28 | **003A-UX done**; **003B next** |
+| Architect | Cursor | 2026-08-28 | **003B done**; **003C next** (004 = Allison data) |
