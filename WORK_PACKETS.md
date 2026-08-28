@@ -13,11 +13,11 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 1 | PACKET-001 | ✅ **Done** (Joe, Aug 25) | ~1 hour |
 | 2 | PACKET-002 | ✅ **Done** (Joe, Aug 25) | ~half day |
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
-| **3b** | **PACKET-003A-UX** | **Ready — align builder with Goal Templates** | ~half day |
-| **4** | **PACKET-003B** | **Ready — after 003A-UX** | multi-day |
+| **3b** | **PACKET-003A-UX** | ✅ **Done** (Joe, Aug 28) | ~half day |
+| **4** | **PACKET-003B** | **Ready — do next** | multi-day |
 | 5 | PACKET-004 | After 003B | small |
 
-**Do next:** paste **PACKET-003A-UX** into Replit (quick UX alignment), then **PACKET-003B**.
+**Do next:** paste **PACKET-003B** into Replit.
 
 ---
 
@@ -285,7 +285,7 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
 
 ## PACKET-003A-UX — Form builder parity with Goal Templates
 
-**Status:** Ready — do **before** PACKET-003B  
+**Status:** ✅ Done (Joe, Aug 28)  
 **Priority:** High (product consistency)  
 **Prerequisite:** PACKET-003A ✅ done  
 **Effort:** ~half day
@@ -398,7 +398,7 @@ Create `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `F
 
 ## PACKET-003B — Mid-year profile card + cert migration + seed
 
-**Status:** Ready — prerequisite PACKET-003A ✅ done + **PACKET-003A-UX** recommended first  
+**Status:** Ready — prerequisites PACKET-003A ✅ + PACKET-003A-UX ✅ done  
 **Priority:** High  
 **Blocked by?** Mid-year question text — ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`)
 

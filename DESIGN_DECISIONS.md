@@ -137,8 +137,8 @@
 1. PACKET-001  T1 manager visibility
 2. PACKET-002  T2 accommodations
 3. PACKET-003A Form engine Phase 1 (schema, Admin CRUD, core types)
-4. PACKET-003A-UX Form builder UX parity with Goal Templates (do before or with 003B)
-5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts
+4. PACKET-003A-UX Form builder UX parity with Goal Templates ✅
+5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts **← next**
 6. PACKET-004  T4 seed mid-year template (needs F1 Google Doc)
 7. PACKET-003C Phase 3 — conditionals + coach check-in migration
 8. PACKET-005  T5 notes aggregator + timeline guardian notes
@@ -162,6 +162,7 @@
 | PACKET-001 | T1 manager visibility | No |
 | PACKET-002 | T2 accommodations | No |
 | PACKET-003A | Form engine Phase 1 (schema, Admin CRUD, core types) | No |
+| PACKET-003A-UX | Form builder UX + AppSelect | No — ✅ done Aug 28 |
 | PACKET-003B | Cert migration + mid-year template (seed from `MIDYEAR_REVIEW_QUESTIONS.md`) | No — F1 locked |
 | PACKET-003C+ | Check-ins, notes, invites | No |
 | PACKET-004 | Seed / data-entry of existing PDF answers (optional backlog) | Content ready |
@@ -175,4 +176,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-28 | B20–B23 locked — Forms card, builder UX, no fill from builder, AppSelect dropdowns |
+| Architect | Cursor | 2026-08-28 | **003A-UX done**; **003B next** |
