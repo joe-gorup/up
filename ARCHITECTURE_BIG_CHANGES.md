@@ -112,7 +112,7 @@ form_answers
 | Edit | `Modal` xl + inline step list | `Modal` xl + inline question list (sections = headings) |
 | Actions | View / Edit / Duplicate / Archive icons | Same |
 
-**Do not ship:** drag-and-drop palette, full-page builder route, card-grid list, or a multi-tab designer.
+**Do not ship:** drag-and-drop palette, full-page builder route, card-grid list, multi-tab designer, or **fill/open-for-employee from the builder** (B22).
 
 - Nav: **Forms & Reviews** (Admin only) — parallel to Goal Templates in sidebar
 - **No delete** if any `form_response_sets` exist (archive only)

@@ -252,6 +252,8 @@ Each type can also define **who can fill** in template `settings_json.allowed_fi
 
 **`form_type` dropdown:** Lives in the create/edit modal (top fields, beside name/description) with helper text from §5 — not a separate screen.
 
+**No fill from builder (locked B22):** Forms & Reviews is **template management only** — same as Goal Templates (you don’t assign/fill goals from that screen). Do **not** add scooper picker, “Start response,” test fill route, or “Open for employee” actions in the admin builder. Filling happens only from the routed surface (profile Reviews/Forms cards, cert flow, etc.).
+
 ---
 
 ## 6. Migration matrix
@@ -322,7 +324,7 @@ ScaleInput, EmailInput, PhoneInput, SignaturePad,
 FileUploadField, RepeatableGroup, SectionHeader, HelpText
 ```
 
-Admin builder previews each type. Profile/fill UI uses same registry.
+Admin **view** mode shows question structure (read-only, like Goal Template view). **Fill** uses the same question registry in profile cards / cert / check-in flows — not in the builder.
 
 **Domain exception:** `GoalOutcomeButtons` stays in `EmployeeProgress` — not in registry.
 
@@ -354,6 +356,7 @@ Enforce via centralized `canAccessScooper` + template `settings_json.allowed_fil
 
 - Visual form builder drag-from-palette (list + reorder in Modal is enough; **must match Goal Templates UX** — see §5.1 / B21)
 - Dedicated full-page form designer or wizard separate from Goal Templates patterns
+- **Fill / open form for an employee from the admin builder** (scooper picker, test fill route) — B22
 - Cross-form analytics dashboard
 - Public/anonymous forms
 - PDF export of responses

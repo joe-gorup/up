@@ -56,7 +56,8 @@
 | B18 | Per-template fill roles configurable? | **Yes** — `settings_json.allowed_fill_roles` |
 | B19 | Permission feature for form/review answers | **Add `form_responses`** to `PERMISSION_FEATURES` — View (and optionally Modify for fill). Default: staff roles View **on**; Guardian + Job Coach View **off**. Admin toggles per role in Permissions Manager |
 | B20 | Custom form profile placement | ✅ **Locked (Joe, Aug 28):** **`form_type = custom`** → dedicated **Forms** card on Super Scooper profiles (separate from Reviews card). Builder dropdown routes each type to the correct profile area. |
-| B21 | Form builder admin UX | ✅ **Locked (Joe, Aug 28):** **Must match Goal Templates UX** — same list page, table, view page, and **xl Modal** create/edit flow. **No** separate designer page, drag-and-drop palette, or wizard. See `FORM_ENGINE_SPEC.md` §4 and **PACKET-003A-UX**. |
+| B21 | Form builder admin UX | ✅ **Locked (Joe, Aug 28):** **Must match Goal Templates UX** — same list page, table, view page, and **xl Modal** create/edit flow. **No** separate designer page, drag-and-drop palette, or wizard. See `FORM_ENGINE_SPEC.md` §5.1 and **PACKET-003A-UX**. |
+| B22 | Fill from form builder | ✅ **Locked (Joe, Aug 28):** **No** — Admin does **not** open or fill a form for an employee from Forms & Reviews. Template management only (list / view / edit / duplicate / archive). **Fill entry points:** Super Scooper profile cards (Reviews, Forms), cert flow, check-ins, onboarding — per `form_type`. |
 
 ---
 
@@ -124,6 +125,7 @@
 - Real-time collaborative draft editing
 - Cross-form analytics dashboard
 - Visual drag-from-palette form builder
+- **Open / fill a form for an employee from the Forms & Reviews admin builder** (B22)
 
 ---
 
@@ -171,4 +173,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-28 | B20–B21 locked — Forms card + Goal Templates UX parity |
+| Architect | Cursor | 2026-08-28 | B20–B22 locked — Forms card, Goal Templates UX parity, no fill from builder |

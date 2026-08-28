@@ -118,7 +118,7 @@ Migration result, screenshots or short notes, any leftover column from prior att
 **Blocked by Google Doc?** No
 
 ### Goal
-Admin can create **form templates** with sections and questions; staff can save **draft** and **submit** answers for a scooper. Phase 1 delivers schema, API, Admin builder UI, and **8 working question types**. Advanced types register in schema but may render as “coming soon” until Phase 4.
+Admin can create **form templates** with sections and questions. Phase 1 delivers schema, API, Admin builder UI (templates only — **no fill-for-employee from builder**, B22), question registry + response APIs for profile cards, and **8 working question types**. Advanced types register in schema but may render as “coming soon” until Phase 4.
 
 ### Reference implementation
 Copy patterns from **Goal Templates** (`GoalTemplates.tsx`, `goal_templates`, `goal_template_steps`, routes in `server/routes.ts`).
@@ -231,12 +231,12 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
   - Reorder: up/down buttons fine — no drag palette
   - Deactivate question (status inactive) — do not hard-delete if answers exist
 - **Table actions:** View (Eye) / Edit / Duplicate / Archive — same icons as Goal Templates
+- **No fill from builder (B22):** Do not add scooper picker, “Open for employee,” or test fill entry on this screen — same as Goal Templates (no goal assignment from that page)
 
-### Fill UI (minimal v1)
+### Response fill UI (component + API only in 003A)
 
-No profile card required in 003A — can be a standalone test route or simple modal:
-- Admin picks template + scooper → create draft → fill → save draft → submit
-- **PACKET-003B** adds Reviews card on `EmployeeDetail.tsx`
+- Build `FormResponseFill.tsx` + question registry for **reuse on profile cards** (003B) and cert/check-in flows — not wired into the admin builder.
+- APIs: create draft, save answers, submit — tested via profile cards in 003B (or API/integration tests in 003A).
 
 ### Files to touch (expected)
 
@@ -245,13 +245,14 @@ No profile card required in 003A — can be a standalone test route or simple mo
 | Schema | `shared/schema.ts` |
 | API | `server/routes.ts`, new `server/scooperAccess.ts` |
 | Admin UI | new `FormTemplates.tsx` or `FormsAndReviews.tsx`, `Sidebar.tsx`, `App.tsx` |
-| Fill UI | new `FormResponseFill.tsx` + registry `formQuestionRegistry.tsx` |
+| Fill UI | `FormResponseFill.tsx` + registry — **profile/cert surfaces only**, not admin builder |
 | State | extend `DataContext.tsx` or use fetch in components (match Goal Templates) |
 | Permissions | `shared/schema.ts` PERMISSION_FEATURES, seed in `server/routes.ts`, `PermissionsManager.tsx` labels |
 
 ### Out of scope (003A)
 
-- Mid-year profile card (003B)
+- Mid-year profile card (003B) — first user-facing fill entry point
+- Fill-for-employee from admin builder (B22)
 - Cert migration / dual-read (003B)
 - Conditionals (`show_when`) — Phase 3
 - Coach check-in replacement — Phase 3
@@ -264,11 +265,10 @@ No profile card required in 003A — can be a standalone test route or simple mo
 1. Admin creates template `Test Mid-Year` type `mid_year_review` with 2 sections, 5 questions mixing yes_no, free_text, single_select, date.
 2. Admin duplicates template → new id, same questions.
 3. Admin deactivates one question → hidden from new fill; old submitted sets still show snapshot.
-4. Admin fills for a scooper: save draft → reload → answers persist.
-5. Submit → status submitted; non-Admin cannot edit (403 or read-only).
-6. Shift Lead with `form_responses` view can read submitted answers; Guardian cannot (default).
-7. Admin enables Guardian `form_responses` View in Permissions → Guardian can view (if linked scooper).
-8. `npm run db:push` — additive only, no data-loss warnings ignored.
+4. Forms & Reviews has **no** scooper picker or “fill for employee” action (B22).
+5. `npm run db:push` — additive only, no data-loss warnings ignored.
+
+**Fill / submit / ACL** — acceptance in **PACKET-003B** (Reviews + Forms cards).
 
 ### Deploy
 
@@ -277,7 +277,7 @@ No profile card required in 003A — can be a standalone test route or simple mo
 ### Report back
 
 - Migration output
-- Screenshot or short Loom of Admin create + fill + submit
+- Screenshot or short Loom of Admin create template + view (no fill-from-builder UI)
 - List of any stubbed types
 - Permission seed confirmed in Permissions Manager
 
@@ -334,6 +334,7 @@ If 003A shipped a separate designer page, drag-and-drop palette, card grid, or w
 - Left sidebar question palette or drag-and-drop canvas
 - Multi-tab “Designer | Preview | Settings” chrome
 - A visual style that doesn’t reuse Goal Templates Tailwind classes
+- **Scooper picker / “Open for employee” / test fill** from the builder (B22) — remove if 003A added one
 
 ### Files
 
@@ -359,6 +360,7 @@ If 003A shipped a separate designer page, drag-and-drop palette, card grid, or w
 4. **Duplicate** → “(Copy)” in modal → saves as new row.
 5. **Archive** → confirm → hidden from Active filter; visible under Archived.
 6. No route exists that is a standalone full-page form designer.
+7. No UI in Forms & Reviews to pick an employee and fill a form (B22).
 
 ### Report back
 
