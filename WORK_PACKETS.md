@@ -366,6 +366,7 @@ Create `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `F
 |------|--------|
 | `client/src/components/FormTemplates.tsx` (or equivalent) | Refactor to mirror `GoalTemplates.tsx` structure |
 | `client/src/components/ui/AppSelect.tsx` | **New** — shared custom dropdown (B23) |
+| `client/src/components/GoalTemplates.tsx` | Replace duration native `<select>` with `AppSelect` |
 | `client/src/components/ui/Modal.tsx` | Reuse — do not replace |
 | `client/src/App.tsx` | Keep single list route; view mode is in-component state like goals |
 | Optional later | Extract shared `TemplateTable` / `TemplateViewHeader` — **not required** for this packet |

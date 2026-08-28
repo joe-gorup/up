@@ -112,12 +112,12 @@ form_answers
 | Edit | `Modal` xl + inline step list | `Modal` xl + inline question list (sections = headings) |
 | Actions | View / Edit / Duplicate / Archive icons | Same |
 
-**Do not ship:** drag-and-drop palette, full-page builder route, card-grid list, multi-tab designer, or **fill/open-for-employee from the builder** (B22).
+**Do not ship:** drag-and-drop palette, full-page builder route, card-grid list, multi-tab designer, **fill/open-for-employee from the builder** (B22), or **native `<select>`** dropdowns (B23).
 
 - Nav: **Forms & Reviews** (Admin only) — parallel to Goal Templates in sidebar
 - **No delete** if any `form_response_sets` exist (archive only)
 
-Detail: `FORM_ENGINE_SPEC.md` §5.1
+Detail: `FORM_ENGINE_SPEC.md` §5.1, §8 (`AppSelect`)
 
 ### 3.5 Employee / staff UX
 
