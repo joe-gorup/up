@@ -101,13 +101,23 @@ form_answers
 
 **Recommendation for v1:** Snapshot `{ question_id, prompt, question_type, value }` into `form_answers` (or a `answer_snapshot` jsonb). Slightly denormalized; safest for mid-year + certs.
 
-### 3.4 Admin UI (mirror Goal Templates)
+### 3.4 Admin UI — **must match Goal Templates** (locked B21)
 
-- Nav: **Forms & Reviews** (Admin only) — parallel to Goal Templates
-- List templates by type + status
-- Edit: sections + questions drag-reorder
-- Actions: Activate / Deactivate / Duplicate
-- **No delete** if any `form_response_sets` exist (or only archive)
+**Reference:** `GoalTemplates.tsx` — Forms & Reviews is a sibling screen, not a new product.
+
+| Screen | Goal Templates | Forms & Reviews |
+|--------|----------------|-----------------|
+| List | Search + status pills + table + Create | Same layout |
+| View | Full-page read-only + Edit/Duplicate/Archive | Same |
+| Edit | `Modal` xl + inline step list | `Modal` xl + inline question list (sections = headings) |
+| Actions | View / Edit / Duplicate / Archive icons | Same |
+
+**Do not ship:** drag-and-drop palette, full-page builder route, card-grid list, or a multi-tab designer.
+
+- Nav: **Forms & Reviews** (Admin only) — parallel to Goal Templates in sidebar
+- **No delete** if any `form_response_sets` exist (archive only)
+
+Detail: `FORM_ENGINE_SPEC.md` §5.1
 
 ### 3.5 Employee / staff UX
 

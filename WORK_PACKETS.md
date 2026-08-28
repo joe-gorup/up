@@ -13,10 +13,11 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 1 | PACKET-001 | ✅ **Done** (Joe, Aug 25) | ~1 hour |
 | 2 | PACKET-002 | ✅ **Done** (Joe, Aug 25) | ~half day |
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
-| **4** | **PACKET-003B** | **Ready — do next** | multi-day |
+| **3b** | **PACKET-003A-UX** | **Ready — align builder with Goal Templates** | ~half day |
+| **4** | **PACKET-003B** | **Ready — after 003A-UX** | multi-day |
 | 5 | PACKET-004 | After 003B | small |
 
-**Do next:** paste **PACKET-003B** into Replit.
+**Do next:** paste **PACKET-003A-UX** into Replit (quick UX alignment), then **PACKET-003B**.
 
 ---
 
@@ -218,13 +219,18 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
 
 ### Admin UI
 
+**UX parity (locked B21):** Must match **`GoalTemplates.tsx`** — see **PACKET-003A-UX** if the shipped 003A builder diverged.
+
 - **Sidebar:** new item **“Forms & Reviews”** — Administrator only (same pattern as Goal Templates link in `Sidebar.tsx` + route in `App.tsx`)
-- **List page:** templates filtered by status; search; Create / Duplicate / Archive
-- **Edit page:** template name, form_type, sections, questions list
-  - Add question → pick type → prompt, help, options (for selects), required flag
-  - Reorder sections/questions (up/down buttons fine — no drag required v1)
+- **List page:** same as Goal Templates — search, All/Active/Archived pills, white **table**, Create Template button
+- **View page:** full-page read-only detail (back button, info cards, question list like Goal Steps)
+- **Create/Edit:** **`Modal` `size="xl"`** — NOT a separate designer page
+  - Fields: template name, description, **form_type** (with helper text), settings as needed
+  - Questions: numbered bordered cards, Add Question / remove X (mirror Goal Steps)
+  - Sections: optional headings inside the same list — no separate section manager UI
+  - Reorder: up/down buttons fine — no drag palette
   - Deactivate question (status inactive) — do not hard-delete if answers exist
-- **Preview:** optional read-only preview of fill UI
+- **Table actions:** View (Eye) / Edit / Duplicate / Archive — same icons as Goal Templates
 
 ### Fill UI (minimal v1)
 
@@ -277,9 +283,93 @@ No profile card required in 003A — can be a standalone test route or simple mo
 
 ---
 
+## PACKET-003A-UX — Form builder parity with Goal Templates
+
+**Status:** Ready — do **before** PACKET-003B  
+**Priority:** High (product consistency)  
+**Prerequisite:** PACKET-003A ✅ done  
+**Effort:** ~half day
+
+### Goal
+
+Refactor the Forms & Reviews **admin builder** so it matches the **Goal Templates** experience (`GoalTemplates.tsx`). Admins should not learn a second UI pattern.
+
+### Problem
+
+If 003A shipped a separate designer page, drag-and-drop palette, card grid, or wizard, that is a **departure** from Goal Templates and must be replaced.
+
+### Required UX (copy from `GoalTemplates.tsx`)
+
+**1. List page (`FormsAndReviews.tsx` or `FormTemplates.tsx`)**
+- `p-3 sm:p-6 max-w-6xl mx-auto` container
+- Row: Search input (left icon) + **All / Active / Archived** filter pills + **Create Template** button (blue, Plus icon)
+- White `rounded-xl` **table** (not card grid):
+  - Columns: **Template** (name + description subtitle), **Type** (`form_type` label), **Questions** (count), **Status** (badge), **Actions**
+  - Actions: **Eye** (view), **Edit**, **Copy** (duplicate), **Archive** — same icon buttons + hover colors as Goal Templates
+
+**2. View mode (full page, not modal)**
+- Back (X) + template name header
+- Action bar: Edit, Duplicate, Archive (when active)
+- White cards: **Form Information** (description, form type, status) + **Questions (N)** list in bordered rows (like Goal Steps)
+
+**3. Create / Edit (Modal only)**
+- Use shared `Modal` component with `size="xl"` and title “Create New Template” / “Edit Template”
+- Top fields: name, description (textarea), **form_type** select + helper text under dropdown
+- **Questions** section header with **Add Question** link (blue, Plus) — mirror **Goal Steps** / **Add Step**
+- Each question in a `border rounded-xl p-4` card:
+  - Header: “Question N” + remove X (if more than one)
+  - Fields: question type select, prompt (textarea), help text, required checkbox
+  - Select types: inline options list (add/remove rows) — same density as step timer/required fields
+- Optional **sections**: render as a simple heading row in the scrollable list (`max-h-96 overflow-y-auto`) — not a second panel
+- Footer: Cancel + Create/Update Template (border-t, right-aligned)
+
+**4. Behavior parity**
+- Duplicate → opens modal with “(Copy)” name
+- Archive → `confirm()` dialog, same copy tone as goals
+- Default filter: **Active**
+- Administrator-only access denied screen (match Goal Templates)
+
+**5. Do NOT keep**
+- Full-page `/edit` route for templates
+- Left sidebar question palette or drag-and-drop canvas
+- Multi-tab “Designer | Preview | Settings” chrome
+- A visual style that doesn’t reuse Goal Templates Tailwind classes
+
+### Files
+
+| Area | Action |
+|------|--------|
+| `client/src/components/FormTemplates.tsx` (or equivalent) | Refactor to mirror `GoalTemplates.tsx` structure |
+| `client/src/components/ui/Modal.tsx` | Reuse — do not replace |
+| `client/src/App.tsx` | Keep single list route; view mode is in-component state like goals |
+| Optional later | Extract shared `TemplateTable` / `TemplateViewHeader` — **not required** for this packet |
+
+### Out of scope
+
+- Profile Reviews/Forms cards (003B)
+- Fill UI changes (unless preview is already in view mode)
+- New question types
+- Drag reorder (up/down buttons OK)
+
+### Acceptance tests
+
+1. Side-by-side screenshot: Goal Templates list and Forms & Reviews list — same layout rhythm (search, pills, table, create button).
+2. Create template in **modal** → add 3 questions → save → appears in table.
+3. **View** (Eye) → full-page read-only → **Edit** opens same modal.
+4. **Duplicate** → “(Copy)” in modal → saves as new row.
+5. **Archive** → confirm → hidden from Active filter; visible under Archived.
+6. No route exists that is a standalone full-page form designer.
+
+### Report back
+
+- Before/after screenshots (list + modal + view)
+- Confirm which 003A patterns were removed
+
+---
+
 ## PACKET-003B — Mid-year profile card + cert migration + seed
 
-**Status:** Ready — prerequisite PACKET-003A ✅ done  
+**Status:** Ready — prerequisite PACKET-003A ✅ done + **PACKET-003A-UX** recommended first  
 **Priority:** High  
 **Blocked by?** Mid-year question text — ✅ locked (`MIDYEAR_REVIEW_QUESTIONS.md`)
 

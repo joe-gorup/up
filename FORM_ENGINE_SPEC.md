@@ -226,6 +226,32 @@ The Admin **form type** dropdown sets `form_type` and determines where filled re
 
 Each type can also define **who can fill** in template `settings_json.allowed_fill_roles`.
 
+### Admin builder UX — Goal Templates parity (locked B21)
+
+**Reference implementation:** `client/src/components/GoalTemplates.tsx` — Forms & Reviews admin UI must feel like the same product screen, not a separate “form designer.”
+
+| Pattern | Goal Templates (`GoalTemplates.tsx`) | Forms & Reviews (required) |
+|---------|--------------------------------------|------------------------------|
+| List layout | Search bar + **All / Active / Archived** pills + **Create Template** | Same |
+| List body | White **table** card: name + subtitle, counts, status badge, icon actions | Table: name + description, **form type**, question count, status, actions |
+| View | **Full-page read-only** detail with back (X), white info cards, Edit / Duplicate / Archive | Same — show sections + questions in bordered cards (like Goal Steps) |
+| Create / Edit | **`Modal` `size="xl"`** — inline scrollable list of steps | **`Modal` `size="xl"`** — inline scrollable list of questions (grouped by section) |
+| Child rows | Numbered **Step N** cards, Add Step, remove X, fields inside card | Numbered **Question N** cards (or section heading + questions), Add Question, remove X |
+| Actions | Eye / Edit / Copy / Archive icon buttons in table | Same icons + behavior |
+| Archive | Confirm dialog; archived hidden from default filter | Same |
+| Duplicate | Opens create modal prefilled with “(Copy)” | Same |
+| Styling | `rounded-xl`, blue-600 primary, gray-50 table header, green active badge | **Reuse same classes** — do not introduce a new visual system |
+
+**Explicitly do NOT build:**
+- Dedicated `/form-templates/:id/edit` full-page builder or multi-step wizard
+- Drag-from-palette / canvas / left-rail “form designer”
+- Card-grid template list instead of table
+- Tabs like “Build | Preview | Settings” — optional read-only preview only, same as Goal Templates view mode
+
+**Sections in the modal:** Goal Templates use a flat step list. For forms, render sections as **lightweight headings** inside the same scrollable list (e.g. “Section: Job Skills” divider, then question cards). Avoid a separate sections management UI unless it matches the simplicity of “Add Step.”
+
+**`form_type` dropdown:** Lives in the create/edit modal (top fields, beside name/description) with helper text from §5 — not a separate screen.
+
 ---
 
 ## 6. Migration matrix
@@ -326,7 +352,8 @@ Enforce via centralized `canAccessScooper` + template `settings_json.allowed_fil
 
 ## 10. What we are explicitly NOT building in v1
 
-- Visual form builder drag-from-palette (list + reorder is enough; match Goal Templates UX)
+- Visual form builder drag-from-palette (list + reorder in Modal is enough; **must match Goal Templates UX** — see §5.1 / B21)
+- Dedicated full-page form designer or wizard separate from Goal Templates patterns
 - Cross-form analytics dashboard
 - Public/anonymous forms
 - PDF export of responses

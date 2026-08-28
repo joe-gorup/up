@@ -56,6 +56,7 @@
 | B18 | Per-template fill roles configurable? | **Yes** — `settings_json.allowed_fill_roles` |
 | B19 | Permission feature for form/review answers | **Add `form_responses`** to `PERMISSION_FEATURES` — View (and optionally Modify for fill). Default: staff roles View **on**; Guardian + Job Coach View **off**. Admin toggles per role in Permissions Manager |
 | B20 | Custom form profile placement | ✅ **Locked (Joe, Aug 28):** **`form_type = custom`** → dedicated **Forms** card on Super Scooper profiles (separate from Reviews card). Builder dropdown routes each type to the correct profile area. |
+| B21 | Form builder admin UX | ✅ **Locked (Joe, Aug 28):** **Must match Goal Templates UX** — same list page, table, view page, and **xl Modal** create/edit flow. **No** separate designer page, drag-and-drop palette, or wizard. See `FORM_ENGINE_SPEC.md` §4 and **PACKET-003A-UX**. |
 
 ---
 
@@ -132,13 +133,14 @@
 1. PACKET-001  T1 manager visibility
 2. PACKET-002  T2 accommodations
 3. PACKET-003A Form engine Phase 1 (schema, Admin CRUD, core types)
-4. PACKET-003B Phase 2 — mid-year card + cert migration + seed scripts
-5. PACKET-004  T4 seed mid-year template (needs F1 Google Doc)
-6. PACKET-003C Phase 3 — conditionals + coach check-in migration
-7. PACKET-005  T5 notes aggregator + timeline guardian notes
-8. PACKET-006  T6 invites + permission enforcement
-9. PACKET-003D Phase 4 — signature, file, rich text, ROI subset
-10. PACKET-007 Phase 5 — profile catalog + option_lists
+4. PACKET-003A-UX Form builder UX parity with Goal Templates (do before or with 003B)
+5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts
+6. PACKET-004  T4 seed mid-year template (needs F1 Google Doc)
+7. PACKET-003C Phase 3 — conditionals + coach check-in migration
+8. PACKET-005  T5 notes aggregator + timeline guardian notes
+9. PACKET-006  T6 invites + permission enforcement
+10. PACKET-003D Phase 4 — signature, file, rich text, ROI subset
+11. PACKET-007 Phase 5 — profile catalog + option_lists
 ```
 
 ---
@@ -169,4 +171,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-28 | B20 locked — custom forms get dedicated Forms card; **003B next** |
+| Architect | Cursor | 2026-08-28 | B20–B21 locked — Forms card + Goal Templates UX parity |
