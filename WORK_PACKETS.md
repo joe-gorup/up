@@ -198,7 +198,7 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
 | `free_text` | Single-line input |
 | `long_text` | Textarea |
 | `yes_no` | Yes / No toggle or buttons |
-| `single_select` | Dropdown + chip style via `config_json.display.style` |
+| `single_select` | Dropdown + chip style via `config_json.display.style` — dropdown mode uses **`AppSelect`** (B23), not `<select>` |
 | `multi_select` | Checkbox list |
 | `date` | `<input type="date">` |
 | `date_time` | datetime-local or date + time pair |
@@ -292,11 +292,35 @@ Start by centralizing logic already scattered in routes (coach_assignments, guar
 
 ### Goal
 
-Refactor the Forms & Reviews **admin builder** so it matches the **Goal Templates** experience (`GoalTemplates.tsx`). Admins should not learn a second UI pattern.
+Refactor the Forms & Reviews **admin builder** so it matches the **Goal Templates** experience (`GoalTemplates.tsx`). Admins should not learn a second UI pattern. Introduce shared **`AppSelect`** for all dropdowns (B23) so menus look identical on every OS.
 
 ### Problem
 
-If 003A shipped a separate designer page, drag-and-drop palette, card grid, or wizard, that is a **departure** from Goal Templates and must be replaced.
+If 003A shipped a separate designer page, drag-and-drop palette, card grid, wizard, or **native `<select>`** dropdowns, that is a **departure** from product standards and must be replaced.
+
+### AppSelect component (B23 — do first in this packet)
+
+Create `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `FormInput.tsx` to use custom panel internally).
+
+**API (suggested):**
+```tsx
+<AppSelect
+  label="Form type"
+  value={formType}
+  onChange={setFormType}
+  options={[{ value: 'custom', label: 'Custom form' }, ...]}
+  helpText="Controls where this template appears on profiles."
+/>
+```
+
+**Visual:** Trigger matches `INPUT_BASE_CLASSES`; chevron right; white `rounded-xl` option panel with hover/selected states — see `FORM_ENGINE_SPEC.md` §8.
+
+**Replace in this packet:**
+- Forms & Reviews builder: `form_type`, question type, any enum field
+- `GoalTemplates.tsx`: duration unit dropdown (so Goal Templates and Forms match)
+- Form fill `single_select` renderer if already built — use `AppSelect` for `display.style = dropdown`
+
+**Do not use** native `<select>` in new or refactored code.
 
 ### Required UX (copy from `GoalTemplates.tsx`)
 
@@ -314,11 +338,11 @@ If 003A shipped a separate designer page, drag-and-drop palette, card grid, or w
 
 **3. Create / Edit (Modal only)**
 - Use shared `Modal` component with `size="xl"` and title “Create New Template” / “Edit Template”
-- Top fields: name, description (textarea), **form_type** select + helper text under dropdown
+- Top fields: name, description (textarea), **form_type** `AppSelect` + helper text
 - **Questions** section header with **Add Question** link (blue, Plus) — mirror **Goal Steps** / **Add Step**
 - Each question in a `border rounded-xl p-4` card:
   - Header: “Question N” + remove X (if more than one)
-  - Fields: question type select, prompt (textarea), help text, required checkbox
+  - Fields: question type `AppSelect`, prompt (textarea), help text, required checkbox
   - Select types: inline options list (add/remove rows) — same density as step timer/required fields
 - Optional **sections**: render as a simple heading row in the scrollable list (`max-h-96 overflow-y-auto`) — not a second panel
 - Footer: Cancel + Create/Update Template (border-t, right-aligned)
@@ -341,6 +365,7 @@ If 003A shipped a separate designer page, drag-and-drop palette, card grid, or w
 | Area | Action |
 |------|--------|
 | `client/src/components/FormTemplates.tsx` (or equivalent) | Refactor to mirror `GoalTemplates.tsx` structure |
+| `client/src/components/ui/AppSelect.tsx` | **New** — shared custom dropdown (B23) |
 | `client/src/components/ui/Modal.tsx` | Reuse — do not replace |
 | `client/src/App.tsx` | Keep single list route; view mode is in-component state like goals |
 | Optional later | Extract shared `TemplateTable` / `TemplateViewHeader` — **not required** for this packet |
@@ -361,6 +386,7 @@ If 003A shipped a separate designer page, drag-and-drop palette, card grid, or w
 5. **Archive** → confirm → hidden from Active filter; visible under Archived.
 6. No route exists that is a standalone full-page form designer.
 7. No UI in Forms & Reviews to pick an employee and fill a form (B22).
+8. All dropdowns use **`AppSelect`** — screenshot on Windows and Mac (or browser devtools) shows identical open menu styling, not OS-native select chrome (B23).
 
 ### Report back
 
@@ -416,7 +442,7 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 **Behavior**
 - List response sets for this scooper for `form_type = mid_year_review` (and later other review types).
 - Actions: **Start** (creates draft for cycle), **Continue draft**, **View submitted**.
-- Fill UI: reuse `FormResponseFill` / question registry from 003A.
+- Fill UI: reuse `FormResponseFill` / question registry from 003A; `single_select` dropdown mode uses **`AppSelect`** (B23).
 - ACL: fill = Admin + Shift Lead (or template settings); view = `form_responses` permission (Guardian/Job Coach off by default).
 - After submit: read-only except Admin edit (per DESIGN_DECISIONS B7).
 
@@ -429,7 +455,7 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 **Behavior**
 - List **active** templates where `form_type = custom`.
 - For each template (or grouped list): show response sets for this scooper — **Start**, **Continue draft**, **View submitted**.
-- Fill UI: reuse `FormResponseFill` / question registry from 003A.
+- Fill UI: reuse `FormResponseFill` / question registry from 003A; `single_select` dropdown mode uses **`AppSelect`** (B23).
 - ACL: same as Reviews — fill per template `allowed_fill_roles`; view via `form_responses` permission.
 - After submit: read-only except Admin edit (DESIGN_DECISIONS B7).
 

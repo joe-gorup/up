@@ -70,6 +70,7 @@ This application has real production data in use since September 2025. Every cha
 - Use `@tanstack/react-query` for data fetching; use `apiRequest` from `lib/queryClient` for mutations
 - Follow existing component patterns: rounded-xl borders, blue-600 primary buttons, gray-100 backgrounds
 - Mobile responsive: test at 375px width minimum
+- **Dropdowns (B23):** Use shared **`AppSelect`** (`client/src/components/ui/AppSelect.tsx`) — **not** native `<select>`. OS-native select menus look different on Windows, Mac, and mobile. Use `INPUT_BASE_CLASSES` on the trigger; custom white panel for options. Applies to form builder, form fill, Goal Templates, and all new enum pickers.
 
 ### 4. File Organization
 - API routes go in `server/routes.ts`

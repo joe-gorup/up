@@ -57,7 +57,7 @@
 | `long_text` | Long text | `{ "text": "..." }` | Textarea; multiline flag |
 | `rich_text` | Rich text | `{ "html": "..." }` | TipTap JSON or HTML; coach notes pattern |
 | `yes_no` | Yes / No | `{ "bool": true \| false \| null }` | Null = unanswered |
-| `single_select` | Single choice | `{ "selected": "option_key" }` | Dropdown or chips (display config) |
+| `single_select` | Single choice | `{ "selected": "option_key" }` | **`AppSelect`** (default), chips, or radio — all custom UI; **no native `<select>`** (B23) |
 | `multi_select` | Multiple choice | `{ "selected": ["key", ...] }` | Checkboxes or multi dropdown |
 | `date` | Date | `{ "date": "YYYY-MM-DD" }` | ISO date |
 | `date_time` | Date & time | `{ "datetime": "ISO-8601" }` | **New to app** |
@@ -104,6 +104,8 @@
   "default_value": null
 }
 ```
+
+**`display.style: "dropdown"`** must render with shared **`AppSelect`** (B23) — never native `<select>`, which looks different per OS/browser.
 
 ---
 
@@ -254,6 +256,8 @@ Each type can also define **who can fill** in template `settings_json.allowed_fi
 
 **No fill from builder (locked B22):** Forms & Reviews is **template management only** — same as Goal Templates (you don’t assign/fill goals from that screen). Do **not** add scooper picker, “Start response,” test fill route, or “Open for employee” actions in the admin builder. Filling happens only from the routed surface (profile Reviews/Forms cards, cert flow, etc.).
 
+**Dropdowns (locked B23):** All builder selects (`form_type`, question type, etc.) use **`AppSelect`** — not `<select>`. Deprecate `SelectInput` wrapping native select for new work.
+
 ---
 
 ## 6. Migration matrix
@@ -318,11 +322,36 @@ One React registry maps `question_type` → component:
 
 ```text
 FreeTextInput, LongTextInput, RichTextEditor, YesNoToggle,
-SingleSelectDropdown, SingleSelectChips, MultiSelect,
+AppSelect, SingleSelectChips, MultiSelect,
 DatePicker, DateTimePicker, TimePicker, NumberInput,
 ScaleInput, EmailInput, PhoneInput, SignaturePad,
 FileUploadField, RepeatableGroup, SectionHeader, HelpText
 ```
+
+### Shared `AppSelect` (B23 — all dropdowns)
+
+**Problem:** Native `<select>` menus are rendered by the OS — different on Windows, macOS, iOS, Android. Styled borders on the closed control do not fix the open menu.
+
+**Rule:** One shared component: `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `FormInput.tsx` to use this internally).
+
+| Requirement | Detail |
+|-------------|--------|
+| Trigger | Same height/padding/radius as `INPUT_BASE_CLASSES` from `FormInput.tsx` |
+| Chevron | `ChevronDown` from lucide-react on the right |
+| Panel | White `rounded-xl` list, `border border-gray-200 shadow-lg`, max-height scroll |
+| Option row | `px-4 py-2.5 hover:bg-gray-50`; selected = `bg-blue-50 text-blue-700` |
+| Keyboard | Arrow keys, Enter, Escape; click outside closes |
+| A11y | `role="listbox"` / `role="option"` or Radix `@radix-ui/react-select` if added |
+
+**Use `AppSelect` in:**
+- Forms & Reviews builder (`form_type`, question type, any enum)
+- Form fill `single_select` when `display.style = dropdown`
+- Goal Templates duration unit (replace native select in `GoalTemplates.tsx`)
+- New dropdowns anywhere in the app
+
+**OK without AppSelect:** `chips`, `radio`, `checkbox_list`, `yes_no` toggles — already custom UI.
+
+**Migration:** Replace native `<select>` when touching a screen; **required** for all form-engine UI in 003A-UX / 003B.
 
 Admin **view** mode shows question structure (read-only, like Goal Template view). **Fill** uses the same question registry in profile cards / cert / check-in flows — not in the builder.
 
@@ -357,6 +386,7 @@ Enforce via centralized `canAccessScooper` + template `settings_json.allowed_fil
 - Visual form builder drag-from-palette (list + reorder in Modal is enough; **must match Goal Templates UX** — see §5.1 / B21)
 - Dedicated full-page form designer or wizard separate from Goal Templates patterns
 - **Fill / open form for an employee from the admin builder** (scooper picker, test fill route) — B22
+- Native `<select>` for dropdown menus (B23) — use `AppSelect`
 - Cross-form analytics dashboard
 - Public/anonymous forms
 - PDF export of responses

@@ -58,6 +58,7 @@
 | B20 | Custom form profile placement | ✅ **Locked (Joe, Aug 28):** **`form_type = custom`** → dedicated **Forms** card on Super Scooper profiles (separate from Reviews card). Builder dropdown routes each type to the correct profile area. |
 | B21 | Form builder admin UX | ✅ **Locked (Joe, Aug 28):** **Must match Goal Templates UX** — same list page, table, view page, and **xl Modal** create/edit flow. **No** separate designer page, drag-and-drop palette, or wizard. See `FORM_ENGINE_SPEC.md` §5.1 and **PACKET-003A-UX**. |
 | B22 | Fill from form builder | ✅ **Locked (Joe, Aug 28):** **No** — Admin does **not** open or fill a form for an employee from Forms & Reviews. Template management only (list / view / edit / duplicate / archive). **Fill entry points:** Super Scooper profile cards (Reviews, Forms), cert flow, check-ins, onboarding — per `form_type`. |
+| B23 | Dropdown UI consistency | ✅ **Locked (Joe, Aug 28):** **No native `<select>`** for user-facing dropdowns — OS renders those menus differently (Windows vs Mac vs mobile). Use shared **`AppSelect`** (`client/src/components/ui/AppSelect.tsx`) everywhere: form builder fields, form fill `single_select`, Goal Templates, permissions, profile enums. Match `INPUT_BASE_CLASSES` trigger + custom option panel. |
 
 ---
 
@@ -126,6 +127,7 @@
 - Cross-form analytics dashboard
 - Visual drag-from-palette form builder
 - **Open / fill a form for an employee from the Forms & Reviews admin builder** (B22)
+- Native `<select>` for new dropdown UI (B23) — use `AppSelect` instead
 
 ---
 
@@ -173,4 +175,4 @@
 | Product | | | |
 | Admin user | | | |
 | Dev (Replit) | Joe | | |
-| Architect | Cursor | 2026-08-28 | B20–B22 locked — Forms card, Goal Templates UX parity, no fill from builder |
+| Architect | Cursor | 2026-08-28 | B20–B23 locked — Forms card, builder UX, no fill from builder, AppSelect dropdowns |
