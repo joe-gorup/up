@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  Archive, ArrowDown, ArrowLeft, ArrowUp, Check, ClipboardCheck, Copy,
+  Archive, ArrowDown, ArrowLeft, ArrowUp, Check, ClipboardCheck, Copy, Edit, Eye,
   FileText, GripVertical, Plus, Save, Send, Settings2, Trash2, X,
 } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
-import { useData, type Employee } from '../contexts/DataContext';
+import { type Employee } from '../contexts/DataContext';
 import { useToast } from '../hooks/use-toast';
+import AppSelect from './ui/AppSelect';
+import Modal from './ui/Modal';
 
 type QuestionType =
   | 'free_text' | 'long_text' | 'yes_no' | 'single_select' | 'multi_select'
@@ -98,13 +100,12 @@ function QuestionEditor({ question, onChange, onRemove, onMove }: {
               placeholder="Write the question prompt…"
               className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100"
             />
-            <select
+            <AppSelect
               value={question.question_type}
-              onChange={e => onChange({ ...question, question_type: e.target.value as QuestionType })}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"
-            >
-              {questionTypes.map(type => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </select>
+              onChange={value => onChange({ ...question, question_type: value as QuestionType })}
+              options={questionTypes.map(type => ({ value: type.value, label: type.label }))}
+              aria-label="Question type"
+            />
           </div>
           <input
             value={question.help_text || ''}
@@ -122,14 +123,15 @@ function QuestionEditor({ question, onChange, onRemove, onMove }: {
             />
           )}
           {question.question_type === 'single_select' && (
-            <select
+            <AppSelect
               value={config.display?.style || 'dropdown'}
-              onChange={e => updateConfig({ display: { ...(config.display || {}), style: e.target.value } })}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500"
-            >
-              <option value="dropdown">Dropdown style</option>
-              <option value="chips">Chip style</option>
-            </select>
+              onChange={value => updateConfig({ display: { ...(config.display || {}), style: value } })}
+              options={[
+                { value: 'dropdown', label: 'Dropdown style' },
+                { value: 'chips', label: 'Chip style' },
+              ]}
+              aria-label="Single select display style"
+            />
           )}
           <label className="inline-flex items-center gap-2 text-sm text-slate-600">
             <input type="checkbox" checked={Boolean(config.required)} onChange={e => updateConfig({ required: e.target.checked })} className="h-4 w-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500" />
@@ -243,8 +245,8 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
   const visibleQuestions = sectionQuestions(sections[activeSection]);
 
   return (
-    <div className="min-h-full bg-[#f7f7f5] p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl">
+    <div className="space-y-5">
+      <div>
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <button onClick={onClose} className="rounded-xl border border-slate-200 bg-white p-2 text-slate-600 hover:bg-slate-50"><ArrowLeft className="h-5 w-5" /></button>
@@ -262,10 +264,31 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
               <div className="space-y-3">
                 <input value={draft.name || ''} onChange={e => setDraft(prev => ({ ...prev, name: e.target.value }))} placeholder="Form name" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
                 <textarea value={draft.description || ''} onChange={e => setDraft(prev => ({ ...prev, description: e.target.value }))} placeholder="What is this form for?" rows={3} className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
-                <select value={draft.form_type || 'custom'} onChange={e => setDraft(prev => ({ ...prev, form_type: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                  <option value="custom">Custom form</option><option value="review">Employee review</option><option value="check_in">Check-in</option><option value="certification">Certification</option>
-                </select>
-                <select value={draft.status || 'active'} onChange={e => setDraft(prev => ({ ...prev, status: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="active">Active</option><option value="archived">Archived</option></select>
+                <AppSelect
+                  value={draft.form_type || 'custom'}
+                  onChange={value => setDraft(prev => ({ ...prev, form_type: value }))}
+                  options={[
+                    { value: 'mid_year_review', label: 'Mid-Year Review' },
+                    { value: 'annual_review', label: 'Annual Review' },
+                    { value: 'mentor_certification', label: 'Mentor Certification' },
+                    { value: 'shift_lead_certification', label: 'Shift Lead Certification' },
+                    { value: 'coach_checkin', label: 'Coach Check-in' },
+                    { value: 'roi_onboarding', label: 'ROI Onboarding' },
+                    { value: 'employee_intake', label: 'Employee Intake' },
+                    { value: 'custom', label: 'Custom form' },
+                  ]}
+                  aria-label="Form type"
+                />
+                <AppSelect
+                  value={draft.status || 'active'}
+                  onChange={value => setDraft(prev => ({ ...prev, status: value }))}
+                  options={[
+                    { value: 'active', label: 'Active' },
+                    { value: 'inactive', label: 'Inactive' },
+                    { value: 'archived', label: 'Archived' },
+                  ]}
+                  aria-label="Form status"
+                />
                 <div className="border-t border-slate-100 pt-3">
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Who can fill this form</p>
                   <div className="space-y-2">
@@ -336,7 +359,17 @@ function AnswerControl({ question, value, onChange }: { question: FormQuestion; 
       </div>
     );
   }
-  if (question.question_type === 'single_select' && config.display?.style !== 'chips') return <select value={value || ''} onChange={e => onChange(e.target.value)} className={inputClass}><option value="">Choose an option…</option>{options.map((option: string) => <option key={option} value={option}>{option}</option>)}</select>;
+  if (question.question_type === 'single_select' && config.display?.style !== 'chips') {
+    return (
+      <AppSelect
+        value={value || ''}
+        onChange={onChange}
+        options={options.map((option: string) => ({ value: option, label: option }))}
+        placeholder="Choose an option…"
+        aria-label={question.prompt || 'Choose an option'}
+      />
+    );
+  }
   if (question.question_type === 'single_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => <button key={option} onClick={() => onChange(option)} className={`rounded-xl border px-3 py-2 text-left text-sm ${value === option ? 'border-amber-500 bg-amber-50 font-semibold text-amber-900' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{option}</button>)}</div>;
   if (question.question_type === 'multi_select') return <div className="grid gap-2 sm:grid-cols-2">{options.map((option: string) => { const selected = Array.isArray(value) && value.includes(option); return <label key={option} className={`flex cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-sm ${selected ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-slate-200 text-slate-600'}`}><input type="checkbox" checked={selected} onChange={() => onChange(selected ? value.filter((item: string) => item !== option) : [...(value || []), option])} className="h-4 w-4 text-amber-600 focus:ring-amber-500" />{option}</label>; })}</div>;
   return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">This question type is registered and will be available in a future phase.</div>;
@@ -409,73 +442,204 @@ export function FormFiller({ response, employee, onClose, onComplete }: { respon
   );
 }
 
-export default function FormsAndReviews() {
-  const { user } = useAuth();
-  const { employees } = useData();
-  const { toast } = useToast();
-  const [templates, setTemplates] = useState<FormTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState('active');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [builder, setBuilder] = useState<{ open: boolean; template?: FormTemplate }>({ open: false });
-  const [filler, setFiller] = useState<{ response: ResponseSet; employee: Employee } | null>(null);
-  const [selectedEmployee, setSelectedEmployee] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState('');
-  const [cycleLabel, setCycleLabel] = useState('');
+function FormTemplateView({
+   template,
+   onBack,
+   onEdit,
+   onDuplicate,
+   onArchive,
+ }: {
+   template: FormTemplate;
+   onBack: () => void;
+   onEdit: () => void;
+   onDuplicate: () => void;
+   onArchive: () => void;
+ }) {
+   const questions = normalizeQuestions(template);
+   const typeLabel = (type: QuestionType) => questionTypes.find(item => item.value === type)?.label || type;
 
-  const loadTemplates = async () => {
-    setLoading(true);
-    try {
-      const response = await apiRequest('/api/form-templates');
-      if (!response.ok) throw new Error('Unable to load templates');
-      setTemplates(await response.json());
-    } catch (error) {
-      toast({ title: 'Could not load forms', description: error instanceof Error ? error.message : 'Please refresh and try again.', type: 'error' });
-    } finally { setLoading(false); }
-  };
-  useEffect(() => { loadTemplates(); }, []);
-  const visibleTemplates = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    return templates.filter(template => {
-      const matchesStatus = statusFilter === 'all' || template.status === statusFilter;
-      const matchesSearch = !query || template.name.toLowerCase().includes(query) || (template.description || '').toLowerCase().includes(query);
-      return matchesStatus && matchesSearch;
-    });
-  }, [templates, statusFilter, searchTerm]);
-  const startForm = async () => {
-    const employee = employees.find(item => item.id === selectedEmployee);
-    if (!employee || !selectedTemplate) return;
-    try {
-      const response = await apiRequest('/api/form-responses', { method: 'POST', body: JSON.stringify({ template_id: selectedTemplate, employee_id: employee.id, cycle_label: cycleLabel || undefined }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Unable to start form');
-      setFiller({ response: data, employee });
-    } catch (error) {
-      toast({ title: 'Could not start form', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
-    }
-  };
-  const duplicate = async (template: FormTemplate) => {
-    const response = await apiRequest(`/api/form-templates/${template.id}/duplicate`, { method: 'POST' });
-    if (!response.ok) return toast({ title: 'Could not duplicate form', type: 'error' });
-    await loadTemplates();
-    toast({ title: 'Form duplicated', description: 'A new active copy was created.', type: 'success' });
-  };
-  const archive = async (template: FormTemplate) => {
-    if (!confirm(`Archive "${template.name}"? Existing responses will remain available.`)) return;
-    const response = await apiRequest(`/api/form-templates/${template.id}`, { method: 'DELETE' });
-    if (response.ok) { await loadTemplates(); toast({ title: 'Form archived', type: 'success' }); }
-  };
-  if (filler) return <FormFiller response={filler.response} employee={filler.employee} onClose={() => setFiller(null)} onComplete={() => { setFiller(null); }} />;
-  if (builder.open) return <FormBuilder initial={builder.template} onClose={() => setBuilder({ open: false })} onSaved={() => { setBuilder({ open: false }); loadTemplates(); }} />;
-  if (user?.role !== 'Administrator') return <div className="p-6"><div className="mx-auto max-w-lg rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><X className="mx-auto mb-3 h-10 w-10 text-red-400" /><h2 className="font-semibold text-red-900">Administrator access required</h2><p className="mt-1 text-sm text-red-700">Forms & Reviews templates are managed by Administrators.</p></div></div>;
-  return (
-    <div className="min-h-full bg-[#f7f7f5] p-4 sm:p-6">
-      <div className="mx-auto max-w-6xl">
-        <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between"><div><div className="mb-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><ClipboardCheck className="h-3.5 w-3.5" />Structured documentation</div><h2 className="text-3xl font-semibold tracking-tight text-slate-900">Forms & Reviews</h2><p className="mt-1 max-w-2xl text-sm text-slate-500">Build reusable review and check-in templates, then capture locked responses for each Super Scooper.</p></div><button onClick={() => setBuilder({ open: true })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"><Plus className="h-4 w-4" />New form template</button></div>
-        <div className="mb-5 grid gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm lg:grid-cols-[1fr_1fr_1fr_auto]"><div><label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Start a response</label><select value={selectedTemplate} onChange={e => setSelectedTemplate(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Choose a form…</option>{templates.filter(template => template.status === 'active').map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></div><div><label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Super Scooper</label><select value={selectedEmployee} onChange={e => setSelectedEmployee(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="">Choose an employee…</option>{employees.filter(employee => employee.isActive).map(employee => <option key={employee.id} value={employee.id}>{employee.first_name} {employee.last_name}</option>)}</select></div><div><label className="mb-1 block text-xs font-semibold uppercase tracking-wider text-slate-500">Cycle (optional)</label><input value={cycleLabel} onChange={e => setCycleLabel(e.target.value)} placeholder="e.g. Q3 2026" className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" /></div><button onClick={startForm} disabled={!selectedTemplate || !selectedEmployee} className="self-end rounded-xl bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600 disabled:cursor-not-allowed disabled:opacity-50">Open form</button></div>
-        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h3 className="font-semibold text-slate-900">Template library</h3><p className="text-sm text-slate-500">{visibleTemplates.length} {visibleTemplates.length === 1 ? 'template' : 'templates'}</p></div><div className="flex flex-col gap-2 sm:flex-row"><input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search templates…" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" /><select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="active">Active templates</option><option value="archived">Archived templates</option><option value="all">All templates</option></select></div></div>
-        {loading ? <div className="py-16 text-center text-sm text-slate-500">Loading templates…</div> : visibleTemplates.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center"><FileText className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-semibold text-slate-800">No templates here yet</h3><p className="mt-1 text-sm text-slate-500">Create a reusable form to start documenting reviews and check-ins.</p></div> : <div className="grid gap-4 md:grid-cols-2">{visibleTemplates.map(template => <article key={template.id} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"><div className="mb-4 flex items-start justify-between gap-3"><div className="flex min-w-0 gap-3"><div className="rounded-xl bg-amber-50 p-2.5 text-amber-700"><FileText className="h-5 w-5" /></div><div className="min-w-0"><h3 className="truncate font-semibold text-slate-900">{template.name}</h3><p className="mt-1 text-xs font-medium uppercase tracking-wider text-slate-400">{template.form_type.replace('_', ' ')} · v{template.version}</p></div></div><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${template.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{template.status}</span></div><p className="mb-4 min-h-[40px] text-sm text-slate-500">{template.description || 'No description added.'}</p><div className="mb-5 flex gap-4 text-xs text-slate-500"><span>{template.sections.length} sections</span><span>{normalizeQuestions(template).filter(question => question.status !== 'inactive').length} questions</span></div><div className="flex flex-wrap gap-2 border-t border-slate-100 pt-4"><button onClick={() => setBuilder({ open: true, template })} className="rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">Edit</button><button onClick={() => duplicate(template)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Copy className="h-3.5 w-3.5" />Duplicate</button>{template.status === 'active' && <button onClick={() => archive(template)} className="inline-flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-red-50 hover:text-red-700"><Archive className="h-3.5 w-3.5" />Archive</button>}</div></article>)}</div>}
-      </div>
-    </div>
-  );
-}
+   return (
+     <div className="min-h-full bg-[#f7f7f5] p-4 sm:p-6">
+       <div className="mx-auto max-w-5xl">
+         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+           <div className="flex items-center gap-3">
+             <button type="button" onClick={onBack} className="rounded-xl p-2 text-slate-600 transition-colors hover:bg-white" aria-label="Back to Forms & Reviews">
+               <ArrowLeft className="h-5 w-5" />
+             </button>
+             <div>
+               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-amber-700">Template details</p>
+               <h1 className="text-3xl font-semibold tracking-tight text-slate-900">{template.name}</h1>
+               <p className="mt-1 text-sm text-slate-500">{template.description || 'No description added.'}</p>
+             </div>
+           </div>
+           <div className="flex flex-wrap gap-2">
+             <button type="button" onClick={onEdit} className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"><Edit className="h-4 w-4" />Edit</button>
+             <button type="button" onClick={onDuplicate} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"><Copy className="h-4 w-4" />Duplicate</button>
+             {template.status === 'active' && <button type="button" onClick={onArchive} className="inline-flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 hover:bg-amber-100"><Archive className="h-4 w-4" />Archive</button>}
+           </div>
+         </div>
+
+         <div className="mb-5 grid gap-4 sm:grid-cols-3">
+           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Form type</p><p className="mt-1 font-semibold capitalize text-slate-900">{template.form_type.replaceAll('_', ' ')}</p></div>
+           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Version</p><p className="mt-1 font-semibold text-slate-900">v{template.version}</p></div>
+           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Status</p><p className="mt-1 font-semibold capitalize text-slate-900">{template.status}</p></div>
+         </div>
+
+         <div className="space-y-4">
+           {template.sections.map(section => (
+             <section key={section.id || section.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
+               <div className="mb-4 flex items-center justify-between border-b border-slate-100 pb-3">
+                 <h2 className="text-lg font-semibold text-slate-900">{section.title}</h2>
+                 <span className="text-xs font-medium text-slate-400">{questions.filter(question => (question.section_id || null) === section.id).length} questions</span>
+               </div>
+               <div className="space-y-3">
+                 {questions.filter(question => (question.section_id || null) === section.id).map(question => (
+                   <div key={question.id || question.stable_key} className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                       <div><p className="font-medium text-slate-900">{question.prompt || 'Untitled question'}</p>{question.help_text && <p className="mt-1 text-sm text-slate-500">{question.help_text}</p>}</div>
+                       <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-500"><Eye className="h-3.5 w-3.5" />{typeLabel(question.question_type)}{question.config_json?.required ? ' · Required' : ''}</span>
+                     </div>
+                     {Array.isArray(question.config_json?.options) && question.config_json.options.length > 0 && <p className="mt-3 text-xs text-slate-500">Options: {question.config_json.options.join(', ')}</p>}
+                   </div>
+                 ))}
+               </div>
+             </section>
+           ))}
+         </div>
+       </div>
+     </div>
+   );
+ }
+
+ export default function FormsAndReviews() {
+   const { user } = useAuth();
+   const { toast } = useToast();
+   const [templates, setTemplates] = useState<FormTemplate[]>([]);
+   const [loading, setLoading] = useState(true);
+   const [statusFilter, setStatusFilter] = useState('active');
+   const [searchTerm, setSearchTerm] = useState('');
+   const [builder, setBuilder] = useState<{ open: boolean; template?: FormTemplate }>({ open: false });
+   const [viewingTemplate, setViewingTemplate] = useState<FormTemplate | null>(null);
+
+   const loadTemplates = async () => {
+     setLoading(true);
+     try {
+       const response = await apiRequest('/api/form-templates');
+       if (!response.ok) throw new Error('Unable to load forms');
+       setTemplates(await response.json());
+     } catch (error) {
+       toast({ title: 'Could not load forms', description: error instanceof Error ? error.message : 'Please refresh and try again.', type: 'error' });
+     } finally {
+       setLoading(false);
+     }
+   };
+
+   useEffect(() => { loadTemplates(); }, []);
+
+   const visibleTemplates = useMemo(() => {
+     const query = searchTerm.trim().toLowerCase();
+     return templates
+       .filter(template => (statusFilter === 'all' || template.status === statusFilter)
+         && (!query || template.name.toLowerCase().includes(query) || (template.description || '').toLowerCase().includes(query)))
+       .sort((a, b) => a.name.localeCompare(b.name));
+   }, [templates, statusFilter, searchTerm]);
+
+   const duplicate = async (template: FormTemplate) => {
+     const response = await apiRequest(`/api/form-templates/${template.id}/duplicate`, { method: 'POST' });
+     if (!response.ok) return toast({ title: 'Could not duplicate form', type: 'error' });
+     await loadTemplates();
+     toast({ title: 'Form duplicated', description: 'A new active copy was created.', type: 'success' });
+   };
+
+   const archive = async (template: FormTemplate) => {
+     if (!confirm(`Archive "${template.name}"? Existing responses will remain available.`)) return;
+     const response = await apiRequest(`/api/form-templates/${template.id}`, { method: 'DELETE' });
+     if (response.ok) {
+       setViewingTemplate(null);
+       await loadTemplates();
+       toast({ title: 'Form archived', type: 'success' });
+     }
+   };
+
+   if (user?.role !== 'Administrator') {
+     return <div className="p-6"><div className="mx-auto max-w-lg rounded-2xl border border-red-200 bg-red-50 p-8 text-center"><X className="mx-auto mb-3 h-10 w-10 text-red-400" /><h2 className="font-semibold text-red-900">Administrator access required</h2><p className="mt-1 text-sm text-red-700">Forms & Reviews templates are managed by Administrators.</p></div></div>;
+   }
+
+   if (viewingTemplate) {
+     return (
+       <FormTemplateView
+         template={viewingTemplate}
+         onBack={() => setViewingTemplate(null)}
+         onEdit={() => {
+           setViewingTemplate(null);
+           setBuilder({ open: true, template: viewingTemplate });
+         }}
+         onDuplicate={() => duplicate(viewingTemplate)}
+         onArchive={() => archive(viewingTemplate)}
+       />
+     );
+   }
+
+   return (
+     <div className="min-h-full bg-[#f7f7f5] p-4 sm:p-6">
+       <div className="mx-auto max-w-6xl">
+         <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+           <div>
+             <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800"><ClipboardCheck className="h-3.5 w-3.5" />Structured documentation</div>
+             <h2 className="text-3xl font-semibold tracking-tight text-slate-900">Forms & Reviews</h2>
+             <p className="mt-1 max-w-2xl text-sm text-slate-500">Build reusable review and check-in templates for your team.</p>
+           </div>
+           <button type="button" onClick={() => setBuilder({ open: true })} className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-slate-800"><Plus className="h-4 w-4" />New form template</button>
+         </div>
+
+         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+           <div><h3 className="font-semibold text-slate-900">Template library</h3><p className="text-sm text-slate-500">{visibleTemplates.length} {visibleTemplates.length === 1 ? 'template' : 'templates'}</p></div>
+           <div className="flex flex-col gap-2 sm:flex-row">
+             <input value={searchTerm} onChange={e => setSearchTerm(e.target.value)} placeholder="Search templates…" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-amber-500" />
+             <AppSelect
+               value={statusFilter}
+               onChange={setStatusFilter}
+               options={[
+                 { value: 'active', label: 'Active templates' },
+                 { value: 'inactive', label: 'Inactive templates' },
+                 { value: 'archived', label: 'Archived templates' },
+                 { value: 'all', label: 'All templates' },
+               ]}
+               aria-label="Template status"
+               className="min-w-48"
+             />
+           </div>
+         </div>
+
+         {loading ? <div className="rounded-2xl border border-slate-200 bg-white py-16 text-center text-sm text-slate-500">Loading templates…</div> : visibleTemplates.length === 0 ? (
+           <div className="rounded-2xl border border-dashed border-slate-300 bg-white py-16 text-center"><FileText className="mx-auto mb-3 h-10 w-10 text-slate-300" /><h3 className="font-semibold text-slate-800">No templates here yet</h3><p className="mt-1 text-sm text-slate-500">Create a reusable form to start documenting reviews and check-ins.</p></div>
+         ) : (
+           <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+             <div className="overflow-x-auto">
+               <table className="w-full min-w-[760px] text-left">
+                 <thead className="border-b border-slate-200 bg-slate-50/80 text-xs font-semibold uppercase tracking-wider text-slate-500">
+                   <tr><th className="px-5 py-3">Template</th><th className="px-4 py-3">Type</th><th className="px-4 py-3">Version</th><th className="px-4 py-3">Content</th><th className="px-4 py-3">Status</th><th className="px-5 py-3 text-right">Actions</th></tr>
+                 </thead>
+                 <tbody className="divide-y divide-slate-100">
+                   {visibleTemplates.map(template => (
+                     <tr key={template.id} className="transition-colors hover:bg-amber-50/30">
+                       <td className="px-5 py-4"><button type="button" onClick={() => setViewingTemplate(template)} className="flex items-center gap-3 text-left"><span className="rounded-xl bg-amber-50 p-2 text-amber-700"><FileText className="h-4 w-4" /></span><span><span className="block font-semibold text-slate-900">{template.name}</span><span className="mt-0.5 block max-w-xs truncate text-xs text-slate-500">{template.description || 'No description added.'}</span></span></button></td>
+                       <td className="px-4 py-4 text-sm capitalize text-slate-600">{template.form_type.replaceAll('_', ' ')}</td>
+                       <td className="px-4 py-4 text-sm text-slate-600">v{template.version}</td>
+                       <td className="px-4 py-4 text-sm text-slate-600">{template.sections.length} sections · {normalizeQuestions(template).filter(question => question.status !== 'inactive').length} questions</td>
+                       <td className="px-4 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${template.status === 'active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>{template.status}</span></td>
+                       <td className="px-5 py-4"><div className="flex justify-end gap-1"><button type="button" onClick={() => setViewingTemplate(template)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Eye className="h-3.5 w-3.5" />View</button><button type="button" onClick={() => setBuilder({ open: true, template })} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Edit className="h-3.5 w-3.5" />Edit</button><button type="button" onClick={() => duplicate(template)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"><Copy className="h-3.5 w-3.5" />Duplicate</button>{template.status === 'active' && <button type="button" onClick={() => archive(template)} className="inline-flex items-center gap-1 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-500 hover:bg-red-50 hover:text-red-700"><Archive className="h-3.5 w-3.5" />Archive</button>}</div></td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             </div>
+           </div>
+         )}
+       </div>
+       <Modal isOpen={builder.open} onClose={() => setBuilder({ open: false })} title={builder.template ? 'Edit Template' : 'Create New Template'} size="xl">
+         <FormBuilder initial={builder.template} onClose={() => setBuilder({ open: false })} onSaved={() => { setBuilder({ open: false }); loadTemplates(); }} />
+       </Modal>
+     </div>
+   );
+ }
