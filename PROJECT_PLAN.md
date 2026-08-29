@@ -252,5 +252,6 @@ Report back: what changed, how tested, any blockers
 1. ~~PACKET-001 … 003C~~ ✅ **Done** (through 003C Aug 29).  
 2. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
 3. ~~PACKET-003B-FIX~~ ✅ **Done** (Aug 29).  
-4. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
-5. **Replit (now):** **PACKET-003D** — advanced form types (rich text, file, signature, etc.).
+4. ~~PACKET-003D / 005 / 007~~ ✅ **On main** (advanced types, notes feed, profile catalog).  
+5. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
+6. **Optional engineering:** verify PACKET-006 invite flow end-to-end; delete unused `EmployeeReviews.tsx` if unused.
