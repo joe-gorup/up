@@ -185,7 +185,7 @@ function ReviewForm({ initial = BLANK_FORM, onSave, onCancel, saving }: ReviewFo
 
 export default function EmployeeReviews({ employeeId, embedded = false }: { employeeId: string; embedded?: boolean }) {
   const { user } = useAuth();
-  const { canView, canModify, canDelete: canDel } = usePermissions('employee_reviews');
+  const { canView, canModify, canDelete: canDel } = usePermissions();
   const { toast } = useToast();
 
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -209,7 +209,7 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
         setLoaded(true);
       }
     } catch {
-      toast({ title: 'Failed to load reviews', variant: 'destructive' });
+      toast({ type: 'error', title: 'Failed to load reviews' });
     } finally {
       setLoading(false);
     }
@@ -232,15 +232,15 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
       });
       if (!res.ok) {
         const err = await res.json();
-        toast({ title: err.error || 'Failed to update review', variant: 'destructive' });
+        toast({ type: 'error', title: err.error || 'Failed to update review' });
         return;
       }
       const updated = await res.json();
       setReviews(prev => prev.map(r => r.id === updated.id ? updated : r));
       setEditingReview(null);
-      toast({ title: 'Review updated' });
+      toast({ type: 'success', title: 'Review updated' });
     } catch {
-      toast({ title: 'Failed to update review', variant: 'destructive' });
+      toast({ type: 'error', title: 'Failed to update review' });
     } finally {
       setSaving(false);
     }
@@ -251,13 +251,13 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
     try {
       const res = await apiRequest(`/api/reviews/${review.id}`, { method: 'DELETE' });
       if (!res.ok) {
-        toast({ title: 'Failed to delete review', variant: 'destructive' });
+        toast({ type: 'error', title: 'Failed to delete review' });
         return;
       }
       setReviews(prev => prev.filter(r => r.id !== review.id));
-      toast({ title: 'Review deleted' });
+      toast({ type: 'success', title: 'Review deleted' });
     } catch {
-      toast({ title: 'Failed to delete review', variant: 'destructive' });
+      toast({ type: 'error', title: 'Failed to delete review' });
     }
   };
 
@@ -266,7 +266,7 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
     try {
       const res = await apiRequest(`/api/employees/${employeeId}/reviews/export`);
       if (!res.ok) {
-        toast({ title: 'Export failed', variant: 'destructive' });
+        toast({ type: 'error', title: 'Export failed' });
         return;
       }
       const blob = await res.blob();
@@ -277,7 +277,7 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      toast({ title: 'Export failed', variant: 'destructive' });
+      toast({ type: 'error', title: 'Export failed' });
     } finally {
       setExporting(false);
     }
@@ -345,8 +345,8 @@ export default function EmployeeReviews({ employeeId, embedded = false }: { empl
               <ReviewCard
                 key={review.id}
                 review={review}
-                canEdit={(canModify || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
-                canDelete={(canDel || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
+                canEdit={(canModify('employee_reviews') || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
+                canDelete={(canDel('employee_reviews') || isAdmin) && (review.reviewer_id === user?.id || isAdmin)}
                 onEdit={() => setEditingReview(review)}
                 onDelete={() => handleDelete(review)}
               />

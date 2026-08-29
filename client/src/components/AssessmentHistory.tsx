@@ -32,7 +32,7 @@ interface AssessmentDetails {
   stepResults: Array<{
     id: string;
     step: string;
-    outcome: 'correct' | 'verbal_prompt' | 'n/a';
+    outcome: 'correct' | 'verbal_prompt' | 'n/a' | 'incorrect';
     notes?: string;
     completionTime?: number; // Time in seconds
     timerManuallyEntered?: boolean;

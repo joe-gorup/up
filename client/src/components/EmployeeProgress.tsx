@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X, Users } from 'lucide-react';
-import { Employee } from '../contexts/DataContext';
+import { Employee, type StepProgress } from '../contexts/DataContext';
 import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import { usePermissions } from '../hooks/usePermissions';
@@ -390,7 +390,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       setIsSaving(true);
       
       // Save all outcomes only for included goals as drafts
-      const allStepProgressData = [];
+      const allStepProgressData: Array<Omit<StepProgress, 'id' | 'date'>> = [];
       const includedEmployeeGoals = employeeGoals.filter(goal => includedGoals[goal.id] !== false);
       
       for (const goal of includedEmployeeGoals) {
@@ -449,16 +449,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       setIsSaving(true);
 
       const includedEmployeeGoals = employeeGoals.filter(goal => includedGoals[goal.id] !== false);
-      const allStepProgressData: Array<{
-        developmentGoalId: string;
-        goalStepId: string;
-        employeeId: string;
-        assessmentSessionId?: string;
-        outcome: string;
-        notes: string;
-        completionTimeSeconds?: number;
-        timerManuallyEntered: boolean;
-      }> = [];
+      const allStepProgressData: Array<Omit<StepProgress, 'id' | 'date'>> = [];
 
       for (const goal of includedEmployeeGoals) {
         for (const step of goal.steps) {

@@ -1455,7 +1455,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const summaryBySession: Record<string, string | null> = {};
       for (const row of allSummaries) {
-        summaryBySession[row.assessment_session_id] = row.summary;
+        if (row.assessment_session_id) {
+          summaryBySession[row.assessment_session_id] = row.summary;
+        }
       }
 
       const result = sessions.map(session => {

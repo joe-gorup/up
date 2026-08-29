@@ -68,7 +68,7 @@ export function setCachedProfileData<T>(key: string, data: T): void {
 }
 
 export function invalidateProfileCache(keyPrefix: string): void {
-  for (const key of profileCache.keys()) {
+  for (const key of Array.from(profileCache.keys())) {
     if (key.startsWith(keyPrefix)) {
       profileCache.delete(key);
     }

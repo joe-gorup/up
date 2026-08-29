@@ -41,6 +41,7 @@ export interface GoalStep {
   stepOrder: number;
   stepDescription: string;
   isRequired: boolean;
+  timerType?: 'none' | 'optional' | 'required';
 }
 
 export interface RecentSession {
