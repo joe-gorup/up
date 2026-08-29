@@ -1,6 +1,6 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
-import { coach_assignments, guardian_relationships, role_permissions } from '@shared/schema';
+import { coach_assignments, employees, guardian_relationships, role_permissions } from '@shared/schema';
 import { isNotesWriterRole } from '@shared/notesFeed';
 import type { AuthUser } from './auth';
 
@@ -42,6 +42,15 @@ export async function canAccessScooper(user: AuthUser, employeeId: string): Prom
     return Boolean(relationship);
   }
   return false;
+}
+
+export async function canAccessSuperScooper(user: AuthUser, employeeId: string): Promise<boolean> {
+  const [employee] = await db.select({ role: employees.role })
+    .from(employees)
+    .where(eq(employees.id, employeeId))
+    .limit(1);
+
+  return employee?.role === 'Super Scooper' && await canAccessScooper(user, employeeId);
 }
 
 export async function canViewScooperForms(user: AuthUser, employeeId: string): Promise<boolean> {

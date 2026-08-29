@@ -33,6 +33,10 @@ const ids = {
   administrator: `${fixtureId}-administrator`,
   guardianNote: `${fixtureId}-guardian-note`,
   coachNote: `${fixtureId}-coach-note`,
+  guardianAuthorNote: `${fixtureId}-guardian-author-note`,
+  guardianAdminNote: `${fixtureId}-guardian-admin-note`,
+  coachAuthorNote: `${fixtureId}-coach-author-note`,
+  coachAdminNote: `${fixtureId}-coach-admin-note`,
   checkin: `${fixtureId}-checkin`,
   profileNote: `${fixtureId}-profile-note`,
 };
@@ -153,6 +157,20 @@ async function seedNotesFeedFixtures() {
     scooper_id: ids.target,
     note: 'Family note before authorization test',
   });
+  await db.insert(guardian_notes).values([
+    {
+      id: ids.guardianAuthorNote,
+      guardian_id: ids.linkedGuardian,
+      scooper_id: ids.target,
+      note: 'Guardian-authored compatibility note',
+    },
+    {
+      id: ids.guardianAdminNote,
+      guardian_id: ids.linkedGuardian,
+      scooper_id: ids.target,
+      note: 'Administrator-managed guardian compatibility note',
+    },
+  ]);
   await db.insert(coach_notes).values({
     id: ids.coachNote,
     employee_id: ids.target,
@@ -160,6 +178,22 @@ async function seedNotesFeedFixtures() {
     title: 'Support note',
     content: 'Coach note before authorization test',
   });
+  await db.insert(coach_notes).values([
+    {
+      id: ids.coachAuthorNote,
+      employee_id: ids.target,
+      coach_id: ids.assignedCoach,
+      title: 'Coach-authored compatibility note',
+      content: 'Coach-authored compatibility content',
+    },
+    {
+      id: ids.coachAdminNote,
+      employee_id: ids.target,
+      coach_id: ids.assignedCoach,
+      title: 'Administrator-managed coach compatibility note',
+      content: 'Administrator-managed coach compatibility content',
+    },
+  ]);
   await db.insert(coach_checkins).values({
     id: ids.checkin,
     employee_id: ids.target,
@@ -188,8 +222,8 @@ async function seedNotesFeedFixtures() {
 
 async function cleanupNotesFeedFixtures() {
   await db.delete(profile_notes).where(eq(profile_notes.scooper_id, ids.target));
-  await db.delete(guardian_notes).where(inArray(guardian_notes.id, [ids.guardianNote]));
-  await db.delete(coach_notes).where(inArray(coach_notes.id, [ids.coachNote]));
+  await db.delete(guardian_notes).where(eq(guardian_notes.scooper_id, ids.target));
+  await db.delete(coach_notes).where(eq(coach_notes.employee_id, ids.target));
   await db.delete(coach_checkins).where(inArray(coach_checkins.id, [ids.checkin]));
   await db.delete(guardian_relationships).where(eq(guardian_relationships.scooper_id, ids.target));
   await db.delete(coach_assignments).where(eq(coach_assignments.scooper_id, ids.target));
@@ -480,5 +514,157 @@ describe('Unified notes feed authenticated authorization', () => {
     );
     assert.equal(deleteResponse.status, 404);
     assert.equal(deleteResponse.data.error, 'Scooper profile not found');
+  });
+});
+
+describe('Legacy note endpoint authenticated authorization', () => {
+  test('limits compatibility reads and creates to linked guardians and assigned Job Coaches', async () => {
+    const guardianRead = await request(
+      'GET',
+      `/api/guardian-notes/scooper/${ids.target}`,
+      identities.linkedGuardian,
+    );
+    assert.equal(guardianRead.status, 200);
+    assert.ok(guardianRead.data.some((note: any) => note.id === ids.guardianAuthorNote));
+
+    const guardianByAuthorRead = await request(
+      'GET',
+      `/api/guardian-notes/guardian/${ids.linkedGuardian}`,
+      identities.assignedCoach,
+    );
+    assert.equal(guardianByAuthorRead.status, 200);
+    assert.ok(guardianByAuthorRead.data.some((note: any) => note.id === ids.guardianAdminNote));
+
+    const coachRead = await request(
+      'GET',
+      `/api/coach-notes/${ids.target}`,
+      identities.assignedCoach,
+    );
+    assert.equal(coachRead.status, 200);
+    assert.ok(coachRead.data.some((note: any) => note.id === ids.coachAuthorNote));
+
+    const guardianCreate = await request(
+      'POST',
+      '/api/guardian-notes',
+      identities.linkedGuardian,
+      {
+        guardian_id: ids.linkedGuardian,
+        scooper_id: ids.target,
+        note: 'Authorized legacy guardian creation',
+      },
+    );
+    assert.equal(guardianCreate.status, 200);
+
+    const coachCreate = await request(
+      'POST',
+      '/api/coach-notes',
+      identities.assignedCoach,
+      {
+        employee_id: ids.target,
+        title: 'Authorized legacy coach creation',
+        content: 'Assigned coach compatibility route',
+      },
+    );
+    assert.equal(coachCreate.status, 200);
+
+    const deniedRequests = [
+      request('GET', `/api/guardian-notes/scooper/${ids.target}`, identities.unrelatedGuardian),
+      request('GET', `/api/guardian-notes/guardian/${ids.linkedGuardian}`, identities.unrelatedCoach),
+      request('GET', `/api/coach-notes/${ids.target}`, identities.unrelatedCoach),
+      request('POST', '/api/guardian-notes', identities.unrelatedGuardian, {
+        guardian_id: ids.unrelatedGuardian,
+        scooper_id: ids.target,
+        note: 'Must not be created',
+      }),
+      request('POST', '/api/coach-notes', identities.unrelatedCoach, {
+        employee_id: ids.target,
+        title: 'Must not be created',
+        content: 'Must not be created',
+      }),
+    ];
+    for (const response of await Promise.all(deniedRequests)) {
+      assert.equal(response.status, 403);
+    }
+  });
+
+  test('checks profile access before allowing original-author or Administrator mutations', async () => {
+    const deniedGuardianUpdate = await request(
+      'PUT',
+      `/api/guardian-notes/${ids.guardianAdminNote}`,
+      identities.unrelatedGuardian,
+      { note: 'Must not replace guardian note' },
+    );
+    assert.equal(deniedGuardianUpdate.status, 403);
+    assert.equal(deniedGuardianUpdate.data.error, 'You do not have access to this profile');
+
+    const deniedCoachDelete = await request(
+      'DELETE',
+      `/api/coach-notes/${ids.coachAdminNote}`,
+      identities.unrelatedCoach,
+    );
+    assert.equal(deniedCoachDelete.status, 403);
+    assert.equal(deniedCoachDelete.data.error, 'You do not have access to this profile');
+
+    const guardianAuthorUpdate = await request(
+      'PUT',
+      `/api/guardian-notes/${ids.guardianAuthorNote}`,
+      identities.linkedGuardian,
+      { note: 'Guardian author updated compatibility note' },
+    );
+    assert.equal(guardianAuthorUpdate.status, 200);
+    assert.equal(guardianAuthorUpdate.data.note, 'Guardian author updated compatibility note');
+
+    const coachAuthorUpdate = await request(
+      'PUT',
+      `/api/coach-notes/${ids.coachAuthorNote}`,
+      identities.assignedCoach,
+      { content: 'Coach author updated compatibility note' },
+    );
+    assert.equal(coachAuthorUpdate.status, 200);
+    assert.equal(coachAuthorUpdate.data.content, 'Coach author updated compatibility note');
+
+    const guardianAdminUpdate = await request(
+      'PUT',
+      `/api/guardian-notes/${ids.guardianAdminNote}`,
+      identities.administrator,
+      { note: 'Administrator updated guardian compatibility note' },
+    );
+    assert.equal(guardianAdminUpdate.status, 200);
+
+    const coachAdminUpdate = await request(
+      'PUT',
+      `/api/coach-notes/${ids.coachAdminNote}`,
+      identities.administrator,
+      { content: 'Administrator updated coach compatibility note' },
+    );
+    assert.equal(coachAdminUpdate.status, 200);
+
+    const coachAuthorDelete = await request(
+      'DELETE',
+      `/api/coach-notes/${ids.coachAuthorNote}`,
+      identities.assignedCoach,
+    );
+    assert.equal(coachAuthorDelete.status, 200);
+
+    const guardianAdminDelete = await request(
+      'DELETE',
+      `/api/guardian-notes/${ids.guardianAuthorNote}`,
+      identities.administrator,
+    );
+    assert.equal(guardianAdminDelete.status, 200);
+
+    const secondGuardianAdminDelete = await request(
+      'DELETE',
+      `/api/guardian-notes/${ids.guardianAdminNote}`,
+      identities.administrator,
+    );
+    assert.equal(secondGuardianAdminDelete.status, 200);
+
+    const coachAdminDelete = await request(
+      'DELETE',
+      `/api/coach-notes/${ids.coachAdminNote}`,
+      identities.administrator,
+    );
+    assert.equal(coachAdminDelete.status, 200);
   });
 });

@@ -31,7 +31,7 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
-import { canAccessScooper, canInviteExternalUser, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
+import { canAccessScooper, canAccessSuperScooper, canInviteExternalUser, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
 import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible, missingRequiredQuestionPrompts, normalizeConditionalAnswers } from "@shared/formLogic";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
@@ -4561,8 +4561,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as AuthUser;
       const { scooperId } = req.params;
-      
-      // Guardians can only see their own notes for their linked scoopers
+
+      if (!['Guardian', 'Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      if (!(await canAccessSuperScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
+      // Guardians can only see their own notes for their linked scoopers.
       if (user.role === 'Guardian') {
         const notes = await db.select().from(guardian_notes)
           .where(and(
@@ -4572,12 +4579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(notes);
       }
       
-      // Super Scoopers cannot view guardian notes
-      if (user.role === 'Super Scooper') {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-      
-      // Admins, managers, and job coaches can see all notes for a scooper
+      // Administrators, managers, and assigned Job Coaches can see all notes
+      // for an accessible Super Scooper.
       const notes = await db.select().from(guardian_notes)
         .where(eq(guardian_notes.scooper_id, scooperId))
         .orderBy(desc(guardian_notes.updated_at));
@@ -4593,19 +4596,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as AuthUser;
       const { guardianId } = req.params;
-      
-      // Guardians can only view their own notes
+
+      if (!['Guardian', 'Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
       if (user.role === 'Guardian' && user.id !== guardianId) {
         return res.status(403).json({ error: 'You can only view your own notes' });
       }
-      
-      // Super Scoopers cannot view guardian notes
-      if (user.role === 'Super Scooper') {
-        return res.status(403).json({ error: 'Insufficient permissions' });
+
+      const superScoopers = await db.select({ id: employees.id })
+        .from(employees)
+        .where(eq(employees.role, 'Super Scooper'));
+      const superScooperIds = superScoopers.map(employee => employee.id);
+      if (superScooperIds.length === 0) {
+        return res.json([]);
       }
-      
+
+      let accessibleScooperIds = superScooperIds;
+      if (user.role === 'Guardian') {
+        const relationships = await db.select({ scooper_id: guardian_relationships.scooper_id })
+          .from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+        const linkedIds = new Set(relationships.map(relationship => relationship.scooper_id));
+        accessibleScooperIds = superScooperIds.filter(id => linkedIds.has(id));
+      } else if (user.role === 'Job Coach') {
+        const assignments = await db.select({ scooper_id: coach_assignments.scooper_id })
+          .from(coach_assignments)
+          .where(eq(coach_assignments.coach_id, user.id));
+        const assignedIds = new Set(assignments.map(assignment => assignment.scooper_id));
+        accessibleScooperIds = superScooperIds.filter(id => assignedIds.has(id));
+      }
+
+      if (accessibleScooperIds.length === 0) {
+        return res.status(403).json({ error: 'You do not have access to these profiles' });
+      }
+
       const notes = await db.select().from(guardian_notes)
-        .where(eq(guardian_notes.guardian_id, guardianId))
+        .where(and(
+          eq(guardian_notes.guardian_id, guardianId),
+          inArray(guardian_notes.scooper_id, accessibleScooperIds),
+        ))
         .orderBy(desc(guardian_notes.updated_at));
       res.json(notes);
     } catch (error) {
@@ -4636,17 +4666,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (guardian_id !== user.id) {
         return res.status(403).json({ error: 'You can only create notes as yourself' });
       }
-      
-      // Verify guardian-scooper relationship exists
-      const [relationship] = await db.select().from(guardian_relationships)
-        .where(and(
-          eq(guardian_relationships.guardian_id, guardian_id),
-          eq(guardian_relationships.scooper_id, scooper_id)
-        ))
-        .limit(1);
-      
-      if (!relationship) {
-        return res.status(400).json({ error: 'You are not linked to this family member' });
+
+      if (!(await canAccessSuperScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
       
       const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
@@ -4673,9 +4695,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingNote) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
+      if (!(await canAccessSuperScooper(user, existingNote.scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
       // Only the guardian who created the note can update it
-      if (existingNote.guardian_id !== user.id) {
+      if (existingNote.guardian_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'You can only edit your own notes' });
       }
       
@@ -4706,9 +4732,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingNote) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
+      if (!(await canAccessSuperScooper(user, existingNote.scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
       // Only the guardian who created the note can delete it
-      if (existingNote.guardian_id !== user.id) {
+      if (existingNote.guardian_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'You can only delete your own notes' });
       }
       
@@ -5102,13 +5132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
-
-      if (user.role === 'Job Coach') {
-        const assignments = await db.select().from(coach_assignments)
-          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
-        if (assignments.length === 0) {
-          return res.status(403).json({ error: 'Not assigned to this employee' });
-        }
+      if (!(await canAccessSuperScooper(user, employeeId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
 
       const notes = await db.select().from(coach_notes)
@@ -5138,19 +5163,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'Only Job Coaches and Administrators can create notes' });
       }
 
-      if (user.role === 'Job Coach') {
-        const assignments = await db.select().from(coach_assignments)
-          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
-        if (assignments.length === 0) {
-          return res.status(403).json({ error: 'Not assigned to this employee' });
-        }
+      const parsed = insertCoachNoteSchema.safeParse({ ...req.body, coach_id: user.id });
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request body', details: parsed.error.errors });
+      }
+      if (!(await canAccessSuperScooper(user, parsed.data.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
 
-      const noteData = { ...req.body, coach_id: user.id };
-      const parsed = insertCoachNoteSchema.parse(noteData);
-
-      const [note] = await db.insert(coach_notes).values(parsed).returning();
-      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach note created');
+      const [note] = await db.insert(coach_notes).values(parsed.data).returning();
+      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.data.employee_id }, 'Coach note created');
       res.json(note);
     } catch (error) {
       logger.error({ error }, 'Failed to create coach note');
@@ -5165,6 +5187,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
       if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (!(await canAccessSuperScooper(user, existing.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
       if (existing.coach_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'Only the original author can edit this note' });
       }
@@ -5189,6 +5214,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
       if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (!(await canAccessSuperScooper(user, existing.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
       if (existing.coach_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'Only the original author can delete this note' });
       }
