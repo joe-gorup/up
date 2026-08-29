@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, FileText, Heart, Pencil, Plus, RefreshCw, ShieldCheck, Trash2, UserCheck, X } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 
-type NotesFeedSource = 'guardian' | 'coach' | 'checkin';
+type NotesFeedSource = 'guardian' | 'coach' | 'checkin' | 'profile';
 
 interface NotesFeedItem {
   id: string;
@@ -16,6 +16,7 @@ interface NotesFeedItem {
   createdAt: string;
   updatedAt?: string | null;
   linked?: boolean;
+  noteType?: string | null;
   canEdit: boolean;
   canDelete: boolean;
 }
@@ -38,12 +39,14 @@ function formatDate(value: string): string {
 function sourceLabel(item: NotesFeedItem): string {
   if (item.sourceType === 'guardian') return 'Guardian note';
   if (item.sourceType === 'checkin') return 'Linked check-in';
+  if (item.sourceType === 'profile') return 'Profile update';
   return 'Staff note';
 }
 
 function sourceIcon(item: NotesFeedItem) {
   if (item.sourceType === 'guardian') return <Heart className="h-3.5 w-3.5" aria-hidden="true" />;
   if (item.sourceType === 'checkin') return <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />;
+  if (item.sourceType === 'profile') return <FileText className="h-3.5 w-3.5" aria-hidden="true" />;
   return <UserCheck className="h-3.5 w-3.5" aria-hidden="true" />;
 }
 
@@ -247,7 +250,9 @@ export default function NotesFeed({ employeeId, className = '' }: NotesFeedProps
                       ? 'bg-rose-100 text-rose-600'
                       : note.sourceType === 'checkin'
                         ? 'bg-amber-100 text-amber-700'
-                        : 'bg-indigo-100 text-indigo-600'
+                        : note.sourceType === 'profile'
+                          ? 'bg-sky-100 text-sky-600'
+                          : 'bg-indigo-100 text-indigo-600'
                   }`}>
                     {sourceIcon(note)}
                   </div>

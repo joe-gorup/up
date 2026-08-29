@@ -6,9 +6,9 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions, employee_reviews,
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, profile_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions, employee_reviews,
   form_templates, form_sections, form_questions, form_response_sets, form_answers,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertProfileNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
   insertFormTemplateSchema, insertFormSectionSchema, insertFormQuestionSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
@@ -161,17 +161,22 @@ function noteDate(value: Date | string | null | undefined, fallback?: Date | str
 }
 
 async function loadUnifiedNotes(scooperId: string, viewerId: string, viewerRole: string) {
-  const [guardianRows, coachRows, checkinRows] = await Promise.all([
+  const [guardianRows, coachRows, checkinRows, profileRows] = await Promise.all([
     db.select().from(guardian_notes).where(eq(guardian_notes.scooper_id, scooperId)),
     db.select().from(coach_notes).where(eq(coach_notes.employee_id, scooperId)),
     db.select().from(coach_checkins).where(eq(coach_checkins.employee_id, scooperId)),
+    db.select().from(profile_notes).where(and(
+      eq(profile_notes.scooper_id, scooperId),
+      eq(profile_notes.status, 'active'),
+    )),
   ]);
 
   const authorIds = Array.from(new Set([
     ...guardianRows.map(note => note.guardian_id),
     ...coachRows.map(note => note.coach_id),
     ...checkinRows.map(checkin => checkin.coach_id),
-  ]));
+    ...profileRows.map(note => note.author_id),
+  ].filter((authorId): authorId is string => Boolean(authorId))));
   const authorRows = authorIds.length > 0
     ? await db.select({
         id: employees.id,
@@ -232,6 +237,22 @@ async function loadUnifiedNotes(scooperId: string, viewerId: string, viewerRole:
           linked: true,
         };
       }),
+    ...profileRows.map(note => {
+      const author = note.author_id ? authorMap.get(note.author_id) : undefined;
+      return {
+        id: `profile:${note.id}`,
+        sourceType: 'profile' as const,
+        sourceId: note.id,
+        body: note.body,
+        title: null,
+        noteType: note.source_type,
+        authorId: note.author_id || '',
+        authorName: noteAuthorName(author),
+        authorRole: note.author_role_snapshot || author?.role || 'Unknown',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
   ];
 
   return buildNotesFeed(entries).map(entry => ({
@@ -4079,30 +4100,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: 'You do not have permission to write notes for this profile' });
       }
 
-      let sourceType: 'guardian' | 'coach';
-      let sourceId: string;
-      if (user.role === 'Guardian') {
-        const [created] = await db.insert(guardian_notes).values({
-          guardian_id: user.id,
-          scooper_id: scooperId,
-          note: body,
-        }).returning({ id: guardian_notes.id });
-        sourceType = 'guardian';
-        sourceId = created.id;
-      } else {
-        const [created] = await db.insert(coach_notes).values({
-          employee_id: scooperId,
-          coach_id: user.id,
-          title: 'Note',
-          content: body,
-        }).returning({ id: coach_notes.id });
-        sourceType = 'coach';
-        sourceId = created.id;
+      const requestedNoteType = req.body?.source_type ?? req.body?.note_type;
+      const noteType = typeof requestedNoteType === 'string' && requestedNoteType.trim()
+        ? requestedNoteType.trim()
+        : 'manual';
+      if (noteType.length > 100) {
+        return res.status(400).json({ error: 'Note type is too long' });
       }
 
+      const [created] = await db.insert(profile_notes).values(insertProfileNoteSchema.parse({
+        scooper_id: scooperId,
+        author_id: user.id,
+        author_role_snapshot: user.role,
+        body,
+        source_type: noteType,
+      })).returning({ id: profile_notes.id });
+      const sourceId = created.id;
+
       const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
-      const createdNote = notes.find(note => note.sourceType === sourceType && note.sourceId === sourceId);
-      logger.info({ scooperId, authorId: user.id, sourceType, sourceId }, 'Unified note created');
+      const createdNote = notes.find(note => note.sourceType === 'profile' && note.sourceId === sourceId);
+      logger.info({ scooperId, authorId: user.id, sourceType: 'profile', noteType, sourceId }, 'Unified note created');
       res.status(201).json(createdNote);
     } catch (error) {
       logger.error({ error, scooperId: req.params.scooperId }, 'Failed to create unified note');
@@ -4128,7 +4145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!(await canAccessScooper(user, scooperId))) {
         return res.status(403).json({ error: 'You do not have access to this profile' });
       }
-      if (sourceType !== 'guardian' && sourceType !== 'coach') {
+      if (sourceType !== 'guardian' && sourceType !== 'coach' && sourceType !== 'profile') {
         return res.status(400).json({ error: 'This feed item cannot be edited' });
       }
 
@@ -4147,7 +4164,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await db.update(guardian_notes)
           .set({ note: body, updated_at: new Date() })
           .where(eq(guardian_notes.id, sourceId));
-      } else {
+      } else if (sourceType === 'coach') {
         const [existing] = await db.select({
           id: coach_notes.id,
           coach_id: coach_notes.coach_id,
@@ -4161,6 +4178,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await db.update(coach_notes)
           .set({ content: body, updated_at: new Date() })
           .where(eq(coach_notes.id, sourceId));
+      } else {
+        const [existing] = await db.select({
+          id: profile_notes.id,
+          author_id: profile_notes.author_id,
+        }).from(profile_notes).where(and(
+          eq(profile_notes.id, sourceId),
+          eq(profile_notes.scooper_id, scooperId),
+          eq(profile_notes.status, 'active'),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.author_id || undefined;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(profile_notes)
+          .set({ body, updated_at: new Date() })
+          .where(and(
+            eq(profile_notes.id, sourceId),
+            eq(profile_notes.scooper_id, scooperId),
+            eq(profile_notes.status, 'active'),
+          ));
       }
 
       const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
@@ -4202,6 +4238,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           eq(coach_notes.id, sourceId),
           eq(coach_notes.employee_id, scooperId),
         )).returning({ id: coach_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else if (sourceType === 'profile') {
+        const deleted = await db.update(profile_notes).set({
+          status: 'deleted',
+          updated_at: new Date(),
+        }).where(and(
+          eq(profile_notes.id, sourceId),
+          eq(profile_notes.scooper_id, scooperId),
+          eq(profile_notes.status, 'active'),
+        )).returning({ id: profile_notes.id });
         if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
       } else {
         return res.status(400).json({ error: 'This feed item cannot be deleted' });

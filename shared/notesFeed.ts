@@ -1,4 +1,4 @@
-export type NotesFeedSource = 'guardian' | 'coach' | 'checkin';
+export type NotesFeedSource = 'guardian' | 'coach' | 'checkin' | 'profile';
 
 export interface NotesFeedEntry {
   id: string;
@@ -12,6 +12,7 @@ export interface NotesFeedEntry {
   createdAt: string | Date;
   updatedAt?: string | Date | null;
   linked?: boolean;
+  noteType?: string | null;
 }
 
 export function buildNotesFeed(entries: NotesFeedEntry[]): NotesFeedEntry[] {

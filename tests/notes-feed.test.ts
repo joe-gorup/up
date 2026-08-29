@@ -14,6 +14,7 @@ import {
   employees,
   guardian_notes,
   guardian_relationships,
+  profile_notes,
 } from '../shared/schema';
 import {
   buildNotesFeed,
@@ -33,6 +34,7 @@ const ids = {
   guardianNote: `${fixtureId}-guardian-note`,
   coachNote: `${fixtureId}-coach-note`,
   checkin: `${fixtureId}-checkin`,
+  profileNote: `${fixtureId}-profile-note`,
 };
 
 const identities = {
@@ -174,15 +176,27 @@ async function seedNotesFeedFixtures() {
     support_helped: 'Prompting',
     notes: 'Linked check-in note that cannot be edited as a feed item',
   });
+  await db.insert(profile_notes).values({
+    id: ids.profileNote,
+    scooper_id: ids.target,
+    author_id: ids.assignedCoach,
+    author_role_snapshot: 'Job Coach',
+    body: 'Durable profile update before authorization test',
+    source_type: 'support_update',
+  });
 }
 
 async function cleanupNotesFeedFixtures() {
+  await db.delete(profile_notes).where(eq(profile_notes.scooper_id, ids.target));
   await db.delete(guardian_notes).where(inArray(guardian_notes.id, [ids.guardianNote]));
   await db.delete(coach_notes).where(inArray(coach_notes.id, [ids.coachNote]));
   await db.delete(coach_checkins).where(inArray(coach_checkins.id, [ids.checkin]));
   await db.delete(guardian_relationships).where(eq(guardian_relationships.scooper_id, ids.target));
   await db.delete(coach_assignments).where(eq(coach_assignments.scooper_id, ids.target));
-  await db.delete(employees).where(inArray(employees.id, Object.values(ids).filter(id => id !== ids.guardianNote && id !== ids.coachNote && id !== ids.checkin)));
+  await db.delete(employees).where(inArray(
+    employees.id,
+    Object.values(ids).filter(id => ![ids.guardianNote, ids.coachNote, ids.checkin, ids.profileNote].includes(id)),
+  ));
 }
 
 before(async () => {
@@ -288,6 +302,7 @@ describe('Unified notes feed integration contract', () => {
     assert.match(routes, /app\.delete\("\/api\/scoopers\/:scooperId\/notes-feed\/:sourceType\/:sourceId"/);
     assert.match(routes, /app\.get\("\/api\/guardian-notes\/scooper\/:scooperId"/);
     assert.match(routes, /app\.get\("\/api\/coach-notes\/:employeeId"/);
+    assert.match(schema, /export const profile_notes = pgTable\("profile_notes"/);
     assert.doesNotMatch(schema, /uniqueGuardianScooperNote/);
   });
 });
@@ -302,6 +317,11 @@ describe('Unified notes feed authenticated authorization', () => {
     assert.equal(linkedGuardianResponse.status, 200);
     assert.equal(linkedGuardianResponse.data.permissions.can_write, true);
     assert.ok(linkedGuardianResponse.data.notes.some((note: any) => note.sourceId === ids.guardianNote));
+    assert.ok(linkedGuardianResponse.data.notes.some((note: any) => (
+      note.sourceType === 'profile'
+      && note.sourceId === ids.profileNote
+      && note.noteType === 'support_update'
+    )));
 
     const assignedCoachResponse = await request(
       'GET',
@@ -353,6 +373,50 @@ describe('Unified notes feed authenticated authorization', () => {
     assert.equal(coachUpdate.status, 200);
     assert.equal(coachUpdate.data.body, 'Updated coach note');
 
+    const coachNotesBeforeCreate = await db.select({ id: coach_notes.id })
+      .from(coach_notes)
+      .where(eq(coach_notes.employee_id, ids.target));
+    const profileCreate = await request(
+      'POST',
+      `/api/scoopers/${ids.target}/notes-feed`,
+      identities.assignedCoach,
+      { body: 'New shared profile update' },
+    );
+    assert.equal(profileCreate.status, 201);
+    assert.equal(profileCreate.data.sourceType, 'profile');
+    assert.equal(profileCreate.data.noteType, 'manual');
+    assert.equal(profileCreate.data.body, 'New shared profile update');
+
+    const [storedProfileNote] = await db.select().from(profile_notes)
+      .where(eq(profile_notes.id, profileCreate.data.sourceId));
+    assert.equal(storedProfileNote.scooper_id, ids.target);
+    assert.equal(storedProfileNote.author_id, ids.assignedCoach);
+    assert.equal(storedProfileNote.author_role_snapshot, 'Job Coach');
+    assert.equal(storedProfileNote.status, 'active');
+
+    const coachNotesAfterCreate = await db.select({ id: coach_notes.id })
+      .from(coach_notes)
+      .where(eq(coach_notes.employee_id, ids.target));
+    assert.equal(coachNotesAfterCreate.length, coachNotesBeforeCreate.length);
+
+    const profileUpdate = await request(
+      'PUT',
+      `/api/scoopers/${ids.target}/notes-feed/profile/${profileCreate.data.sourceId}`,
+      identities.assignedCoach,
+      { body: 'Updated shared profile update' },
+    );
+    assert.equal(profileUpdate.status, 200);
+    assert.equal(profileUpdate.data.body, 'Updated shared profile update');
+
+    const profileUpdateByAnotherAuthor = await request(
+      'PUT',
+      `/api/scoopers/${ids.target}/notes-feed/profile/${profileCreate.data.sourceId}`,
+      identities.linkedGuardian,
+      { body: 'Must not replace another author’s profile update' },
+    );
+    assert.equal(profileUpdateByAnotherAuthor.status, 403);
+    assert.equal(profileUpdateByAnotherAuthor.data.error, 'You can only edit your own notes');
+
     const checkinUpdate = await request(
       'PUT',
       `/api/scoopers/${ids.target}/notes-feed/checkin/${ids.checkin}`,
@@ -369,6 +433,17 @@ describe('Unified notes feed authenticated authorization', () => {
     );
     assert.equal(checkinDelete.status, 400);
     assert.equal(checkinDelete.data.error, 'This feed item cannot be deleted');
+
+    const profileDelete = await request(
+      'DELETE',
+      `/api/scoopers/${ids.target}/notes-feed/profile/${profileCreate.data.sourceId}`,
+      identities.administrator,
+    );
+    assert.equal(profileDelete.status, 200);
+    assert.deepEqual(profileDelete.data, { success: true });
+    const [deletedProfileNote] = await db.select().from(profile_notes)
+      .where(eq(profile_notes.id, profileCreate.data.sourceId));
+    assert.equal(deletedProfileNote.status, 'deleted');
 
     const administratorDelete = await request(
       'DELETE',
