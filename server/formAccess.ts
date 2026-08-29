@@ -69,3 +69,19 @@ export async function canWriteNotes(user: AuthUser, employeeId: string): Promise
   if (!isNotesWriterRole(user.role)) return false;
   return canAccessScooper(user, employeeId);
 }
+
+/**
+ * External invitations are a separate capability from profile editing. This
+ * keeps the default Administrator-only behavior while allowing an
+ * Administrator to opt another role in through Permissions Manager.
+ */
+export async function canInviteExternalUser(user: AuthUser): Promise<boolean> {
+  if (user.role === 'Administrator') return true;
+  const [permission] = await db.select({ allowed: role_permissions.can_modify })
+    .from(role_permissions)
+    .where(and(
+      eq(role_permissions.role, user.role),
+      eq(role_permissions.feature, 'external_user_invites'),
+    ));
+  return Boolean(permission?.allowed);
+}

@@ -83,6 +83,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
+  const canInviteExternalUser = canModify('external_user_invites');
   const canEditAccommodations = user ? canManageAccommodations(user.role) : false;
   const canAssignGoal = canModify('goal_assignment');
   const canAssess = canModify('goal_assessment');
@@ -175,6 +176,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingCoaches, setEditingCoaches] = useState(false);
   const [selectedCoachId, setSelectedCoachId] = useState('');
   const [coachAssignError, setCoachAssignError] = useState('');
+  const [showCoachInvite, setShowCoachInvite] = useState(false);
+  const [coachInviteForm, setCoachInviteForm] = useState({ first_name: '', last_name: '', email: '' });
+  const [coachInviteSaving, setCoachInviteSaving] = useState(false);
+  const [coachInviteError, setCoachInviteError] = useState('');
+  const [coachInviteLink, setCoachInviteLink] = useState('');
+  const [coachInviteCopied, setCoachInviteCopied] = useState(false);
   const [showCheckins, setShowCheckins] = useState(false);
   const [pastAssessments, setPastAssessments] = useState<Array<{
     id: string; manager_id: string; date: string; location: string;
@@ -1002,6 +1009,63 @@ const handleGenerateInvitation = async () => {
     }
   };
 
+  const handleInviteCoach = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const firstName = coachInviteForm.first_name.trim();
+    const lastName = coachInviteForm.last_name.trim();
+    const email = coachInviteForm.email.trim();
+    if (!firstName || !lastName || !email) {
+      setCoachInviteError('First name, last name, and email are required');
+      return;
+    }
+
+    setCoachInviteSaving(true);
+    setCoachInviteError('');
+    try {
+      const res = await apiRequest('/api/coach-assignments/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scooper_id: employeeId,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCoachInviteError(data.error || 'Failed to invite coach');
+        return;
+      }
+
+      setAssignedCoaches(prev => [
+        ...prev,
+        {
+          ...data.assignment,
+          coach_first_name: data.coach.first_name,
+          coach_last_name: data.coach.last_name,
+          coach_email: data.coach.email,
+        },
+      ]);
+      setCoachInviteLink(data.setupUrl);
+      setCoachInviteForm({ first_name: '', last_name: '', email: '' });
+    } catch {
+      setCoachInviteError('Failed to invite coach');
+    } finally {
+      setCoachInviteSaving(false);
+    }
+  };
+
+  const handleCopyCoachInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(coachInviteLink);
+      setCoachInviteCopied(true);
+      setTimeout(() => setCoachInviteCopied(false), 2000);
+    } catch {
+      setCoachInviteError('Unable to copy the invitation link');
+    }
+  };
+
   const handleAssignMentee = async () => {
     if (!selectedMenteeId) return;
     setMenteeError('');
@@ -1521,7 +1585,7 @@ const handleGenerateInvitation = async () => {
                                         Emergency
                                       </span>
                                     )}
-                                    {contact.has_app_access && (
+                                     {contact.has_app_access && !['invited', 'accepted'].includes(contact.invite_status) && (
                                       <span className="inline-flex items-center bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
                                         <Check className="h-2.5 w-2.5 mr-0.5" />
                                         App Access
@@ -1536,7 +1600,7 @@ const handleGenerateInvitation = async () => {
                                 </div>
                               </div>
                               <div className="flex items-center space-x-1 ml-2 shrink-0">
-                                {user?.role === 'Administrator' && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
+                                 {canInviteExternalUser && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
                                   <button
                                     onClick={() => handleGrantAccess(contact.id)}
                                     disabled={grantingAccess === contact.id}
@@ -1548,6 +1612,18 @@ const handleGenerateInvitation = async () => {
                                     ) : (
                                       <Link className="h-4 w-4" />
                                     )}
+                                 {contact.invite_status === 'invited' && (
+                                   <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                     <Mail className="h-2.5 w-2.5" />
+                                     Invite pending
+                                   </span>
+                                 )}
+                                 {contact.invite_status === 'accepted' && (
+                                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                     <Check className="h-2.5 w-2.5" />
+                                     App access active
+                                   </span>
+                                 )}
                                   </button>
                                 )}
                                 {inviteLinkMap[contact.id] && (
@@ -1641,14 +1717,32 @@ const handleGenerateInvitation = async () => {
                       <UserCheck className="h-4 w-4 text-green-500" />
                       <h3 className="text-sm font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h3>
                     </div>
-                    {canEdit && !editingCoaches && (
-                      <button
-                        onClick={() => { setEditingCoaches(true); setCoachAssignError(''); }}
-                        className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Edit job coaches"
-                      >
-                        <SquarePen className="h-3.5 w-3.5" />
-                      </button>
+                    {!editingCoaches && (
+                      <div className="flex items-center gap-1">
+                        {canInviteExternalUser && (
+                          <button
+                            onClick={() => {
+                              setShowCoachInvite(true);
+                              setCoachInviteError('');
+                              setCoachInviteLink('');
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-green-700 hover:bg-green-50 rounded-lg transition-colors text-xs font-medium"
+                            title="Invite a new job coach"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            <span>Invite</span>
+                          </button>
+                        )}
+                        {canEdit && (
+                          <button
+                            onClick={() => { setEditingCoaches(true); setCoachAssignError(''); }}
+                            className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Edit job coaches"
+                          >
+                            <SquarePen className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                   {editingCoaches && (
@@ -1685,7 +1779,9 @@ const handleGenerateInvitation = async () => {
                     <div className="space-y-2">
                       {assignedCoaches.map((assignment: any) => (
                         <div key={assignment.id} className="flex items-center justify-between text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
-                          <span>{getPersonName(assignment.coach_id)}</span>
+                           <span>{assignment.coach_first_name
+                             ? `${assignment.coach_first_name} ${assignment.coach_last_name || ''}`.trim()
+                             : getPersonName(assignment.coach_id)}</span>
                           {editingCoaches && (
                             <button
                               onClick={() => handleRemoveCoach(assignment.id)}
@@ -2987,6 +3083,108 @@ const handleGenerateInvitation = async () => {
         onClose={() => setSelectedModalSessionId(null)}
         assessment={selectedModalSessionId ? buildModalData(pastAssessments.find(s => s.id === selectedModalSessionId)!) : null}
       />
+
+      <Modal
+        isOpen={showCoachInvite}
+        onClose={() => {
+          if (!coachInviteSaving) {
+            setShowCoachInvite(false);
+            setCoachInviteError('');
+            setCoachInviteLink('');
+          }
+        }}
+        title="Invite a Job Coach"
+        titleIcon={<Mail className="h-5 w-5 text-green-600" />}
+        size="md"
+      >
+        {coachInviteLink ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-green-900">Coach assigned and invitation ready</p>
+                  <p className="text-sm text-green-800 mt-1">
+                    Share this one-time setup link with the new coach. It expires in 7 days.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={coachInviteLink}
+                readOnly
+                className={`flex-1 text-sm ${INPUT_BASE_CLASSES} bg-gray-50`}
+                aria-label="Job coach invitation link"
+              />
+              <button
+                type="button"
+                onClick={handleCopyCoachInviteLink}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium whitespace-nowrap"
+              >
+                {coachInviteCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {coachInviteCopied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+            {coachInviteError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl">{coachInviteError}</div>}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowCoachInvite(false); setCoachInviteLink(''); setCoachInviteError(''); }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleInviteCoach} className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Create a Job Coach account, assign them to {employee.first_name} {employee.last_name}, and generate a setup link.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                value={coachInviteForm.first_name}
+                onChange={e => setCoachInviteForm(prev => ({ ...prev, first_name: e.target.value }))}
+                className={`text-sm ${INPUT_BASE_CLASSES}`}
+                placeholder="First name *"
+                autoFocus
+              />
+              <input
+                value={coachInviteForm.last_name}
+                onChange={e => setCoachInviteForm(prev => ({ ...prev, last_name: e.target.value }))}
+                className={`text-sm ${INPUT_BASE_CLASSES}`}
+                placeholder="Last name *"
+              />
+            </div>
+            <input
+              type="email"
+              value={coachInviteForm.email}
+              onChange={e => setCoachInviteForm(prev => ({ ...prev, email: e.target.value }))}
+              className={`w-full text-sm ${INPUT_BASE_CLASSES}`}
+              placeholder="Email address *"
+            />
+            {coachInviteError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl">{coachInviteError}</div>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowCoachInvite(false); setCoachInviteError(''); }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={coachInviteSaving}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
+              >
+                <Mail className="h-4 w-4" />
+                {coachInviteSaving ? 'Creating invite...' : 'Create & invite'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

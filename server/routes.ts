@@ -30,7 +30,7 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
-import { canAccessScooper, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
+import { canAccessScooper, canInviteExternalUser, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
 import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible, missingRequiredQuestionPrompts, normalizeConditionalAnswers } from "@shared/formLogic";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
@@ -3267,7 +3267,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Account Invitation Routes
-  app.post("/api/invitations", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/invitations", authenticateToken, requirePermission('external_user_invites', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employee_id, email } = req.body;
       const user = (req as any).user;
@@ -3382,6 +3382,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         used_at: new Date(),
       }).where(eq(account_invitations.id, invitation.id));
 
+      // Keep the contact-facing status in sync for guardian invitations.
+      // Coach invitations do not have a contact row, so this update is a
+      // no-op for them.
+      await db.update(employee_contacts).set({
+        invite_status: 'accepted',
+        has_app_access: true,
+        updated_at: new Date(),
+      }).where(eq(employee_contacts.invite_token, token));
+
       logger.info({ employeeId: invitation.employee_id }, 'Account setup completed via invitation');
       res.json({ success: true, message: 'Account setup complete. You can now log in.' });
     } catch (error) {
@@ -3440,6 +3449,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch coach assignments by scooper');
       res.status(500).json({ error: 'Failed to fetch coach assignments' });
+    }
+  });
+
+  // Invite a new Job Coach and assign them to a scooper in one operation.
+  // The transaction prevents an orphaned employee or assignment if any part
+  // of the invitation setup fails.
+  app.post("/api/coach-assignments/invite", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooper_id, first_name, last_name, email } = req.body;
+
+      if (!(await canInviteExternalUser(user))) {
+        return res.status(403).json({ error: 'Insufficient permissions to invite external users' });
+      }
+      if (!scooper_id || !first_name?.trim() || !last_name?.trim() || !email?.trim()) {
+        return res.status(400).json({ error: 'scooper_id, first_name, last_name, and email are required' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'A valid email address is required' });
+      }
+      if (!(await canAccessScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const [scooper] = await db.select().from(employees).where(eq(employees.id, scooper_id)).limit(1);
+      if (!scooper) {
+        return res.status(404).json({ error: 'Super Scooper not found' });
+      }
+      if (scooper.role !== 'Super Scooper') {
+        return res.status(400).json({ error: 'Referenced employee is not a Super Scooper' });
+      }
+      if (!scooper.is_active) {
+        return res.status(400).json({ error: 'Cannot invite a coach for an inactive employee' });
+      }
+
+      const [existingEmail] = await db.select({ id: employees.id }).from(employees)
+        .where(eq(employees.email, normalizedEmail)).limit(1);
+      if (existingEmail) {
+        return res.status(409).json({ error: 'An account with this email already exists' });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [coach] = await tx.insert(employees).values({
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
+          name: `${first_name.trim()} ${last_name.trim()}`,
+          email: normalizedEmail,
+          role: 'Job Coach',
+          is_active: true,
+          has_system_access: true,
+        }).returning();
+
+        const [assignment] = await tx.insert(coach_assignments).values({
+          coach_id: coach.id,
+          scooper_id,
+          assigned_by: user.id,
+        }).returning();
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+        const [invitation] = await tx.insert(account_invitations).values({
+          employee_id: coach.id,
+          email: normalizedEmail,
+          token,
+          expires_at: expiresAt,
+          created_by: user.id,
+        }).returning();
+
+        return { coach, assignment, invitation, token };
+      });
+
+      const { password: _, ...coachWithoutPassword } = result.coach;
+      const setupUrl = `${req.protocol}://${req.get('host')}?setup=${result.token}`;
+      logger.info({
+        coachId: result.coach.id,
+        scooperId: scooper_id,
+        invitationId: result.invitation.id,
+        createdBy: user.id,
+      }, 'Job Coach invited and assigned to scooper');
+      res.status(201).json({
+        coach: coachWithoutPassword,
+        assignment: result.assignment,
+        invitation: result.invitation,
+        setupUrl,
+      });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'An account or coach assignment with these details already exists' });
+      }
+      logger.error({ error }, 'Failed to invite and assign Job Coach');
+      res.status(500).json({ error: 'Failed to invite and assign Job Coach' });
     }
   });
 
@@ -3596,7 +3698,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requirePermission('external_user_invites', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const user = (req as any).user;
@@ -3604,6 +3706,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
       if (!contact) {
         return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      if (!(await canAccessScooper(user, contact.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
       }
 
       if (!['Parent/Guardian', 'Parent'].includes(contact.relationship_type)) {
@@ -3773,7 +3879,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create guardian + link to scooper in one step
-  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { scooper_id, first_name, last_name, email, phone, relationship_type } = req.body;
 
@@ -3797,6 +3903,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = (req as any).user;
+      if (!(await canInviteExternalUser(user))) {
+        return res.status(403).json({ error: 'Insufficient permissions to invite external users' });
+      }
+      if (!(await canAccessScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
+      }
       const guardianData: any = {
         first_name,
         last_name,
