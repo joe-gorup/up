@@ -56,7 +56,7 @@ export default function EmployeeCustomFormsCard({ employee }: { employee: Employ
       }
       setTemplates(await templateResponse.json());
       const loadedResponses = await responsesResponse.json();
-      setResponses(loadedResponses.filter((response: ResponseSet) => ['custom', 'roi_consent'].includes(response.template?.form_type)));
+      setResponses(loadedResponses.filter((response: ResponseSet) => ['custom', 'roi_onboarding'].includes(response.template?.form_type)));
     } catch (error) {
       toast({ title: 'Could not load custom forms', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
     } finally {
