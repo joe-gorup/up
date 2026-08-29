@@ -64,6 +64,19 @@ interface CoachFormResponse {
   answers: Array<{ question_id: string; value_json: any }>;
 }
 
+export function normalizeCoachCheckinPayload(data: unknown): {
+  legacy: CheckinData[];
+  template: any | null;
+  responses: CoachFormResponse[];
+} {
+  const payload = data && typeof data === 'object' ? data as Record<string, unknown> : {};
+  return {
+    legacy: Array.isArray(payload.legacy) ? payload.legacy as CheckinData[] : [],
+    template: payload.template ?? null,
+    responses: Array.isArray(payload.responses) ? payload.responses as CoachFormResponse[] : [],
+  };
+}
+
 type TabType = 'checkins' | 'notes' | 'files';
 
 function formatLabel(value: string): string {
@@ -527,10 +540,10 @@ export default function CoachCheckin({ employeeId, employeeName, onClose }: Coac
     try {
       const res = await apiRequest(`/api/coach-checkins/${employeeId}`);
       if (res.ok) {
-        const data = await res.json();
-        setCheckins(data.legacy || []);
-        setTemplate(data.template || null);
-        setResponses(data.responses || []);
+        const payload = normalizeCoachCheckinPayload(await res.json());
+        setCheckins(payload.legacy);
+        setTemplate(payload.template);
+        setResponses(payload.responses);
       } else {
         const data = await res.json().catch(() => ({}));
         setError(data.error || 'Failed to load check-ins');

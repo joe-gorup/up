@@ -148,6 +148,26 @@ function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): 
   return result;
 }
 
+export function buildCoachCheckinPayload({
+  template,
+  responses,
+  legacyRows,
+  coachMap,
+}: {
+  template: any | null;
+  responses: any[];
+  legacyRows: any[];
+  coachMap: Record<string, string>;
+}) {
+  return {
+    template,
+    responses: responses.filter(Boolean),
+    legacy: legacyRows.map(checkin => ({
+      ...checkin,
+      coach_name: coachMap[checkin.coach_id] || 'Unknown',
+    })),
+  };
+}
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
   app.post("/api/login", async (req: Request, res: Response) => {
@@ -4050,13 +4070,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from(employees).where(inArray(employees.id, coachIds))
         : [];
       const coachMap = Object.fromEntries(coaches.map(coach => [coach.id, `${coach.first_name || ''} ${coach.last_name || ''}`.trim()]));
-      const legacy = legacyRows.map(checkin => ({ ...checkin, coach_name: coachMap[checkin.coach_id] || 'Unknown' }));
 
-      res.json({
+      res.json(buildCoachCheckinPayload({
         template: template ? await hydrateFormTemplate(template.id) : null,
-        responses: responses.filter(Boolean),
-        legacy,
-      });
+        responses,
+        legacyRows,
+        coachMap,
+      }));
     } catch (error) {
       logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach check-ins');
       res.status(500).json({ error: 'Failed to fetch coach check-ins' });

@@ -1,4 +1,3 @@
-import { useEffect, useMemo, useState } from 'react';
 import {
   Archive, ArrowDown, ArrowLeft, ArrowUp, Check, ClipboardCheck, Copy, Edit, Eye,
   FileText, GripVertical, Plus, Save, Send, Settings2, Trash2, X,
@@ -10,6 +9,7 @@ import { useToast } from '../hooks/use-toast';
 import AppSelect from './ui/AppSelect';
 import Modal from './ui/Modal';
 import { isQuestionRequired, isQuestionVisible, normalizeFormOption } from '@shared/formLogic';
+import React, { useEffect, useMemo, useState } from 'react';
 
 type QuestionType =
   | 'free_text' | 'long_text' | 'yes_no' | 'single_select' | 'multi_select'
@@ -89,7 +89,7 @@ function optionText(option: any): string {
   return [item.key, item.label, item.icon].filter(Boolean).join(' | ');
 }
 
-function answerPrimitive(value: any): any {
+export function answerPrimitive(value: any): any {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value']) {
       if (key in value) return value[key];
@@ -408,7 +408,7 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
   );
 }
 
-function AnswerControl({ question, value, onChange }: { question: FormQuestion; value: any; onChange: (value: any) => void }) {
+export function AnswerControl({ question, value, onChange }: { question: FormQuestion; value: any; onChange: (value: any) => void }) {
   const config = question.config_json || {};
   const options = config.options || ['Option 1', 'Option 2'];
   const normalizedOptions = (Array.isArray(options) ? options : [])
