@@ -251,5 +251,6 @@ Report back: what changed, how tested, any blockers
 
 1. ~~PACKET-001 … 003C~~ ✅ **Done** (through 003C Aug 29).  
 2. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
-3. **Replit (now):** **PACKET-003B-FIX** — dedupe reviews + Forms card + polish (see audit Aug 29).  
-4. **Re-audit** after fix, then **PACKET-004** (Allison data) + **003D**.
+3. ~~PACKET-003B-FIX~~ ✅ **Done** (Aug 29).  
+4. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
+5. **Replit (now):** **PACKET-003D** — advanced form types (rich text, file, signature, etc.).

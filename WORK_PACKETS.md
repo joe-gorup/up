@@ -15,13 +15,12 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
 | **3b** | **PACKET-003A-UX** | ✅ **Done** (Joe, Aug 28) | ~half day |
 | **4** | **PACKET-003B** | ✅ Done — **repair:** PACKET-003B-FIX | multi-day |
-| **4-fix** | **PACKET-003B-FIX** | **Ready — do before 004 / new features** | ~half day |
+| **4-fix** | **PACKET-003B-FIX** | ✅ **Done** (Joe, Aug 29) | ~half day |
 | **6** | **PACKET-003C** | ✅ **Done** (Joe, Aug 29) | multi-day |
-| 7 | PACKET-004 | Optional — historical mid-year data entry (product) | small |
-| **8** | **PACKET-003D** | **After 003B-FIX** | multi-day |
+| 7 | PACKET-004 | **Ready — Allison data entry** | small |
+| **8** | **PACKET-003D** | **Ready — do next (engineering)** | multi-day |
 
-**Do next (Replit):** **PACKET-003B-FIX** — repair audit findings from Aug 29 code review.  
-**Then:** re-audit → **PACKET-004** (Allison data) + **003D** in parallel.
+**Do next:** **PACKET-004** (Allison enters PDF mid-year in Reviews UI) + **PACKET-003D** (advanced form types).
 
 ### Packet numbering (locked — do not mix)
 
@@ -589,10 +588,10 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 | Packet | Topic | Blocked by | Next? |
 |--------|--------|------------|-------|
-| **PACKET-003B-FIX** | Reviews dedupe + Forms card + polish | 003B ✅ | **Replit — do next** |
+| **PACKET-003B-FIX** | Reviews dedupe + Forms card + polish | 003B ✅ | ✅ Done Aug 29 |
 | **PACKET-003C** | Conditionals + coach check-in migration | 003B ✅ | ✅ Done |
-| PACKET-004 | Historical PDF mid-year answers (Allison / optional bulk script) | 003B-FIX ✅ | **Product after fix** |
-| PACKET-005 | Unified notes feed (T5) | 003C ✅ | ✅ Likely on main — verify in re-audit |
-| PACKET-006 | Invites + `external_user_invites` (T6) | 005 optional | Partial on main — verify |
-| PACKET-003D | Advanced types + ROI subset | 003B-FIX ✅ | After fix |
+| PACKET-004 | Historical PDF mid-year answers (Allison) | 003B-FIX ✅ | **Product now** |
+| PACKET-005 | Unified notes feed (T5) | 003C ✅ | ✅ On main |
+| PACKET-006 | Invites + `external_user_invites` (T6) | 005 optional | Partial on main |
+| **PACKET-003D** | Advanced types + ROI subset | 003B-FIX ✅ | **Replit next** |
 | PACKET-007 | Profile field catalog (T3-B) | 003A ✅ | Partial on main — verify |
