@@ -4,6 +4,7 @@ import { useData, GoalTemplate } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './ui/Modal';
 import TemplateVideoManager from './TemplateVideoManager';
+import AppSelect from './ui/AppSelect';
 
 export default function GoalTemplates() {
   const { goalTemplates, addGoalTemplate, updateGoalTemplate, archiveGoalTemplate } = useData();
@@ -400,18 +401,19 @@ export default function GoalTemplates() {
                         className="w-24 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
                         data-testid="input-duration-number"
                       />
-                      <select
-                        required
+                      <AppSelect
                         value={formData.durationUnit}
-                        onChange={(e) => setFormData(prev => ({ ...prev, durationUnit: e.target.value }))}
-                        className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
+                        onChange={(value) => setFormData(prev => ({ ...prev, durationUnit: value }))}
+                        options={[
+                          { value: 'days', label: 'Days' },
+                          { value: 'weeks', label: 'Weeks' },
+                          { value: 'months', label: 'Months' },
+                          { value: 'years', label: 'Years' },
+                        ]}
+                        className="flex-1"
+                        aria-label="Duration unit"
                         data-testid="select-duration-unit"
-                      >
-                        <option value="days">Days</option>
-                        <option value="weeks">Weeks</option>
-                        <option value="months">Months</option>
-                        <option value="years">Years</option>
-                      </select>
+                      />
                     </div>
                     <p className="text-sm text-gray-500 mt-1">Set the target timeframe for goal completion</p>
                   </div>
@@ -492,17 +494,19 @@ export default function GoalTemplates() {
                             <label htmlFor={`timer-${index}`} className="text-sm font-medium text-gray-700 min-w-0 flex-shrink-0">
                               Timer:
                             </label>
-                            <select
+                            <AppSelect
                               id={`timer-${index}`}
                               value={step.timerType}
-                              onChange={(e) => updateStep(index, 'timerType', e.target.value)}
-                              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-base"
+                              onChange={(value) => updateStep(index, 'timerType', value)}
+                              options={[
+                                { value: 'none', label: 'No Timer' },
+                                { value: 'optional', label: 'Optional Timer' },
+                                { value: 'required', label: 'Required Timer' },
+                              ]}
+                              className="flex-1"
+                              aria-label={`Timer for step ${index + 1}`}
                               data-testid={`select-timer-type-${index}`}
-                            >
-                              <option value="none">No Timer</option>
-                              <option value="optional">Optional Timer</option>
-                              <option value="required">Required Timer</option>
-                            </select>
+                            />
                           </div>
 
                           {step.id ? (

@@ -1791,6 +1791,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/employees/:employeeId/assessment-history", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee assessment history' });
       const sessions = await db.select({
         id: assessment_sessions.id,
         manager_id: assessment_sessions.manager_id,
@@ -1817,6 +1819,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/employees/:employeeId/assessment-history-details", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee assessment history' });
 
       const sessions = await db.select({
         id: assessment_sessions.id,
@@ -4260,6 +4264,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/certifications/:employeeId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee certifications' });
       const certs = await db.select().from(promotion_certifications)
         .where(eq(promotion_certifications.employee_id, employeeId))
         .orderBy(desc(promotion_certifications.created_at));
@@ -5864,6 +5870,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error }, 'Failed to load profile form template');
       res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
+
+  app.get("/api/form-templates/for-employee", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = typeof req.query.employee_id === 'string' ? req.query.employee_id : '';
+      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot view forms for this employee' });
+
+      const templates = await db.select().from(form_templates)
+        .where(and(eq(form_templates.form_type, 'custom'), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at));
+      const hydrated = await Promise.all(templates.map(async template => ({
+        ...(await hydrateFormTemplate(template.id)),
+        can_fill: templateAllowsFilling(template, user.role),
+      })));
+      res.json(hydrated);
+    } catch (error) {
+      logger.error({ error }, 'Failed to load employee custom form templates');
+      res.status(500).json({ error: 'Failed to load custom form templates' });
     }
   });
 

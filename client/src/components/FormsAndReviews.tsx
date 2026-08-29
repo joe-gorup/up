@@ -364,6 +364,9 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
                   ]}
                   aria-label="Form type"
                 />
+                <p className="text-[11px] leading-4 text-slate-400">
+                  Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs.
+                </p>
                 <AppSelect
                   value={draft.status || 'active'}
                   onChange={value => setDraft(prev => ({ ...prev, status: value }))}

@@ -11,8 +11,8 @@ import GoalAssignment from './GoalAssignment';
 import TemplateVideoManager from './TemplateVideoManager';
 import StepVideoIcons from './StepVideoIcons';
 import CoachCheckin from './CoachCheckin';
-import EmployeeReviews from './EmployeeReviews';
 import EmployeeReviewsCard from './EmployeeReviewsCard';
+import EmployeeCustomFormsCard from './EmployeeCustomFormsCard';
 import CertificationTemplateFlow from './CertificationTemplateFlow';
 import { FormFiller } from './FormsAndReviews';
 import EmployeeProgress from './EmployeeProgress';
@@ -2646,9 +2646,10 @@ const handleGenerateInvitation = async () => {
 
           {/* Employee Reviews */}
           {employee.role === 'Super Scooper' && (
-            <EmployeeReviewsCard employee={employee}>
-              <EmployeeReviews employeeId={employeeId} embedded />
-            </EmployeeReviewsCard>
+            <>
+              <EmployeeReviewsCard employee={employee} />
+              <EmployeeCustomFormsCard employee={employee} />
+            </>
           )}
 
         </div>
