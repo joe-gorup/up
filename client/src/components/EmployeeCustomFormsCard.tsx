@@ -56,7 +56,7 @@ export default function EmployeeCustomFormsCard({ employee }: { employee: Employ
       }
       setTemplates(await templateResponse.json());
       const loadedResponses = await responsesResponse.json();
-      setResponses(loadedResponses.filter((response: ResponseSet) => response.template?.form_type === 'custom'));
+      setResponses(loadedResponses.filter((response: ResponseSet) => ['custom', 'roi_consent'].includes(response.template?.form_type)));
     } catch (error) {
       toast({ title: 'Could not load custom forms', description: error instanceof Error ? error.message : 'Please try again.', type: 'error' });
     } finally {
@@ -103,7 +103,7 @@ export default function EmployeeCustomFormsCard({ employee }: { employee: Employ
           <div className="rounded-xl bg-sky-50 p-2 text-sky-700"><FileText className="h-5 w-5" /></div>
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Forms</h2>
-            <p className="text-xs text-gray-500">Custom employee forms</p>
+            <p className="text-xs text-gray-500">Custom forms and limited ROI consent capture</p>
           </div>
         </div>
         <button type="button" onClick={load} className="rounded-xl p-2 text-gray-400 hover:bg-gray-50 hover:text-gray-700" title="Refresh custom forms">
