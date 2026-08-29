@@ -3,6 +3,7 @@ import { Target, Plus, Edit, Archive, Search, Eye, Copy, X } from 'lucide-react'
 import { useData, GoalTemplate } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import Modal from './ui/Modal';
+import TemplateVideoManager from './TemplateVideoManager';
 
 export default function GoalTemplates() {
   const { goalTemplates, addGoalTemplate, updateGoalTemplate, archiveGoalTemplate } = useData();
@@ -14,13 +15,28 @@ export default function GoalTemplates() {
   const [editingTemplate, setEditingTemplate] = useState<string | null>(null);
   const [viewingTemplate, setViewingTemplate] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
+  type StepFormItem = {
+    id?: string;
+    stepOrder: number;
+    stepDescription: string;
+    isRequired: boolean;
+    timerType: 'none' | 'optional' | 'required';
+  };
+
+  const [formData, setFormData] = useState<{
+    name: string;
+    goalStatement: string;
+    durationNumber: number;
+    durationUnit: string;
+    status: 'active' | 'archived';
+    steps: StepFormItem[];
+  }>({
     name: '',
     goalStatement: '',
     durationNumber: 90,
     durationUnit: 'days',
-    status: 'active' as 'active' | 'archived',
-    steps: [{ stepOrder: 1, stepDescription: '', isRequired: true, timerType: 'none' as 'none' | 'optional' | 'required' }]
+    status: 'active',
+    steps: [{ stepOrder: 1, stepDescription: '', isRequired: true, timerType: 'none' }]
   });
 
   const filteredTemplates = goalTemplates
@@ -39,11 +55,14 @@ export default function GoalTemplates() {
       ...formData,
       relativeTargetDuration: `${formData.durationNumber} ${formData.durationUnit}`,
       defaultMasteryCriteria: '3 consecutive shifts with all required steps Correct', // Backend still expects this
+      // Preserve real DB ids on existing steps so the backend upsert can match
+      // them and keep their per-step video links. Only assign placeholder ids
+      // for brand-new steps; the backend treats unknown ids as inserts.
       steps: formData.steps
         .filter(step => step.stepDescription.trim() !== '')
         .map((step, index) => ({
           ...step,
-          id: `${Date.now()}-${index}`
+          id: step.id ?? `new-${Date.now()}-${index}`
         }))
     };
     
@@ -143,6 +162,7 @@ export default function GoalTemplates() {
       durationUnit: duration.unit,
       status: template.status,
       steps: template.steps.map(step => ({
+        id: step.id,
         stepOrder: step.stepOrder,
         stepDescription: step.stepDescription,
         isRequired: step.isRequired,
@@ -258,26 +278,43 @@ export default function GoalTemplates() {
             </div>
           </div>
 
+          <TemplateVideoManager templateId={viewTemplate.id} mode="admin" />
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Goal Steps ({viewTemplate.steps.length})</h2>
             
             <div className="space-y-4">
               {viewTemplate.steps.map((step, index) => (
                 <div
-                  key={index}
+                  key={step.id ?? index}
                   className={`p-4 border rounded-xl ${
                     step.isRequired 
                       ? 'border-blue-200 bg-blue-50' 
                       : 'border-gray-200 bg-gray-50'
                   }`}
                 >
-                  <div className="flex items-start justify-between">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="flex items-start space-x-3 flex-1">
                       <span className="font-medium text-gray-900 mt-1">
                         {step.stepOrder}. {step.stepDescription}
                       </span>
                     </div>
+                    {step.timerType && step.timerType !== 'none' && (
+                      <span
+                        className={`shrink-0 mt-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                          step.timerType === 'required'
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-blue-100 text-blue-700 border border-blue-200'
+                        }`}
+                        data-testid={`badge-timer-${index}`}
+                      >
+                        {step.timerType === 'required' ? 'Timer required' : 'Timer optional'}
+                      </span>
+                    )}
                   </div>
+                  {step.id && (
+                    <TemplateVideoManager stepId={step.id} mode="admin" compact heading="Step Videos" />
+                  )}
                 </div>
               ))}
             </div>
@@ -467,11 +504,25 @@ export default function GoalTemplates() {
                               <option value="required">Required Timer</option>
                             </select>
                           </div>
+
+                          {step.id ? (
+                            <TemplateVideoManager stepId={step.id} mode="admin" compact heading="Step Videos" />
+                          ) : (
+                            <p className="text-xs text-gray-500 italic">Save the template to attach videos to this step.</p>
+                          )}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
+
+                {editingTemplate ? (
+                  <TemplateVideoManager templateId={editingTemplate} mode="admin" />
+                ) : (
+                  <div className="bg-gray-50 border border-dashed border-gray-200 rounded-xl p-4 text-sm text-gray-600">
+                    Template-wide training videos can be attached after you create the template. Save it first, then re-open it to add videos that apply to the whole goal.
+                  </div>
+                )}
 
                 <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
                   <button

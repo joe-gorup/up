@@ -6,12 +6,18 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema,
-  PERMISSION_FEATURES, CONFIGURABLE_ROLES
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, profile_notes, coach_checkins, coach_files, coach_notes, employee_contacts, profile_field_definitions, option_lists, option_list_items, role_permissions, employee_reviews,
+  form_templates, form_sections, form_questions, form_response_sets, form_answers,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertProfileNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertProfileFieldDefinitionSchema, insertOptionListSchema, insertOptionListItemSchema, insertEmployeeReviewSchema,
+  insertFormTemplateSchema, insertFormSectionSchema, insertFormQuestionSchema,
+  videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
+  PERMISSION_FEATURES, CONFIGURABLE_ROLES,
+  calculateDateFromRelativeDuration, getAccommodationWriteError, hasAccommodationUpdate
 } from "@shared/schema";
+import { buildNotesFeed, plainTextFromRichContent, type NotesFeedEntry } from "@shared/notesFeed";
+import { DEFAULT_CONTACT_RELATIONSHIP_OPTIONS, DEFAULT_PROFILE_FIELDS, PROFILE_FIELD_KEY_PATTERN, cleanProfileFieldValues, isCatalogRoleMatch, normalizeCatalogKey } from "@shared/profileCatalog";
 import crypto from "crypto";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
 
 function parseCoachFilePath(path: string): { bucketName: string; objectName: string } {
@@ -22,9 +28,128 @@ function parseCoachFilePath(path: string): { bucketName: string; objectName: str
 import multer from "multer";
 import csvParser from "csv-parser";
 import { 
-  hashPassword, comparePassword, generateToken, authenticateToken, requireRole,
+  hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
+import { canAccessScooper, canAccessSuperScooper, canInviteExternalUser, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
+import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible, missingRequiredQuestionPrompts, normalizeConditionalAnswers } from "@shared/formLogic";
+
+// One-shot backfill: for any goal_steps row that has no template_step_id yet
+// but whose parent development_goal references a template, look up the matching
+// template step by step_order and link them. Idempotent: only updates rows
+// whose template_step_id is currently NULL.
+async function backfillGoalStepTemplateLinks() {
+  try {
+    const result: { rowCount?: number | null } = await db.execute(sql`
+      UPDATE goal_steps AS gs
+      SET template_step_id = sub.template_step_id
+      FROM (
+        SELECT gs2.id AS goal_step_id, gts.id AS template_step_id
+        FROM goal_steps gs2
+        JOIN development_goals dg ON dg.id = gs2.goal_id
+        JOIN goal_template_steps gts
+          ON gts.template_id = dg.template_id
+         AND gts.step_order = gs2.step_order
+        WHERE gs2.template_step_id IS NULL
+          AND dg.template_id IS NOT NULL
+      ) AS sub
+      WHERE gs.id = sub.goal_step_id
+    `);
+    const updated = result.rowCount ?? 0;
+    if (updated > 0) {
+      logger.info({ updated }, 'Backfilled goal_steps.template_step_id from template step order');
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to backfill goal_steps.template_step_id — non-fatal, continuing');
+  }
+}
+
+// Auto-fill any missing role_permissions rows so new features never block existing users
+async function ensureDefaultPermissions() {
+  try {
+    const existing = await db.select({ role: role_permissions.role, feature: role_permissions.feature }).from(role_permissions);
+    const existingSet = new Set(existing.map(r => `${r.role}|${r.feature}`));
+
+    const toInsert: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
+
+    for (const feature of PERMISSION_FEATURES) {
+      for (const role of CONFIGURABLE_ROLES) {
+        if (existingSet.has(`${role}|${feature}`)) continue;
+
+        let can_view = false;
+        let can_modify = false;
+        let can_delete = false;
+
+        if (role === 'Shift Lead' || role === 'Assistant Manager') {
+          can_view = feature !== 'external_user_invites' && (feature !== 'form_responses' || role === 'Shift Lead');
+          can_modify = ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'form_responses', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature);
+          can_delete = false;
+        } else if (role === 'Job Coach') {
+          can_view = ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature);
+          can_modify = ['coach_notes', 'coach_files'].includes(feature);
+          can_delete = ['coach_notes', 'coach_files'].includes(feature);
+        } else if (role === 'Guardian') {
+          can_view = ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature);
+          can_modify = ['guardian_notes'].includes(feature);
+          can_delete = false;
+        }
+
+        toInsert.push({ role, feature, can_view, can_modify, can_delete });
+      }
+    }
+
+    if (toInsert.length > 0) {
+      for (const row of toInsert) {
+        await db.insert(role_permissions).values(row);
+      }
+      logger.info({ count: toInsert.length }, 'Auto-filled missing default permission rows');
+    }
+    // Form responses were introduced before Shift Leads were allowed to fill
+    // them. Upgrade only the former default (view enabled, modify disabled)
+    // while preserving a full opt-out that an Administrator intentionally set.
+    await db.update(role_permissions).set({ can_modify: true }).where(and(
+      eq(role_permissions.role, 'Shift Lead'),
+      eq(role_permissions.feature, 'form_responses'),
+      eq(role_permissions.can_view, true),
+      eq(role_permissions.can_modify, false),
+    ));
+  } catch (error) {
+    logger.error({ error }, 'Failed to auto-fill default permissions — non-fatal, continuing startup');
+  }
+}
+
+async function ensureDefaultProfileCatalog() {
+  try {
+    for (const field of DEFAULT_PROFILE_FIELDS) {
+      await db.insert(profile_field_definitions).values(field).onConflictDoNothing({
+        target: profile_field_definitions.key,
+      });
+    }
+
+    const [contactList] = await db.insert(option_lists).values({
+      key: 'contact_relationships',
+      label: 'Contact Relationships',
+    }).onConflictDoNothing({
+      target: option_lists.key,
+    }).returning();
+
+    const existingContactList = contactList || (await db.select({ id: option_lists.id })
+      .from(option_lists)
+      .where(eq(option_lists.key, 'contact_relationships'))
+      .limit(1))[0];
+
+    if (existingContactList) {
+      for (const option of DEFAULT_CONTACT_RELATIONSHIP_OPTIONS) {
+        await db.insert(option_list_items).values({
+          ...option,
+          list_id: existingContactList.id,
+        }).onConflictDoNothing();
+      }
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to seed default profile catalog — non-fatal, continuing startup');
+  }
+}
 
 // Helper to strip sensitive fields from employee objects before sending to clients
 function stripSensitiveFields<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
@@ -41,7 +166,8 @@ const EMPLOYEE_ALLOWED_FIELDS = [
   'first_name', 'last_name', 'email', 'role', 'date_of_birth',
   'is_active', 'has_system_access', 'password',
   'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
-  'regulation_strategies', 'has_service_provider', 'service_providers',
+  'regulation_strategies', 'accommodations', 'has_service_provider', 'service_providers',
+  'profile_field_values',
   'profile_image_url', 'location',
   'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
   'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',
@@ -58,6 +184,161 @@ function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): 
   return result;
 }
 
+async function validateProfileFieldValues(values: unknown, employeeRole: string): Promise<Record<string, string[]> | null> {
+  const cleaned = cleanProfileFieldValues(values);
+  if (!cleaned) return null;
+
+  const definitions = await db.select({
+    key: profile_field_definitions.key,
+    value_shape: profile_field_definitions.value_shape,
+    applies_to_roles: profile_field_definitions.applies_to_roles,
+  }).from(profile_field_definitions);
+  const definitionByKey = new Map(definitions.map(definition => [definition.key, definition]));
+
+  for (const key of Object.keys(cleaned)) {
+    const definition = definitionByKey.get(key);
+    if (!definition || definition.value_shape !== 'string_list' || !isCatalogRoleMatch(definition.applies_to_roles, employeeRole)) {
+      return null;
+    }
+  }
+  return cleaned;
+}
+
+function noteAuthorName(employee: { name?: string | null; first_name?: string | null; last_name?: string | null } | undefined): string {
+  if (!employee) return 'Unknown';
+  return `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || employee.name || 'Unknown';
+}
+
+function noteDate(value: Date | string | null | undefined, fallback?: Date | string | null): string {
+  const candidate = value || fallback;
+  const parsed = candidate ? new Date(candidate) : new Date(0);
+  return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
+}
+
+async function loadUnifiedNotes(scooperId: string, viewerId: string, viewerRole: string) {
+  const [guardianRows, coachRows, checkinRows, profileRows] = await Promise.all([
+    db.select().from(guardian_notes).where(eq(guardian_notes.scooper_id, scooperId)),
+    db.select().from(coach_notes).where(eq(coach_notes.employee_id, scooperId)),
+    db.select().from(coach_checkins).where(eq(coach_checkins.employee_id, scooperId)),
+    db.select().from(profile_notes).where(and(
+      eq(profile_notes.scooper_id, scooperId),
+      eq(profile_notes.status, 'active'),
+    )),
+  ]);
+
+  const authorIds = Array.from(new Set([
+    ...guardianRows.map(note => note.guardian_id),
+    ...coachRows.map(note => note.coach_id),
+    ...checkinRows.map(checkin => checkin.coach_id),
+    ...profileRows.map(note => note.author_id),
+  ].filter((authorId): authorId is string => Boolean(authorId))));
+  const authorRows = authorIds.length > 0
+    ? await db.select({
+        id: employees.id,
+        name: employees.name,
+        first_name: employees.first_name,
+        last_name: employees.last_name,
+        role: employees.role,
+      }).from(employees).where(inArray(employees.id, authorIds))
+    : [];
+  const authorMap = new Map(authorRows.map(author => [author.id, author]));
+
+  const entries: NotesFeedEntry[] = [
+    ...guardianRows.map(note => {
+      const author = authorMap.get(note.guardian_id);
+      return {
+        id: `guardian:${note.id}`,
+        sourceType: 'guardian' as const,
+        sourceId: note.id,
+        body: note.note,
+        title: null,
+        authorId: note.guardian_id,
+        authorName: noteAuthorName(author),
+        authorRole: author?.role || 'Guardian',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
+    ...coachRows.map(note => {
+      const author = authorMap.get(note.coach_id);
+      return {
+        id: `coach:${note.id}`,
+        sourceType: 'coach' as const,
+        sourceId: note.id,
+        body: plainTextFromRichContent(note.content),
+        title: note.title,
+        authorId: note.coach_id,
+        authorName: noteAuthorName(author),
+        authorRole: author?.role || 'Job Coach',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
+    ...checkinRows
+      .filter(checkin => Boolean(checkin.notes?.trim()))
+      .map(checkin => {
+        const author = authorMap.get(checkin.coach_id);
+        return {
+          id: `checkin:${checkin.id}`,
+          sourceType: 'checkin' as const,
+          sourceId: checkin.id,
+          body: checkin.notes!.trim(),
+          title: 'Coach Check-In summary',
+          authorId: checkin.coach_id,
+          authorName: noteAuthorName(author),
+          authorRole: author?.role || 'Job Coach',
+          createdAt: noteDate(checkin.created_at, checkin.checkin_date),
+          updatedAt: null,
+          linked: true,
+        };
+      }),
+    ...profileRows.map(note => {
+      const author = note.author_id ? authorMap.get(note.author_id) : undefined;
+      return {
+        id: `profile:${note.id}`,
+        sourceType: 'profile' as const,
+        sourceId: note.id,
+        body: note.body,
+        title: null,
+        noteType: note.source_type,
+        authorId: note.author_id || '',
+        authorName: noteAuthorName(author),
+        authorRole: note.author_role_snapshot || author?.role || 'Unknown',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
+  ];
+
+  return buildNotesFeed(entries).map(entry => ({
+    ...entry,
+    createdAt: noteDate(entry.createdAt),
+    updatedAt: entry.updatedAt ? noteDate(entry.updatedAt) : null,
+    canEdit: entry.sourceType !== 'checkin' && entry.authorId === viewerId,
+    canDelete: viewerRole === 'Administrator' && entry.sourceType !== 'checkin',
+  }));
+}
+
+export function buildCoachCheckinPayload({
+  template,
+  responses,
+  legacyRows,
+  coachMap,
+}: {
+  template: any | null;
+  responses: any[];
+  legacyRows: any[];
+  coachMap: Record<string, string>;
+}) {
+  return {
+    template,
+    responses: responses.filter(Boolean),
+    legacy: legacyRows.map(checkin => ({
+      ...checkin,
+      coach_name: coachMap[checkin.coach_id] || 'Unknown',
+    })),
+  };
+}
 export async function registerRoutes(app: Express): Promise<Server> {
   // Authentication endpoints
   app.post("/api/login", async (req: Request, res: Response) => {
@@ -410,8 +691,230 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  // Profile field definitions and shared options are authenticated catalog data.
+  // Administrators receive inactive entries for management; other roles only
+  // receive active fields that apply to their role.
+  app.get("/api/profile-catalog", authenticateToken, async (req: Request, res: Response) => {
     try {
+      const user = (req as any).user as AuthUser;
+      const includeInactive = user.role === 'Administrator' && req.query.include_inactive === 'true';
+      const requestedProfileRole = typeof req.query.employee_role === 'string'
+        ? req.query.employee_role.trim()
+        : '';
+      const catalogRole = requestedProfileRole || user.role;
+      const definitions = await db.select().from(profile_field_definitions)
+        .orderBy(profile_field_definitions.sort_order, profile_field_definitions.label);
+      const visibleDefinitions = definitions.filter(definition =>
+        (includeInactive || definition.status === 'active') &&
+        (user.role === 'Administrator' || isCatalogRoleMatch(definition.applies_to_roles, catalogRole))
+      );
+
+      const lists = await db.select().from(option_lists).orderBy(option_lists.label);
+      const listIds = lists.map(list => list.id);
+      const items = listIds.length > 0
+        ? await db.select().from(option_list_items)
+          .where(includeInactive ? inArray(option_list_items.list_id, listIds) : and(
+            inArray(option_list_items.list_id, listIds),
+            eq(option_list_items.status, 'active'),
+          ))
+          .orderBy(option_list_items.sort_order, option_list_items.label)
+        : [];
+
+      res.json({
+        profileFields: visibleDefinitions,
+        optionLists: lists
+          .filter(list => includeInactive || list.status === 'active')
+          .map(list => ({
+            ...list,
+            items: items.filter(item => item.list_id === list.id),
+          })),
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch profile catalog');
+      res.status(500).json({ error: 'Failed to fetch profile catalog' });
+    }
+  });
+
+  app.post("/api/profile-catalog/fields", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const key = normalizeCatalogKey(req.body.key || req.body.label);
+      const label = String(req.body.label || '').trim();
+      const description = req.body.description === null ? null : String(req.body.description || '').trim() || null;
+      const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : 0;
+      const appliesToRoles = Array.isArray(req.body.applies_to_roles) && req.body.applies_to_roles.length > 0
+        ? req.body.applies_to_roles.filter((role: unknown): role is string => typeof role === 'string')
+        : ['Super Scooper'];
+
+      if (!PROFILE_FIELD_KEY_PATTERN.test(key) || !label || label.length > 120) {
+        return res.status(400).json({ error: 'A valid key and a field label are required' });
+      }
+      if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+        return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+      }
+      if (req.body.value_shape && req.body.value_shape !== 'string_list') {
+        return res.status(400).json({ error: 'Only string_list profile fields are supported' });
+      }
+
+      const [created] = await db.insert(profile_field_definitions).values({
+        key,
+        label,
+        description,
+        sort_order: sortOrder,
+        status: 'active',
+        value_shape: 'string_list',
+        applies_to_roles: appliesToRoles,
+        created_by: user.id,
+      }).returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'A profile field with that key already exists' });
+      }
+      logger.error({ error }, 'Failed to create profile field');
+      res.status(500).json({ error: 'Failed to create profile field' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/fields/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'A field label is required' });
+        updateData.label = label;
+      }
+      if (req.body.description !== undefined) {
+        updateData.description = req.body.description === null ? null : String(req.body.description).trim() || null;
+      }
+      if (req.body.sort_order !== undefined) {
+        if (!Number.isInteger(req.body.sort_order) || req.body.sort_order < 0 || req.body.sort_order > 10000) {
+          return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+        }
+        updateData.sort_order = req.body.sort_order;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid field status' });
+        updateData.status = req.body.status;
+      }
+      if (req.body.applies_to_roles !== undefined) {
+        if (!Array.isArray(req.body.applies_to_roles) || req.body.applies_to_roles.some((role: unknown) => typeof role !== 'string')) {
+          return res.status(400).json({ error: 'applies_to_roles must be an array of role names' });
+        }
+        updateData.applies_to_roles = req.body.applies_to_roles;
+      }
+
+      const [updated] = await db.update(profile_field_definitions)
+        .set(updateData)
+        .where(eq(profile_field_definitions.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Profile field not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, fieldId: req.params.id }, 'Failed to update profile field');
+      res.status(500).json({ error: 'Failed to update profile field' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/option-lists/:key", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'An option list label is required' });
+        updateData.label = label;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid option list status' });
+        updateData.status = req.body.status;
+      }
+      const [updated] = await db.update(option_lists)
+        .set(updateData)
+        .where(eq(option_lists.key, req.params.key))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Option list not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, listKey: req.params.key }, 'Failed to update option list');
+      res.status(500).json({ error: 'Failed to update option list' });
+    }
+  });
+
+  app.post("/api/profile-catalog/option-lists/:key/items", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const key = normalizeCatalogKey(req.body.key || req.body.label);
+      const label = String(req.body.label || '').trim();
+      const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : 0;
+      if (!PROFILE_FIELD_KEY_PATTERN.test(key) || !label || label.length > 120) {
+        return res.status(400).json({ error: 'A valid option key and label are required' });
+      }
+      if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+        return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+      }
+      const [list] = await db.select({ id: option_lists.id }).from(option_lists)
+        .where(eq(option_lists.key, req.params.key)).limit(1);
+      if (!list) return res.status(404).json({ error: 'Option list not found' });
+
+      const [created] = await db.insert(option_list_items).values({
+        list_id: list.id,
+        key,
+        label,
+        sort_order: sortOrder,
+        status: 'active',
+      }).returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'An option with that key already exists' });
+      }
+      logger.error({ error, listKey: req.params.key }, 'Failed to create option list item');
+      res.status(500).json({ error: 'Failed to create option list item' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/options/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'An option label is required' });
+        updateData.label = label;
+      }
+      if (req.body.sort_order !== undefined) {
+        if (!Number.isInteger(req.body.sort_order) || req.body.sort_order < 0 || req.body.sort_order > 10000) {
+          return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+        }
+        updateData.sort_order = req.body.sort_order;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid option status' });
+        updateData.status = req.body.status;
+      }
+      const [updated] = await db.update(option_list_items)
+        .set(updateData)
+        .where(eq(option_list_items.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Option not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, optionId: req.params.id }, 'Failed to update option list item');
+      res.status(500).json({ error: 'Failed to update option list item' });
+    }
+  });
+
+  app.post("/api/employees", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      if (hasAccommodationUpdate(req.body)) {
+        const accommodationError = getAccommodationWriteError(
+          user.role,
+          req.body.role ?? 'Super Scooper',
+        );
+        if (accommodationError) {
+          return res.status(accommodationError.status).json({ error: accommodationError.message });
+        }
+      }
+
       // Check for existing employee with same email to prevent duplicates (only if email provided)
       if (req.body.email && req.body.email.trim() !== '') {
         const existingEmployee = await db.select().from(employees).where(eq(employees.email, req.body.email)).limit(1);
@@ -445,6 +948,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (employeeData.password) {
         employeeData.password = await hashPassword(employeeData.password);
       }
+
+      if (req.body.profile_field_values !== undefined) {
+        const profileValues = await validateProfileFieldValues(
+          req.body.profile_field_values,
+          employeeData.role || 'Super Scooper',
+        );
+        if (!profileValues) {
+          return res.status(400).json({ error: 'Profile field values must match active string-list fields for this role' });
+        }
+        employeeData.profile_field_values = profileValues;
+      }
       
       const [newEmployee] = await db.insert(employees).values(employeeData as any).returning();
       logger.info({ employeeId: newEmployee.id, name: `${newEmployee.first_name} ${newEmployee.last_name}` }, 'Employee created successfully');
@@ -458,9 +972,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employees/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employees/:id", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (hasAccommodationUpdate(req.body)) {
+        // Reject the sensitive-field write before looking up the target so a
+        // non-administrator consistently receives the authorization response.
+        const actorError = getAccommodationWriteError(user.role, 'Super Scooper');
+        if (actorError) {
+          return res.status(actorError.status).json({ error: actorError.message });
+        }
+
+        const [currentEmployee] = await db
+          .select({ role: employees.role })
+          .from(employees)
+          .where(eq(employees.id, id))
+          .limit(1);
+        if (!currentEmployee) {
+          return res.status(404).json({ error: 'Employee not found' });
+        }
+        const accommodationError = getAccommodationWriteError(
+          user.role,
+          req.body.role ?? currentEmployee.role,
+        );
+        if (accommodationError) {
+          return res.status(accommodationError.status).json({ error: accommodationError.message });
+        }
+      }
+
+      if (req.body.profile_field_values !== undefined) {
+        const [currentEmployee] = await db
+          .select({ role: employees.role })
+          .from(employees)
+          .where(eq(employees.id, id))
+          .limit(1);
+        if (!currentEmployee) return res.status(404).json({ error: 'Employee not found' });
+        if (user.role !== 'Administrator' && !(await canAccessScooper(user, id))) {
+          return res.status(403).json({ error: 'You do not have access to update this profile' });
+        }
+        const profileValues = await validateProfileFieldValues(req.body.profile_field_values, req.body.role ?? currentEmployee.role);
+        if (!profileValues) {
+          return res.status(400).json({ error: 'Profile field values must match active string-list fields for this role' });
+        }
+        req.body.profile_field_values = profileValues;
+      }
+
       const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
       
       // Generate name field from first_name and last_name (legacy field requirement)
@@ -572,21 +1129,40 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return;
       }
       
-      // If steps are provided, replace all existing steps
+      // If steps are provided, sync them while preserving existing step IDs
+      // (so any per-step video links and goal_steps references survive).
       if (steps && Array.isArray(steps)) {
-        // Delete existing steps
-        await db.delete(goal_template_steps).where(eq(goal_template_steps.template_id, templateId));
-        
-        // Insert new steps if any
-        if (steps.length > 0) {
-          const stepInserts = steps.map((step: any, index: number) => ({
-            template_id: templateId,
+        const existing = await db.select().from(goal_template_steps)
+          .where(eq(goal_template_steps.template_id, templateId));
+        const existingById = new Map(existing.map(s => [s.id, s]));
+        const incomingIds = new Set<string>();
+
+        for (let index = 0; index < steps.length; index++) {
+          const step: any = steps[index];
+          const incomingId = step?.id as string | undefined;
+          const stepValues = {
             step_order: index + 1,
             step_description: step.stepDescription,
             is_required: step.isRequired,
-            timer_type: step.timerType || 'none'
-          }));
-          await db.insert(goal_template_steps).values(stepInserts);
+            timer_type: step.timerType || 'none',
+          };
+          if (incomingId && existingById.has(incomingId)) {
+            await db.update(goal_template_steps)
+              .set(stepValues)
+              .where(eq(goal_template_steps.id, incomingId));
+            incomingIds.add(incomingId);
+          } else {
+            const [inserted] = await db.insert(goal_template_steps).values({
+              template_id: templateId,
+              ...stepValues,
+            }).returning();
+            incomingIds.add(inserted.id);
+          }
+        }
+
+        const toDelete = existing.filter(s => !incomingIds.has(s.id)).map(s => s.id);
+        if (toDelete.length > 0) {
+          await db.delete(goal_template_steps).where(inArray(goal_template_steps.id, toDelete));
         }
       }
       
@@ -638,9 +1214,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
               json_agg(
                 json_build_object(
                   'id', ${goal_steps.id},
+                  'template_step_id', ${goal_steps.template_step_id},
                   'step_order', ${goal_steps.step_order},
                   'step_description', ${goal_steps.step_description},
-                  'is_required', ${goal_steps.is_required}
+                  'is_required', ${goal_steps.is_required},
+                  'timer_type', ${goal_steps.timer_type}
                 )
                 ORDER BY ${goal_steps.step_order}
               ) FILTER (WHERE ${goal_steps.id} IS NOT NULL),
@@ -714,21 +1292,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/development-goals", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  // Shared helper: insert a development goal + its steps for one employee.
+  // Used by both single-goal and bulk-goal endpoints to keep behavior in sync.
+  type GoalStepInput = {
+    id?: string | null;
+    template_step_id?: string | null;
+    templateStepId?: string | null;
+    step_order?: number | null;
+    stepOrder?: number | null;
+    step_description?: string | null;
+    stepDescription?: string | null;
+    is_required?: boolean | null;
+    isRequired?: boolean | null;
+    timer_type?: string | null;
+    timerType?: string | null;
+  };
+  type DevelopmentGoalInsert = typeof development_goals.$inferInsert;
+  type DevelopmentGoalRow = typeof development_goals.$inferSelect;
+
+  type DbExecutor = Parameters<Parameters<typeof db.transaction>[0]>[0] | typeof db;
+
+  async function insertGoalWithSteps(
+    executor: DbExecutor,
+    goalData: DevelopmentGoalInsert,
+    steps: GoalStepInput[],
+  ): Promise<DevelopmentGoalRow> {
+    const [newGoal] = await executor.insert(development_goals).values(goalData).returning();
+    if (steps.length > 0) {
+      const stepInserts = steps.map((step) => ({
+        goal_id: newGoal.id,
+        // Track which template step this goal_step came from so per-step
+        // videos can be rendered alongside the assigned employee's goal.
+        template_step_id:
+          (step.template_step_id ?? step.templateStepId ?? step.id) ?? null,
+        step_order: (step.step_order ?? step.stepOrder) as number,
+        step_description: (step.step_description ?? step.stepDescription) as string,
+        is_required: step.is_required ?? step.isRequired ?? true,
+        timer_type: step.timer_type ?? step.timerType ?? 'none',
+      }));
+      await executor.insert(goal_steps).values(stepInserts);
+    }
+    return newGoal;
+  }
+
+  app.post("/api/development-goals", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
     try {
-      const { steps, ...goalData } = req.body;
-      const [newGoal] = await db.insert(development_goals).values(goalData).returning();
-      
-      if (steps && steps.length > 0) {
-        const stepInserts = steps.map((step: any) => ({
-          goal_id: newGoal.id,
-          step_order: step.step_order || step.stepOrder,
-          step_description: step.step_description || step.stepDescription,
-          is_required: step.is_required !== undefined ? step.is_required : step.isRequired
-        }));
-        await db.insert(goal_steps).values(stepInserts);
-      }
-      
+      const { steps, ...goalData } = req.body as { steps?: GoalStepInput[] } & DevelopmentGoalInsert;
+      const newGoal = await insertGoalWithSteps(db, goalData, steps ?? []);
       res.json(newGoal);
     } catch (error) {
       logger.error({ error, goalData: req.body }, 'Failed to create development goal');
@@ -736,7 +1346,105 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/development-goals/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/development-goals/bulk", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { template_id, employee_ids, skip_existing } = req.body as {
+        template_id?: string;
+        employee_ids?: string[];
+        skip_existing?: boolean;
+      };
+
+      if (!template_id || !Array.isArray(employee_ids) || employee_ids.length === 0) {
+        return res.status(400).json({ error: 'template_id and employee_ids are required' });
+      }
+
+      // Deduplicate employee_ids while preserving order; reject empty/non-string entries
+      const seen = new Set<string>();
+      const uniqueEmployeeIds: string[] = [];
+      for (const id of employee_ids) {
+        if (typeof id !== 'string' || id.trim() === '') {
+          return res.status(400).json({ error: 'employee_ids must contain non-empty strings' });
+        }
+        if (!seen.has(id)) {
+          seen.add(id);
+          uniqueEmployeeIds.push(id);
+        }
+      }
+
+      const [template] = await db.select().from(goal_templates).where(eq(goal_templates.id, template_id)).limit(1);
+      if (!template) {
+        return res.status(404).json({ error: 'Goal template not found' });
+      }
+
+      // Validate that all referenced employees exist before creating any goals,
+      // so a malformed payload doesn't leave a partial bulk assignment behind.
+      const existingEmployees = await db
+        .select({ id: employees.id })
+        .from(employees)
+        .where(inArray(employees.id, uniqueEmployeeIds));
+      const existingEmployeeIds = new Set(existingEmployees.map(e => e.id));
+      const unknownEmployeeIds = uniqueEmployeeIds.filter(id => !existingEmployeeIds.has(id));
+      if (unknownEmployeeIds.length > 0) {
+        return res.status(400).json({
+          error: 'Some employee_ids do not exist',
+          unknownEmployeeIds,
+        });
+      }
+
+      const templateSteps = await db.select().from(goal_template_steps)
+        .where(eq(goal_template_steps.template_id, template_id));
+
+      const targetEndDate = calculateDateFromRelativeDuration(template.relative_target_duration || '90 days');
+      const startDate = new Date().toISOString().split('T')[0];
+
+      // Run all inserts in a single transaction so a mid-loop failure rolls back
+      // every goal created in this request — strict all-or-nothing semantics.
+      const { created, skipped } = await db.transaction(async (tx) => {
+        const createdGoals: DevelopmentGoalRow[] = [];
+        const skippedIds: string[] = [];
+
+        for (const employeeId of uniqueEmployeeIds) {
+          if (skip_existing) {
+            const existing = await tx.select({ id: development_goals.id }).from(development_goals)
+              .where(and(
+                eq(development_goals.employee_id, employeeId),
+                eq(development_goals.title, template.name),
+                eq(development_goals.status, 'active')
+              ))
+              .limit(1);
+            if (existing.length > 0) {
+              skippedIds.push(employeeId);
+              continue;
+            }
+          }
+
+          const goalData: DevelopmentGoalInsert = {
+            employee_id: employeeId,
+            template_id: template.id,
+            title: template.name,
+            description: template.goal_statement,
+            start_date: startDate,
+            target_end_date: targetEndDate,
+            status: 'active',
+            mastery_achieved: false,
+            consecutive_all_correct: 0,
+          };
+          const newGoal = await insertGoalWithSteps(tx, goalData, templateSteps);
+          createdGoals.push(newGoal);
+        }
+
+        return { created: createdGoals, skipped: skippedIds };
+      });
+
+      logger.info({ templateId: template_id, createdCount: created.length, skippedCount: skipped.length }, 'Bulk goal assignment completed');
+      res.json({ created, skipped, createdCount: created.length, skippedCount: skipped.length });
+    } catch (error) {
+      logger.error({ error, body: req.body }, 'Failed bulk goal assignment');
+      res.status(500).json({ error: 'Failed to bulk assign goals' });
+    }
+  });
+
+  app.put("/api/development-goals/:id", authenticateToken, requirePermission('goal_assignment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const [updatedGoal] = await db
@@ -835,7 +1543,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return mapped;
   };
 
-  app.post("/api/step-progress", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb(req.body);
       const [newProgress] = await db.insert(step_progress).values(mappedData).returning();
@@ -847,15 +1555,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Save step progress as draft
-  app.post("/api/step-progress/draft", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/draft", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const mappedData = mapProgressDataToDb({ ...req.body, status: 'draft' });
+      const user = (req as any).user as AuthUser;
       
       // Require documenter_user_id for drafts
       if (!mappedData.documenter_user_id) {
         return res.status(400).json({ error: 'documenter_user_id is required for draft progress' });
       }
-      
+
       // Check if draft already exists for this step/employee/session/documenter
       const existingDraft = await db.select().from(step_progress)
         .where(and(
@@ -905,9 +1614,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Submit step progress (convert draft to submitted or create new submitted)
-  app.post("/api/step-progress/submit", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/step-progress/submit", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employee_id, assessment_session_id, date, documenter_user_id } = req.body;
+      const user = (req as any).user as AuthUser;
       
       logger.info({ 
         employeeId: employee_id,
@@ -920,7 +1630,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!documenter_user_id) {
         return res.status(400).json({ error: 'documenter_user_id is required for submission' });
       }
-      
+
       // Get all draft progress for this employee/session/date/documenter
       const draftProgress = await db.select().from(step_progress)
         .where(and(
@@ -1104,6 +1814,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.get("/api/employees/:employeeId/assessment-history-details", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+
+      const sessions = await db.select({
+        id: assessment_sessions.id,
+        manager_id: assessment_sessions.manager_id,
+        date: assessment_sessions.date,
+        location: assessment_sessions.location,
+        status: assessment_sessions.status,
+        created_at: assessment_sessions.created_at,
+        updated_at: assessment_sessions.updated_at,
+        managerFirstName: employees.first_name,
+        managerLastName: employees.last_name,
+      })
+        .from(assessment_sessions)
+        .leftJoin(employees, eq(assessment_sessions.manager_id, employees.id))
+        .where(sql`${assessment_sessions.employee_ids}::jsonb @> ${JSON.stringify([employeeId])}::jsonb AND ${assessment_sessions.status} = 'completed'`)
+        .orderBy(desc(assessment_sessions.date), desc(assessment_sessions.created_at))
+        .limit(20);
+
+      if (sessions.length === 0) {
+        return res.json([]);
+      }
+
+      const sessionIds = sessions.map(s => s.id);
+
+      const [allProgress, allSummaries] = await Promise.all([
+        db.select({
+          assessmentSessionId: step_progress.assessment_session_id,
+          developmentGoalId: step_progress.development_goal_id,
+          goalStepId: step_progress.goal_step_id,
+          outcome: step_progress.outcome,
+          notes: step_progress.notes,
+          completionTimeSeconds: step_progress.completion_time_seconds,
+          timerManuallyEntered: step_progress.timer_manually_entered,
+          date: step_progress.date,
+          goalTitle: development_goals.title,
+          stepOrder: goal_steps.step_order,
+          stepDescription: goal_steps.step_description,
+        })
+          .from(step_progress)
+          .leftJoin(development_goals, eq(step_progress.development_goal_id, development_goals.id))
+          .leftJoin(goal_steps, eq(step_progress.goal_step_id, goal_steps.id))
+          .where(
+            and(
+              inArray(step_progress.assessment_session_id, sessionIds),
+              eq(step_progress.employee_id, employeeId),
+              eq(step_progress.status, 'submitted')
+            )
+          )
+          .orderBy(development_goals.title, goal_steps.step_order),
+        db.select()
+          .from(assessment_summaries)
+          .where(
+            and(
+              inArray(assessment_summaries.assessment_session_id, sessionIds),
+              eq(assessment_summaries.employee_id, employeeId)
+            )
+          )
+      ]);
+
+      const progressBySession: Record<string, typeof allProgress> = {};
+      for (const row of allProgress) {
+        const sid = row.assessmentSessionId || '';
+        if (!progressBySession[sid]) progressBySession[sid] = [];
+        progressBySession[sid].push(row);
+      }
+
+      const summaryBySession: Record<string, string | null> = {};
+      for (const row of allSummaries) {
+        if (row.assessment_session_id) {
+          summaryBySession[row.assessment_session_id] = row.summary;
+        }
+      }
+
+      const result = sessions.map(session => {
+        const progressRows = progressBySession[session.id] || [];
+        const goalMap: Record<string, { goalId: string; goalTitle: string; steps: any[] }> = {};
+        for (const row of progressRows) {
+          const gid = row.developmentGoalId || '';
+          if (!goalMap[gid]) {
+            goalMap[gid] = { goalId: gid, goalTitle: row.goalTitle || 'Unknown Goal', steps: [] };
+          }
+          goalMap[gid].steps.push({
+            stepId: row.goalStepId,
+            stepOrder: row.stepOrder,
+            stepDescription: row.stepDescription,
+            outcome: row.outcome,
+            notes: row.notes,
+            completionTimeSeconds: row.completionTimeSeconds,
+            timerManuallyEntered: row.timerManuallyEntered,
+          });
+        }
+
+        return {
+          ...session,
+          details: {
+            goals: Object.values(goalMap),
+            summary: summaryBySession[session.id] || null,
+            totalSteps: progressRows.length,
+          }
+        };
+      });
+
+      res.json(result);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch assessment history details');
+      res.status(500).json({ error: 'Failed to fetch assessment history details' });
+    }
+  });
+
   app.get("/api/assessment-sessions/:sessionId/details", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { sessionId } = req.params;
@@ -1176,7 +1998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-sessions", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { employee_ids, location, date } = req.body;
@@ -1323,7 +2145,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/assessment-sessions/:id", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/assessment-sessions/:id", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1401,7 +2223,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Complete/end an assessment session (releases lock)
-  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/complete", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1447,7 +2269,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Renew session lock (extends expiry time)
-  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-sessions/:id/renew", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const user = (req as any).user as AuthUser;
@@ -1481,6 +2303,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, sessionId: req.params.id }, 'Failed to renew assessment session');
       res.status(500).json({ error: 'Failed to renew assessment session' });
+    }
+  });
+
+  // Admin takeover of an active assessment session
+  app.post("/api/assessment-sessions/:id/takeover", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      if (user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Administrators can take over assessment sessions' });
+      }
+
+      const [existingSession] = await db.select().from(assessment_sessions)
+        .where(eq(assessment_sessions.id, id)).limit(1);
+
+      if (!existingSession) {
+        return res.status(404).json({ error: 'Assessment session not found' });
+      }
+
+      if (existingSession.status === 'completed' || existingSession.status === 'abandoned') {
+        return res.status(400).json({ error: 'This session is already finished' });
+      }
+
+      if (existingSession.locked_by === user.id) {
+        return res.status(400).json({ error: 'You already own this session' });
+      }
+
+      const previousOwnerId = existingSession.locked_by;
+      const expiresAt = new Date();
+      expiresAt.setMinutes(expiresAt.getMinutes() + 30);
+
+      const [updatedSession] = await db
+        .update(assessment_sessions)
+        .set({
+          locked_by: user.id,
+          locked_at: new Date(),
+          expires_at: expiresAt,
+          taken_over_from: previousOwnerId,
+          taken_over_at: new Date(),
+          updated_at: new Date()
+        })
+        .where(eq(assessment_sessions.id, id))
+        .returning();
+
+      let previousOwnerName = 'the previous manager';
+      if (previousOwnerId) {
+        const [prev] = await db.select().from(employees).where(eq(employees.id, previousOwnerId)).limit(1);
+        if (prev) previousOwnerName = `${prev.first_name} ${prev.last_name}`;
+      }
+
+      logger.info({
+        sessionId: id,
+        adminId: user.id,
+        adminName: user.name,
+        previousOwnerId,
+        previousOwnerName
+      }, 'Assessment session taken over by administrator');
+
+      res.json({ session: updatedSession, previousOwnerName });
+    } catch (error) {
+      logger.error({ error, sessionId: req.params.id }, 'Failed to take over assessment session');
+      res.status(500).json({ error: 'Failed to take over session' });
     }
   });
 
@@ -1593,6 +2478,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get presence/lock status for a single employee — who has an active session and who is actively documenting
+  app.get("/api/employees/:employeeId/lock-status", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      const now = new Date();
+
+      // Clean up expired sessions first
+      await db.update(assessment_sessions)
+        .set({ status: 'abandoned', locked_by: null, locked_at: null, expires_at: null, updated_at: now })
+        .where(sql`${assessment_sessions.status} IN ('draft', 'in_progress') AND ${assessment_sessions.expires_at} < ${now}`);
+
+      // Find active session that includes this employee
+      const [lockingSession] = await db.select()
+        .from(assessment_sessions)
+        .where(
+          sql`${assessment_sessions.status} IN ('draft', 'in_progress')
+              AND ${assessment_sessions.employee_ids}::jsonb ? ${employeeId}`
+        )
+        .limit(1);
+
+      if (!lockingSession || !lockingSession.locked_by) {
+        return res.json({ locked: false });
+      }
+
+      // Resolve session owner name
+      let ownerName = 'Another Manager';
+      const [owner] = await db.select().from(employees)
+        .where(eq(employees.id, lockingSession.locked_by)).limit(1);
+      if (owner) ownerName = `${owner.first_name} ${owner.last_name}`;
+
+      // Find who else has been actively documenting in this session in the last 20 minutes
+      const twentyMinsAgo = new Date(now.getTime() - 20 * 60 * 1000);
+      const recentProgress = await db
+        .selectDistinct({ documenterId: step_progress.documenter_user_id })
+        .from(step_progress)
+        .where(
+          and(
+            eq(step_progress.assessment_session_id, lockingSession.id),
+            eq(step_progress.employee_id, employeeId),
+            sql`${step_progress.updated_at} >= ${twentyMinsAgo}`
+          )
+        );
+
+      // Look up names for active documenters (exclude the caller)
+      const presenceNames: string[] = [];
+      const seenIds = new Set<string>([lockingSession.locked_by]);
+      for (const row of recentProgress) {
+        if (!row.documenterId || seenIds.has(row.documenterId)) continue;
+        seenIds.add(row.documenterId);
+        const [emp] = await db.select().from(employees).where(eq(employees.id, row.documenterId)).limit(1);
+        if (emp) presenceNames.push(`${emp.first_name} ${emp.last_name}`);
+      }
+
+      const ownSession = lockingSession.locked_by === user.id;
+
+      res.json({
+        locked: !ownSession,
+        ownSession,
+        sessionId: lockingSession.id,
+        location: lockingSession.location,
+        lockedById: lockingSession.locked_by,
+        ownerName,
+        lockedAt: lockingSession.locked_at,
+        expiresAt: lockingSession.expires_at,
+        activeDocumenters: presenceNames  // Others (not the owner) who recently saved progress
+      });
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to get employee lock status');
+      res.status(500).json({ error: 'Failed to get lock status' });
+    }
+  });
+
   // Assessment summaries endpoints
   app.get("/api/assessment-summaries", authenticateToken, async (req: Request, res: Response) => {
     try {
@@ -1617,7 +2575,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/assessment-summaries", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/assessment-summaries", authenticateToken, requirePermission('goal_assessment', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const [newSummary] = await db.insert(assessment_summaries).values(req.body).returning();
       res.json(newSummary);
@@ -2216,9 +3174,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             if (templateSteps.length > 0) {
               const goalSteps = templateSteps.map(step => ({
                 goal_id: newGoal.id,
+                template_step_id: step.id,
                 step_order: step.step_order,
                 step_description: step.step_description,
-                is_required: step.is_required
+                is_required: step.is_required,
+                timer_type: step.timer_type || 'none'
               }));
               await db.insert(goal_steps).values(goalSteps);
             }
@@ -2483,9 +3443,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           if (templateSteps.length > 0) {
             const goalSteps = templateSteps.map(step => ({
               goal_id: newGoal.id,
+              template_step_id: step.id,
               step_order: step.step_order,
               step_description: step.step_description,
-              is_required: step.is_required
+              is_required: step.is_required,
+              timer_type: step.timer_type || 'none'
             }));
             await db.insert(goal_steps).values(goalSteps);
           }
@@ -2576,7 +3538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     },
   });
 
-  app.post("/api/employees/photo", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), photoUpload.single('photo'), async (req: Request, res: Response) => {
+  app.post("/api/employees/photo", authenticateToken, requirePermission('employee_profiles', 'can_modify'), photoUpload.single('photo'), async (req: Request, res: Response) => {
     try {
       const file = req.file;
       if (!file) {
@@ -2601,7 +3563,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/employee-images", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.put("/api/employee-images", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { imageURL } = req.body;
       if (!imageURL) {
@@ -2620,7 +3582,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Account Invitation Routes
-  app.post("/api/invitations", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/invitations", authenticateToken, requirePermission('external_user_invites', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employee_id, email } = req.body;
       const user = (req as any).user;
@@ -2735,6 +3697,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         used_at: new Date(),
       }).where(eq(account_invitations.id, invitation.id));
 
+      // Keep the contact-facing status in sync for guardian invitations.
+      // Coach invitations do not have a contact row, so this update is a
+      // no-op for them.
+      await db.update(employee_contacts).set({
+        invite_status: 'accepted',
+        has_app_access: true,
+        updated_at: new Date(),
+      }).where(eq(employee_contacts.invite_token, token));
+
       logger.info({ employeeId: invitation.employee_id }, 'Account setup completed via invitation');
       res.json({ success: true, message: 'Account setup complete. You can now log in.' });
     } catch (error) {
@@ -2793,6 +3764,99 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch coach assignments by scooper');
       res.status(500).json({ error: 'Failed to fetch coach assignments' });
+    }
+  });
+
+  // Invite a new Job Coach and assign them to a scooper in one operation.
+  // The transaction prevents an orphaned employee or assignment if any part
+  // of the invitation setup fails.
+  app.post("/api/coach-assignments/invite", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooper_id, first_name, last_name, email } = req.body;
+
+      if (!(await canInviteExternalUser(user))) {
+        return res.status(403).json({ error: 'Insufficient permissions to invite external users' });
+      }
+      if (!scooper_id || !first_name?.trim() || !last_name?.trim() || !email?.trim()) {
+        return res.status(400).json({ error: 'scooper_id, first_name, last_name, and email are required' });
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        return res.status(400).json({ error: 'A valid email address is required' });
+      }
+      if (!(await canAccessScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const [scooper] = await db.select().from(employees).where(eq(employees.id, scooper_id)).limit(1);
+      if (!scooper) {
+        return res.status(404).json({ error: 'Super Scooper not found' });
+      }
+      if (scooper.role !== 'Super Scooper') {
+        return res.status(400).json({ error: 'Referenced employee is not a Super Scooper' });
+      }
+      if (!scooper.is_active) {
+        return res.status(400).json({ error: 'Cannot invite a coach for an inactive employee' });
+      }
+
+      const [existingEmail] = await db.select({ id: employees.id }).from(employees)
+        .where(eq(employees.email, normalizedEmail)).limit(1);
+      if (existingEmail) {
+        return res.status(409).json({ error: 'An account with this email already exists' });
+      }
+
+      const result = await db.transaction(async (tx) => {
+        const [coach] = await tx.insert(employees).values({
+          first_name: first_name.trim(),
+          last_name: last_name.trim(),
+          name: `${first_name.trim()} ${last_name.trim()}`,
+          email: normalizedEmail,
+          role: 'Job Coach',
+          is_active: true,
+          has_system_access: true,
+        }).returning();
+
+        const [assignment] = await tx.insert(coach_assignments).values({
+          coach_id: coach.id,
+          scooper_id,
+          assigned_by: user.id,
+        }).returning();
+
+        const token = crypto.randomBytes(32).toString('hex');
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 7);
+        const [invitation] = await tx.insert(account_invitations).values({
+          employee_id: coach.id,
+          email: normalizedEmail,
+          token,
+          expires_at: expiresAt,
+          created_by: user.id,
+        }).returning();
+
+        return { coach, assignment, invitation, token };
+      });
+
+      const { password: _, ...coachWithoutPassword } = result.coach;
+      const setupUrl = `${req.protocol}://${req.get('host')}?setup=${result.token}`;
+      logger.info({
+        coachId: result.coach.id,
+        scooperId: scooper_id,
+        invitationId: result.invitation.id,
+        createdBy: user.id,
+      }, 'Job Coach invited and assigned to scooper');
+      res.status(201).json({
+        coach: coachWithoutPassword,
+        assignment: result.assignment,
+        invitation: result.invitation,
+        setupUrl,
+      });
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'An account or coach assignment with these details already exists' });
+      }
+      logger.error({ error }, 'Failed to invite and assign Job Coach');
+      res.status(500).json({ error: 'Failed to invite and assign Job Coach' });
     }
   });
 
@@ -2865,7 +3929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/employees/:employeeId/contacts", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/employees/:employeeId/contacts", authenticateToken, requirePermission('contacts', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
       const user = (req as any).user;
@@ -2898,7 +3962,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.patch("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.patch("/api/contacts/:contactId", authenticateToken, requirePermission('contacts', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const { first_name, last_name, relationship_type, phone, email, is_emergency_contact } = req.body;
@@ -2932,7 +3996,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/contacts/:contactId", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.delete("/api/contacts/:contactId", authenticateToken, requirePermission('contacts', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
@@ -2949,7 +4013,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.post("/api/contacts/:contactId/grant-access", authenticateToken, requirePermission('external_user_invites', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const { contactId } = req.params;
       const user = (req as any).user;
@@ -2957,6 +4021,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const [contact] = await db.select().from(employee_contacts).where(eq(employee_contacts.id, contactId)).limit(1);
       if (!contact) {
         return res.status(404).json({ error: 'Contact not found' });
+      }
+
+      if (!(await canAccessScooper(user, contact.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
       }
 
       if (!['Parent/Guardian', 'Parent'].includes(contact.relationship_type)) {
@@ -3126,7 +4194,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Create guardian + link to scooper in one step
-  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/guardian-relationships/create-with-guardian", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { scooper_id, first_name, last_name, email, phone, relationship_type } = req.body;
 
@@ -3150,6 +4218,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const user = (req as any).user;
+      if (!(await canInviteExternalUser(user))) {
+        return res.status(403).json({ error: 'Insufficient permissions to invite external users' });
+      }
+      if (!(await canAccessScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this employee profile' });
+      }
       const guardianData: any = {
         first_name,
         last_name,
@@ -3207,9 +4281,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/certifications", authenticateToken, requireRole('Administrator', 'Shift Lead', 'Assistant Manager'), async (req: Request, res: Response) => {
+  app.post("/api/certifications", authenticateToken, requirePermission('promotion_certifications', 'can_modify'), async (req: Request, res: Response) => {
     try {
-      const parsed = insertPromotionCertificationSchema.parse(req.body);
+      const body = req.body || {};
+      if (body.response_set_id) {
+        const [responseSet] = await db.select().from(form_response_sets)
+          .where(eq(form_response_sets.id, body.response_set_id))
+          .limit(1);
+        if (!responseSet) return res.status(404).json({ error: 'Certification response not found' });
+        if (responseSet.status !== 'submitted') return res.status(409).json({ error: 'Submit the certification form before recording it' });
+        if (responseSet.employee_id !== body.employee_id) return res.status(400).json({ error: 'Certification response belongs to a different employee' });
+
+        const template: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+        const expectedFormType = body.certification_type === 'mentor' ? 'mentor_certification' : 'shift_lead_certification';
+        if (!template || template.form_type !== expectedFormType) return res.status(400).json({ error: 'Certification response does not match the selected certification type' });
+
+        const [existing] = await db.select().from(promotion_certifications)
+          .where(eq(promotion_certifications.response_set_id, responseSet.id))
+          .limit(1);
+        if (existing) return res.json(existing);
+
+        const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+        const scoredAnswers = answers.map(answer => String(answer.value_json || '').toLowerCase())
+          .filter(value => value === 'yes' || value === 'no');
+        const correct = scoredAnswers.filter(value => value === 'yes').length;
+        const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+        const passingScore = Number((template.settings_json || {}).passing_score || (body.certification_type === 'mentor' ? 84 : 90));
+        body.score = score;
+        body.passing_score = passingScore;
+        body.passed = score >= passingScore;
+        body.checklist_results = [];
+      }
+
+      const parsed = insertPromotionCertificationSchema.parse(body);
       const [cert] = await db.insert(promotion_certifications).values(parsed).returning();
       logger.info({ certId: cert.id, employeeId: cert.employee_id, type: cert.certification_type, score: cert.score, passed: cert.passed }, 'Promotion certification recorded');
       res.json(cert);
@@ -3222,7 +4326,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/certifications/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+  app.delete("/api/certifications/:id", authenticateToken, requirePermission('promotion_certifications', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       await db.delete(promotion_certifications).where(eq(promotion_certifications.id, id));
@@ -3234,14 +4338,238 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unified Notes Feed
+  app.get("/api/scoopers/:scooperId/notes-feed", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId } = req.params;
+
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+
+      const [notes, canWrite] = await Promise.all([
+        loadUnifiedNotes(scooperId, user.id, user.role),
+        canWriteNotes(user, scooperId),
+      ]);
+
+      res.json({
+        scooper_id: scooperId,
+        notes,
+        permissions: {
+          can_write: canWrite,
+          can_delete_any: user.role === 'Administrator',
+        },
+      });
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch unified notes feed');
+      res.status(500).json({ error: 'Failed to fetch notes feed' });
+    }
+  });
+
+  app.post("/api/scoopers/:scooperId/notes-feed", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId } = req.params;
+      const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+
+      if (!body) return res.status(400).json({ error: 'Note body is required' });
+      if (body.length > 10000) return res.status(400).json({ error: 'Note body is too long' });
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canWriteNotes(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have permission to write notes for this profile' });
+      }
+
+      const requestedNoteType = req.body?.source_type ?? req.body?.note_type;
+      const noteType = typeof requestedNoteType === 'string' && requestedNoteType.trim()
+        ? requestedNoteType.trim()
+        : 'manual';
+      if (noteType.length > 100) {
+        return res.status(400).json({ error: 'Note type is too long' });
+      }
+
+      const [created] = await db.insert(profile_notes).values(insertProfileNoteSchema.parse({
+        scooper_id: scooperId,
+        author_id: user.id,
+        author_role_snapshot: user.role,
+        body,
+        source_type: noteType,
+      })).returning({ id: profile_notes.id });
+      const sourceId = created.id;
+
+      const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
+      const createdNote = notes.find(note => note.sourceType === 'profile' && note.sourceId === sourceId);
+      logger.info({ scooperId, authorId: user.id, sourceType: 'profile', noteType, sourceId }, 'Unified note created');
+      res.status(201).json(createdNote);
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId }, 'Failed to create unified note');
+      res.status(500).json({ error: 'Failed to create note' });
+    }
+  });
+
+  app.put("/api/scoopers/:scooperId/notes-feed/:sourceType/:sourceId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId, sourceType, sourceId } = req.params;
+      const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+
+      if (!body) return res.status(400).json({ error: 'Note body is required' });
+      if (body.length > 10000) return res.status(400).json({ error: 'Note body is too long' });
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+      if (sourceType !== 'guardian' && sourceType !== 'coach' && sourceType !== 'profile') {
+        return res.status(400).json({ error: 'This feed item cannot be edited' });
+      }
+
+      let authorId: string | undefined;
+      if (sourceType === 'guardian') {
+        const [existing] = await db.select({
+          id: guardian_notes.id,
+          guardian_id: guardian_notes.guardian_id,
+        }).from(guardian_notes).where(and(
+          eq(guardian_notes.id, sourceId),
+          eq(guardian_notes.scooper_id, scooperId),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.guardian_id;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(guardian_notes)
+          .set({ note: body, updated_at: new Date() })
+          .where(eq(guardian_notes.id, sourceId));
+      } else if (sourceType === 'coach') {
+        const [existing] = await db.select({
+          id: coach_notes.id,
+          coach_id: coach_notes.coach_id,
+        }).from(coach_notes).where(and(
+          eq(coach_notes.id, sourceId),
+          eq(coach_notes.employee_id, scooperId),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.coach_id;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(coach_notes)
+          .set({ content: body, updated_at: new Date() })
+          .where(eq(coach_notes.id, sourceId));
+      } else {
+        const [existing] = await db.select({
+          id: profile_notes.id,
+          author_id: profile_notes.author_id,
+        }).from(profile_notes).where(and(
+          eq(profile_notes.id, sourceId),
+          eq(profile_notes.scooper_id, scooperId),
+          eq(profile_notes.status, 'active'),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.author_id || undefined;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(profile_notes)
+          .set({ body, updated_at: new Date() })
+          .where(and(
+            eq(profile_notes.id, sourceId),
+            eq(profile_notes.scooper_id, scooperId),
+            eq(profile_notes.status, 'active'),
+          ));
+      }
+
+      const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
+      const updated = notes.find(note => note.sourceType === sourceType && note.sourceId === sourceId);
+      logger.info({ scooperId, authorId, sourceType, sourceId }, 'Unified note updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId, sourceId: req.params.sourceId }, 'Failed to update unified note');
+      res.status(500).json({ error: 'Failed to update note' });
+    }
+  });
+
+  app.delete("/api/scoopers/:scooperId/notes-feed/:sourceType/:sourceId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId, sourceType, sourceId } = req.params;
+
+      if (user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Administrators can delete feed notes' });
+      }
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+      if (sourceType === 'guardian') {
+        const deleted = await db.delete(guardian_notes).where(and(
+          eq(guardian_notes.id, sourceId),
+          eq(guardian_notes.scooper_id, scooperId),
+        )).returning({ id: guardian_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else if (sourceType === 'coach') {
+        const deleted = await db.delete(coach_notes).where(and(
+          eq(coach_notes.id, sourceId),
+          eq(coach_notes.employee_id, scooperId),
+        )).returning({ id: coach_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else if (sourceType === 'profile') {
+        const deleted = await db.update(profile_notes).set({
+          status: 'deleted',
+          updated_at: new Date(),
+        }).where(and(
+          eq(profile_notes.id, sourceId),
+          eq(profile_notes.scooper_id, scooperId),
+          eq(profile_notes.status, 'active'),
+        )).returning({ id: profile_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else {
+        return res.status(400).json({ error: 'This feed item cannot be deleted' });
+      }
+
+      logger.info({ scooperId, administratorId: user.id, sourceType, sourceId }, 'Unified note deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId, sourceId: req.params.sourceId }, 'Failed to delete unified note');
+      res.status(500).json({ error: 'Failed to delete note' });
+    }
+  });
+
 // Guardian Notes Routes
   // Get all notes for a scooper (viewable by admins/managers/job coaches)
   app.get("/api/guardian-notes/scooper/:scooperId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { scooperId } = req.params;
-      
-      // Guardians can only see their own notes for their linked scoopers
+
+      if (!['Guardian', 'Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+      if (!(await canAccessSuperScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
+      // Guardians can only see their own notes for their linked scoopers.
       if (user.role === 'Guardian') {
         const notes = await db.select().from(guardian_notes)
           .where(and(
@@ -3251,12 +4579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(notes);
       }
       
-      // Super Scoopers cannot view guardian notes
-      if (user.role === 'Super Scooper') {
-        return res.status(403).json({ error: 'Insufficient permissions' });
-      }
-      
-      // Admins, managers, and job coaches can see all notes for a scooper
+      // Administrators, managers, and assigned Job Coaches can see all notes
+      // for an accessible Super Scooper.
       const notes = await db.select().from(guardian_notes)
         .where(eq(guardian_notes.scooper_id, scooperId))
         .orderBy(desc(guardian_notes.updated_at));
@@ -3272,19 +4596,46 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const user = (req as any).user as AuthUser;
       const { guardianId } = req.params;
-      
-      // Guardians can only view their own notes
+
+      if (!['Guardian', 'Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
       if (user.role === 'Guardian' && user.id !== guardianId) {
         return res.status(403).json({ error: 'You can only view your own notes' });
       }
-      
-      // Super Scoopers cannot view guardian notes
-      if (user.role === 'Super Scooper') {
-        return res.status(403).json({ error: 'Insufficient permissions' });
+
+      const superScoopers = await db.select({ id: employees.id })
+        .from(employees)
+        .where(eq(employees.role, 'Super Scooper'));
+      const superScooperIds = superScoopers.map(employee => employee.id);
+      if (superScooperIds.length === 0) {
+        return res.json([]);
       }
-      
+
+      let accessibleScooperIds = superScooperIds;
+      if (user.role === 'Guardian') {
+        const relationships = await db.select({ scooper_id: guardian_relationships.scooper_id })
+          .from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+        const linkedIds = new Set(relationships.map(relationship => relationship.scooper_id));
+        accessibleScooperIds = superScooperIds.filter(id => linkedIds.has(id));
+      } else if (user.role === 'Job Coach') {
+        const assignments = await db.select({ scooper_id: coach_assignments.scooper_id })
+          .from(coach_assignments)
+          .where(eq(coach_assignments.coach_id, user.id));
+        const assignedIds = new Set(assignments.map(assignment => assignment.scooper_id));
+        accessibleScooperIds = superScooperIds.filter(id => assignedIds.has(id));
+      }
+
+      if (accessibleScooperIds.length === 0) {
+        return res.status(403).json({ error: 'You do not have access to these profiles' });
+      }
+
       const notes = await db.select().from(guardian_notes)
-        .where(eq(guardian_notes.guardian_id, guardianId))
+        .where(and(
+          eq(guardian_notes.guardian_id, guardianId),
+          inArray(guardian_notes.scooper_id, accessibleScooperIds),
+        ))
         .orderBy(desc(guardian_notes.updated_at));
       res.json(notes);
     } catch (error) {
@@ -3293,8 +4644,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create or update a guardian note (upsert - one note per guardian-scooper pair)
-  app.post("/api/guardian-notes", authenticateToken, async (req: Request, res: Response) => {
+  // Create a guardian note. Guardian notes are timeline entries; each save
+  // creates a new row rather than overwriting the previous entry.
+  app.post("/api/guardian-notes", authenticateToken, requirePermission('guardian_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       
@@ -3314,41 +4666,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (guardian_id !== user.id) {
         return res.status(403).json({ error: 'You can only create notes as yourself' });
       }
-      
-      // Verify guardian-scooper relationship exists
-      const [relationship] = await db.select().from(guardian_relationships)
-        .where(and(
-          eq(guardian_relationships.guardian_id, guardian_id),
-          eq(guardian_relationships.scooper_id, scooper_id)
-        ))
-        .limit(1);
-      
-      if (!relationship) {
-        return res.status(400).json({ error: 'You are not linked to this family member' });
+
+      if (!(await canAccessSuperScooper(user, scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
       
-      // Check if a note already exists for this pair
-      const [existingNote] = await db.select().from(guardian_notes)
-        .where(and(
-          eq(guardian_notes.guardian_id, guardian_id),
-          eq(guardian_notes.scooper_id, scooper_id)
-        ))
-        .limit(1);
-      
-      if (existingNote) {
-        // Update existing note
-        const [updatedNote] = await db.update(guardian_notes)
-          .set({ note, updated_at: new Date() })
-          .where(eq(guardian_notes.id, existingNote.id))
-          .returning();
-        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: updatedNote.id }, 'Guardian note updated');
-        return res.json(updatedNote);
-      } else {
-        // Create new note
-        const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
-        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: newNote.id }, 'Guardian note created');
-        return res.json(newNote);
-      }
+      const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
+      logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: newNote.id }, 'Guardian note created');
+      return res.json(newNote);
     } catch (error) {
       logger.error({ error, body: req.body }, 'Failed to create/update guardian note');
       res.status(500).json({ error: 'Failed to save guardian note' });
@@ -3356,7 +4681,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Update a guardian note
-  app.put("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/guardian-notes/:id", authenticateToken, requirePermission('guardian_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { id } = req.params;
@@ -3370,9 +4695,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingNote) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
+      if (!(await canAccessSuperScooper(user, existingNote.scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
       // Only the guardian who created the note can update it
-      if (existingNote.guardian_id !== user.id) {
+      if (existingNote.guardian_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'You can only edit your own notes' });
       }
       
@@ -3390,7 +4719,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Delete a guardian note
-  app.delete("/api/guardian-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/guardian-notes/:id", authenticateToken, requirePermission('guardian_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
       const { id } = req.params;
@@ -3403,9 +4732,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingNote) {
         return res.status(404).json({ error: 'Note not found' });
       }
-      
+
+      if (!(await canAccessSuperScooper(user, existingNote.scooper_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
       // Only the guardian who created the note can delete it
-      if (existingNote.guardian_id !== user.id) {
+      if (existingNote.guardian_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'You can only delete your own notes' });
       }
       
@@ -3458,7 +4791,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/checkins", authenticateToken, async (req: Request, res: Response) => {
+  // New check-ins are form responses. This endpoint intentionally also returns
+  // legacy rows so history remains complete while the old table is retained.
+  app.get("/api/coach-checkins/:employeeId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { employeeId } = req.params;
+      if (!['Job Coach', 'Administrator'].includes(user.role) || !await canAccessScooper(user, employeeId)) {
+        return res.status(403).json({ error: 'You cannot access check-ins for this employee' });
+      }
+
+      const [template] = await db.select().from(form_templates)
+        .where(and(eq(form_templates.form_type, 'coach_checkin'), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at))
+        .limit(1);
+      const responseSets = template
+        ? await db.select().from(form_response_sets)
+          .where(and(eq(form_response_sets.template_id, template.id), eq(form_response_sets.employee_id, employeeId)))
+          .orderBy(desc(form_response_sets.updated_at))
+        : [];
+      const responses = await Promise.all(responseSets.map(response => responsePayload(response.id)));
+
+      const legacyRows = await db.select().from(coach_checkins)
+        .where(eq(coach_checkins.employee_id, employeeId))
+        .orderBy(desc(coach_checkins.checkin_date));
+      const coachIds = Array.from(new Set(legacyRows.map(checkin => checkin.coach_id)));
+      const coaches = coachIds.length > 0
+        ? await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, coachIds))
+        : [];
+      const coachMap = Object.fromEntries(coaches.map(coach => [coach.id, `${coach.first_name || ''} ${coach.last_name || ''}`.trim()]));
+
+      res.json(buildCoachCheckinPayload({
+        template: template ? await hydrateFormTemplate(template.id) : null,
+        responses,
+        legacyRows,
+        coachMap,
+      }));
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch coach check-ins');
+      res.status(500).json({ error: 'Failed to fetch coach check-ins' });
+    }
+  });
+
+  app.post("/api/checkins", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
@@ -3485,7 +4861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/checkins/:id", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
@@ -3518,7 +4894,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/checkins/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/checkins/:id", authenticateToken, requirePermission('coach_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
@@ -3596,7 +4972,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/coach-files/:employeeId", authenticateToken, fileUpload.single('file'), async (req: Request, res: Response) => {
+  app.post("/api/coach-files/:employeeId", authenticateToken, requirePermission('coach_files', 'can_modify'), fileUpload.single('file'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { employeeId } = req.params;
@@ -3709,7 +5085,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/coach-files/:fileId", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/coach-files/:fileId", authenticateToken, requirePermission('coach_files', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { fileId } = req.params;
@@ -3756,13 +5132,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!['Job Coach', 'Administrator', 'Shift Lead', 'Assistant Manager'].includes(user.role)) {
         return res.status(403).json({ error: 'Insufficient permissions' });
       }
-
-      if (user.role === 'Job Coach') {
-        const assignments = await db.select().from(coach_assignments)
-          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, employeeId)));
-        if (assignments.length === 0) {
-          return res.status(403).json({ error: 'Not assigned to this employee' });
-        }
+      if (!(await canAccessSuperScooper(user, employeeId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
 
       const notes = await db.select().from(coach_notes)
@@ -3785,26 +5156,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/coach-notes", authenticateToken, async (req: Request, res: Response) => {
+  app.post("/api/coach-notes", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       if (user.role !== 'Job Coach' && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'Only Job Coaches and Administrators can create notes' });
       }
 
-      if (user.role === 'Job Coach') {
-        const assignments = await db.select().from(coach_assignments)
-          .where(and(eq(coach_assignments.coach_id, user.id), eq(coach_assignments.scooper_id, req.body.employee_id)));
-        if (assignments.length === 0) {
-          return res.status(403).json({ error: 'Not assigned to this employee' });
-        }
+      const parsed = insertCoachNoteSchema.safeParse({ ...req.body, coach_id: user.id });
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid request body', details: parsed.error.errors });
+      }
+      if (!(await canAccessSuperScooper(user, parsed.data.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
       }
 
-      const noteData = { ...req.body, coach_id: user.id };
-      const parsed = insertCoachNoteSchema.parse(noteData);
-
-      const [note] = await db.insert(coach_notes).values(parsed).returning();
-      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.employee_id }, 'Coach note created');
+      const [note] = await db.insert(coach_notes).values(parsed.data).returning();
+      logger.info({ noteId: note.id, coachId: user.id, employeeId: parsed.data.employee_id }, 'Coach note created');
       res.json(note);
     } catch (error) {
       logger.error({ error }, 'Failed to create coach note');
@@ -3812,13 +5180,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.put("/api/coach-notes/:id", authenticateToken, requirePermission('coach_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
 
       const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
       if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (!(await canAccessSuperScooper(user, existing.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
       if (existing.coach_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'Only the original author can edit this note' });
       }
@@ -3836,13 +5207,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.delete("/api/coach-notes/:id", authenticateToken, async (req: Request, res: Response) => {
+  app.delete("/api/coach-notes/:id", authenticateToken, requirePermission('coach_notes', 'can_delete'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user;
       const { id } = req.params;
 
       const [existing] = await db.select().from(coach_notes).where(eq(coach_notes.id, id));
       if (!existing) return res.status(404).json({ error: 'Note not found' });
+      if (!(await canAccessSuperScooper(user, existing.employee_id))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
       if (existing.coach_id !== user.id && user.role !== 'Administrator') {
         return res.status(403).json({ error: 'Only the original author can delete this note' });
       }
@@ -3930,49 +5304,1039 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // POST /api/permissions/seed - seed default permissions (admin only)
+  // POST /api/permissions/seed - seed missing default permissions (admin only)
   app.post("/api/permissions/seed", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
     try {
-      const user = (req as any).user as AuthUser;
-      const existing = await db.select().from(role_permissions);
-      if (existing.length > 0) {
-        return res.json({ message: 'Permissions already seeded', count: existing.length });
-      }
-
-      const defaults: Array<{ role: string; feature: string; can_view: boolean; can_modify: boolean; can_delete: boolean }> = [];
-
-      for (const feature of PERMISSION_FEATURES) {
-        // Shift Lead - broad access
-        defaults.push({ role: 'Shift Lead', feature, can_view: true,
-          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
-          can_delete: false });
-        // Assistant Manager - similar to Shift Lead
-        defaults.push({ role: 'Assistant Manager', feature, can_view: true,
-          can_modify: ['my_shift', 'employee_profiles', 'goal_assessment', 'goal_assignment', 'promotion_certifications', 'roi_compliance', 'contacts', 'past_assessments'].includes(feature),
-          can_delete: false });
-        // Job Coach - limited access
-        defaults.push({ role: 'Job Coach', feature,
-          can_view: ['my_scoopers', 'employee_profiles', 'goal_assessment', 'coach_notes', 'coach_files', 'guardian_notes', 'contacts', 'past_assessments'].includes(feature),
-          can_modify: ['coach_notes', 'coach_files'].includes(feature),
-          can_delete: ['coach_notes', 'coach_files'].includes(feature) });
-        // Guardian - most restricted
-        defaults.push({ role: 'Guardian', feature,
-          can_view: ['my_loved_ones', 'employee_profiles', 'guardian_notes', 'past_assessments'].includes(feature),
-          can_modify: ['guardian_notes'].includes(feature),
-          can_delete: false });
-      }
-
-      for (const d of defaults) {
-        await db.insert(role_permissions).values({ ...d, updated_by: user.id });
-      }
-
+      await ensureDefaultPermissions();
       const allPerms = await db.select().from(role_permissions);
-      res.json({ success: true, count: allPerms.length, permissions: allPerms });
+      res.json({ success: true, count: allPerms.length });
     } catch (error) {
       logger.error({ error }, 'Failed to seed permissions');
       res.status(500).json({ error: 'Failed to seed permissions' });
     }
   });
+
+  // ============ Video Library Endpoints ============
+
+  // List all videos (optionally filter by source/status)
+  app.get("/api/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { source, status, template_id, template_step_id } = req.query as { source?: string; status?: string; template_id?: string; template_step_id?: string };
+
+      // Guardians may only read videos for templates that one of their linked
+      // scoopers currently has a development goal from.
+      if (user.role === 'Guardian') {
+        if (!template_id && !template_step_id) {
+          return res.status(403).json({ error: 'Guardians may only request videos by template_id or template_step_id' });
+        }
+        let templateIdForCheck: string | null = null;
+        if (template_id) {
+          templateIdForCheck = template_id;
+        } else if (template_step_id) {
+          const [step] = await db
+            .select({ template_id: goal_template_steps.template_id })
+            .from(goal_template_steps)
+            .where(eq(goal_template_steps.id, template_step_id))
+            .limit(1);
+          templateIdForCheck = step?.template_id ?? null;
+        }
+        if (!templateIdForCheck) {
+          return res.json([]);
+        }
+        const rels = await db.select().from(guardian_relationships)
+          .where(eq(guardian_relationships.guardian_id, user.id));
+        const scooperIds = rels.map(r => r.scooper_id);
+        if (scooperIds.length === 0) {
+          return res.json([]);
+        }
+        const matchingGoals = await db
+          .select({ id: development_goals.id })
+          .from(development_goals)
+          .where(and(
+            eq(development_goals.template_id, templateIdForCheck),
+            inArray(development_goals.employee_id, scooperIds),
+            eq(development_goals.status, 'active')
+          ))
+          .limit(1);
+        if (matchingGoals.length === 0) {
+          return res.json([]);
+        }
+      }
+
+      if (template_step_id) {
+        const rows = await db
+          .select({
+            id: videos.id,
+            title: videos.title,
+            description: videos.description,
+            youtube_url: videos.youtube_url,
+            source: videos.source,
+            status: videos.status,
+            created_by: videos.created_by,
+            created_at: videos.created_at,
+            display_order: goal_template_step_videos.display_order,
+            link_id: goal_template_step_videos.id,
+          })
+          .from(goal_template_step_videos)
+          .innerJoin(videos, eq(goal_template_step_videos.video_id, videos.id))
+          .where(and(
+            eq(goal_template_step_videos.template_step_id, template_step_id),
+            eq(videos.status, 'active')
+          ))
+          .orderBy(goal_template_step_videos.display_order, videos.created_at);
+        return res.json(rows);
+      }
+
+      if (template_id) {
+        const rows = await db
+          .select({
+            id: videos.id,
+            title: videos.title,
+            description: videos.description,
+            youtube_url: videos.youtube_url,
+            source: videos.source,
+            status: videos.status,
+            created_by: videos.created_by,
+            created_at: videos.created_at,
+            display_order: goal_template_videos.display_order,
+            link_id: goal_template_videos.id,
+          })
+          .from(goal_template_videos)
+          .innerJoin(videos, eq(goal_template_videos.video_id, videos.id))
+          .where(and(
+            eq(goal_template_videos.template_id, template_id),
+            eq(videos.status, 'active')
+          ))
+          .orderBy(goal_template_videos.display_order, videos.created_at);
+        return res.json(rows);
+      }
+
+      const conditions: any[] = [];
+      if (source) conditions.push(eq(videos.source, source));
+      if (status) conditions.push(eq(videos.status, status));
+
+      const rows = conditions.length
+        ? await db.select().from(videos).where(and(...conditions)).orderBy(desc(videos.created_at))
+        : await db.select().from(videos).orderBy(desc(videos.created_at));
+      res.json(rows);
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch videos');
+      res.status(500).json({ error: 'Failed to fetch videos' });
+    }
+  });
+
+  // Create a video. Admins create golden_scoop or employer; coaches create employer only.
+  app.post("/api/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+
+      const parsed = insertVideoSchema.safeParse({
+        ...req.body,
+        created_by: user.id,
+        source: req.body.source || (user.role === 'Administrator' ? 'golden_scoop' : 'employer'),
+      });
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid video data', details: parsed.error.errors });
+      }
+
+      // Non-admins cannot create golden_scoop videos
+      if (user.role !== 'Administrator' && parsed.data.source === 'golden_scoop') {
+        return res.status(403).json({ error: 'Only Administrators can add Golden Scoop videos' });
+      }
+
+      const [created] = await db.insert(videos).values(parsed.data).returning();
+
+      // Optionally attach to a template (and/or template step) in the same call
+      const { template_id, template_step_id, display_order } = req.body as { template_id?: string; template_step_id?: string; display_order?: number };
+      if (template_id) {
+        await db.insert(goal_template_videos).values({
+          video_id: created.id,
+          template_id,
+          display_order: display_order ?? 0,
+        }).onConflictDoNothing();
+      }
+      if (template_step_id) {
+        await db.insert(goal_template_step_videos).values({
+          video_id: created.id,
+          template_step_id,
+          display_order: display_order ?? 0,
+        }).onConflictDoNothing();
+      }
+
+      res.json(created);
+    } catch (error) {
+      logger.error({ error, body: req.body }, 'Failed to create video');
+      res.status(500).json({ error: 'Failed to create video' });
+    }
+  });
+
+  // Update a video
+  app.put("/api/videos/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const id = req.params.id;
+
+      const [existing] = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Video not found' });
+
+      // Authorization: Admin can edit anything; creator can edit their own employer videos
+      if (user.role !== 'Administrator' && existing.created_by !== user.id) {
+        return res.status(403).json({ error: 'Not authorized to edit this video' });
+      }
+
+      const parsed = updateVideoSchema.safeParse(req.body);
+      if (!parsed.success) {
+        return res.status(400).json({ error: 'Invalid video data', details: parsed.error.flatten() });
+      }
+      const updates: any = {};
+      ['title', 'description', 'youtube_url', 'status'].forEach((f) => {
+        if ((parsed.data as any)[f] !== undefined) updates[f] = (parsed.data as any)[f];
+      });
+      if (user.role === 'Administrator' && (parsed.data as any).source) updates.source = (parsed.data as any).source;
+      updates.updated_at = new Date();
+
+      const [updated] = await db.update(videos).set(updates).where(eq(videos.id, id)).returning();
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to update video');
+      res.status(500).json({ error: 'Failed to update video' });
+    }
+  });
+
+  // Archive a video (soft delete)
+  app.delete("/api/videos/:id", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const id = req.params.id;
+      const [existing] = await db.select().from(videos).where(eq(videos.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Video not found' });
+      if (user.role !== 'Administrator' && existing.created_by !== user.id) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      await db.update(videos).set({ status: 'archived', updated_at: new Date() }).where(eq(videos.id, id));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, id: req.params.id }, 'Failed to archive video');
+      res.status(500).json({ error: 'Failed to archive video' });
+    }
+  });
+
+  // Attach an existing video to a template
+  app.post("/api/goal-templates/:templateId/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const templateId = req.params.templateId;
+      const { video_id, display_order } = req.body as { video_id: string; display_order?: number };
+      if (!video_id) return res.status(400).json({ error: 'video_id required' });
+
+      // Coaches can only attach employer videos that they created
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, video_id)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'You can only attach your own employer videos' });
+        }
+      }
+
+      const [link] = await db.insert(goal_template_videos).values({
+        template_id: templateId,
+        video_id,
+        display_order: display_order ?? 0,
+      }).onConflictDoNothing().returning();
+      res.json(link ?? { success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to attach video');
+      res.status(500).json({ error: 'Failed to attach video to template' });
+    }
+  });
+
+  // Detach a video from a template
+  app.delete("/api/goal-templates/:templateId/videos/:videoId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const { templateId, videoId } = req.params;
+
+      // Authorization: Admins can detach any link. Non-admins can only detach
+      // employer videos they themselves created — never Golden Scoop or other
+      // coaches' employer videos.
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'Only the video creator can detach employer videos; Golden Scoop videos require an Administrator' });
+        }
+      }
+
+      await db.delete(goal_template_videos).where(and(
+        eq(goal_template_videos.template_id, templateId),
+        eq(goal_template_videos.video_id, videoId),
+      ));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to detach video');
+      res.status(500).json({ error: 'Failed to detach video from template' });
+    }
+  });
+
+  // Attach an existing video to a template step
+  app.post("/api/goal-template-steps/:stepId/videos", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const stepId = req.params.stepId;
+      const { video_id, display_order } = req.body as { video_id: string; display_order?: number };
+      if (!video_id) return res.status(400).json({ error: 'video_id required' });
+
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, video_id)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'You can only attach your own employer videos' });
+        }
+      }
+
+      const [link] = await db.insert(goal_template_step_videos).values({
+        template_step_id: stepId,
+        video_id,
+        display_order: display_order ?? 0,
+      }).onConflictDoNothing().returning();
+      res.json(link ?? { success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to attach video to template step');
+      res.status(500).json({ error: 'Failed to attach video to template step' });
+    }
+  });
+
+  // Detach a video from a template step
+  app.delete("/api/goal-template-steps/:stepId/videos/:videoId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const allowedRoles = ['Administrator', 'Job Coach'];
+      if (!allowedRoles.includes(user.role)) {
+        return res.status(403).json({ error: 'Not authorized' });
+      }
+      const { stepId, videoId } = req.params;
+
+      if (user.role !== 'Administrator') {
+        const [video] = await db.select().from(videos).where(eq(videos.id, videoId)).limit(1);
+        if (!video) return res.status(404).json({ error: 'Video not found' });
+        if (video.source !== 'employer' || video.created_by !== user.id) {
+          return res.status(403).json({ error: 'Only the video creator can detach employer videos; Golden Scoop videos require an Administrator' });
+        }
+      }
+
+      await db.delete(goal_template_step_videos).where(and(
+        eq(goal_template_step_videos.template_step_id, stepId),
+        eq(goal_template_step_videos.video_id, videoId),
+      ));
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to detach video from template step');
+      res.status(500).json({ error: 'Failed to detach video from template step' });
+    }
+  });
+
+  // ========== Employee Reviews Endpoints ==========
+
+  app.get("/api/employees/:employeeId/reviews", authenticateToken, requirePermission('employee_reviews', 'can_view'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      // Guardian role has no access to reviews
+      if (user.role === 'Guardian') return res.status(403).json({ error: 'Access denied' });
+
+      const reviews = await db.select().from(employee_reviews)
+        .where(eq(employee_reviews.employee_id, employeeId))
+        .orderBy(desc(employee_reviews.created_at));
+
+      const reviewerIds = Array.from(new Set(reviews.map(r => r.reviewer_id).filter(Boolean))) as string[];
+      let reviewerMap: Record<string, string> = {};
+      if (reviewerIds.length > 0) {
+        const reviewers = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, reviewerIds));
+        reviewerMap = Object.fromEntries(reviewers.map(e => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+      }
+
+      const enriched = reviews.map(r => ({ ...r, reviewer_name: r.reviewer_id ? (reviewerMap[r.reviewer_id] || 'Unknown') : null }));
+      res.json(enriched);
+    } catch (error) {
+      logger.error({ error, employeeId: req.params.employeeId }, 'Failed to fetch reviews');
+      res.status(500).json({ error: 'Failed to fetch reviews' });
+    }
+  });
+
+  app.post("/api/employees/:employeeId/reviews", authenticateToken, requirePermission('employee_reviews', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      if (user.role === 'Guardian' || user.role === 'Super Scooper') {
+        return res.status(403).json({ error: 'Insufficient permissions' });
+      }
+
+      const reviewData = { ...req.body, employee_id: employeeId, reviewer_id: user.id };
+      const parsed = insertEmployeeReviewSchema.parse(reviewData);
+      const [review] = await db.insert(employee_reviews).values(parsed).returning();
+
+      logger.info({ reviewId: review.id, reviewerId: user.id, employeeId }, 'Employee review created');
+      const reviewer_name = `${user.first_name || ''} ${user.last_name || ''}`.trim() || 'Unknown';
+      res.json({ ...review, reviewer_name });
+    } catch (error) {
+      logger.error({ error }, 'Failed to create review');
+      res.status(500).json({ error: 'Failed to create review' });
+    }
+  });
+
+  app.patch("/api/reviews/:id", authenticateToken, requirePermission('employee_reviews', 'can_modify'), async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      const [existing] = await db.select().from(employee_reviews).where(eq(employee_reviews.id, id));
+      if (!existing) return res.status(404).json({ error: 'Review not found' });
+      if (existing.reviewer_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original reviewer or an Administrator can edit this review' });
+      }
+
+      const { review_type, q1, q2, q3, q4, q5, q6 } = req.body;
+      const [updated] = await db.update(employee_reviews)
+        .set({ review_type, q1, q2, q3, q4, q5, q6, updated_at: new Date() })
+        .where(eq(employee_reviews.id, id))
+        .returning();
+
+      logger.info({ reviewId: id, editorId: user.id }, 'Employee review updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error }, 'Failed to update review');
+      res.status(500).json({ error: 'Failed to update review' });
+    }
+  });
+
+  app.delete("/api/reviews/:id", authenticateToken, requirePermission('employee_reviews', 'can_delete'), async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const user = (req as any).user as AuthUser;
+
+      const [existing] = await db.select().from(employee_reviews).where(eq(employee_reviews.id, id));
+      if (!existing) return res.status(404).json({ error: 'Review not found' });
+      if (existing.reviewer_id !== user.id && user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only the original reviewer or an Administrator can delete this review' });
+      }
+
+      await db.delete(employee_reviews).where(eq(employee_reviews.id, id));
+      logger.info({ reviewId: id, deletedBy: user.id }, 'Employee review deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error }, 'Failed to delete review');
+      res.status(500).json({ error: 'Failed to delete review' });
+    }
+  });
+
+  // Admin-only CSV export
+  app.get("/api/employees/:employeeId/reviews/export", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const { employeeId } = req.params;
+
+      const [emp] = await db.select().from(employees).where(eq(employees.id, employeeId)).limit(1);
+      const empName = emp ? `${emp.first_name || ''} ${emp.last_name || ''}`.trim() : employeeId;
+
+      const reviews = await db.select().from(employee_reviews)
+        .where(eq(employee_reviews.employee_id, employeeId))
+        .orderBy(desc(employee_reviews.created_at));
+
+      const reviewerIds = Array.from(new Set(reviews.map(r => r.reviewer_id).filter(Boolean))) as string[];
+      let reviewerMap: Record<string, string> = {};
+      if (reviewerIds.length > 0) {
+        const reviewers = await db.select({ id: employees.id, first_name: employees.first_name, last_name: employees.last_name })
+          .from(employees).where(inArray(employees.id, reviewerIds));
+        reviewerMap = Object.fromEntries(reviewers.map(e => [e.id, `${e.first_name || ''} ${e.last_name || ''}`.trim()]));
+      }
+
+      const escape = (v: string | null | undefined) => `"${(v || '').replace(/"/g, '""')}"`;
+
+      const headers = ['Employee', 'Review Type', 'Date', 'Reviewer',
+        'Q1: Greatest Strengths', 'Q2: Growth Areas', 'Q3: Goal Progress',
+        'Q4: Teamwork & Attitude', 'Q5: Achievements', 'Q6: Next Period Goals'];
+
+      const rows = reviews.map(r => [
+        escape(empName),
+        escape(r.review_type === 'mid_year' ? 'Mid-Year' : 'Annual'),
+        escape(r.created_at ? new Date(r.created_at).toLocaleDateString() : ''),
+        escape(r.reviewer_id ? (reviewerMap[r.reviewer_id] || 'Unknown') : ''),
+        escape(r.q1), escape(r.q2), escape(r.q3), escape(r.q4), escape(r.q5), escape(r.q6),
+      ].join(','));
+
+      const csv = [headers.join(','), ...rows].join('\n');
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="reviews-${empName.replace(/\s+/g, '-')}.csv"`);
+      logger.info({ employeeId, exportedBy: (req as any).user.id, count: reviews.length }, 'Reviews exported to CSV');
+      res.send(csv);
+    } catch (error) {
+      logger.error({ error }, 'Failed to export reviews');
+      res.status(500).json({ error: 'Failed to export reviews' });
+    }
+  });
+
+  // ===== Forms & Reviews =====
+  // Templates are intentionally admin-only in Phase 1. Response access is
+  // separately scoped to the employee relationship and form permissions.
+  const hydrateFormTemplate = async (templateId: string) => {
+    const [template] = await db.select().from(form_templates).where(eq(form_templates.id, templateId)).limit(1);
+    if (!template) return null;
+    const sections = await db.select().from(form_sections)
+      .where(eq(form_sections.template_id, templateId))
+      .orderBy(form_sections.sort_order);
+    const questions = await db.select().from(form_questions)
+      .where(eq(form_questions.template_id, templateId))
+      .orderBy(form_questions.sort_order);
+    return { ...template, sections: sections.map(section => ({
+      ...section,
+      questions: questions.filter(question => question.section_id === section.id),
+    })), questions };
+  };
+
+  const validateQuestionValue = (question: any, value: unknown): string | null => {
+    if (value === null || value === undefined || value === '') return null;
+    if (question.question_type !== 'scale') return null;
+    const config = (question.config_json || {}) as Record<string, unknown>;
+    const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
+    const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
+    const rating = Number(value);
+    if (!Number.isInteger(rating) || rating < min || rating > max) {
+      return `"${question.prompt}" must be a whole-number rating from ${min} to ${max}`;
+    }
+    return null;
+  };
+
+  const templateAllowsFilling = (template: any, role: string) => {
+    const settings = (template.settings_json || {}) as Record<string, unknown>;
+    const allowedRoles = Array.isArray(settings.allowed_fill_roles)
+      ? settings.allowed_fill_roles as string[]
+      : ['Administrator'];
+    return role === 'Administrator' || allowedRoles.includes(role);
+  };
+
+  const canViewTemplateResponse = async (user: AuthUser, employeeId: string, template: any) => {
+    if (template?.form_type === 'coach_checkin') {
+      return (user.role === 'Administrator' || user.role === 'Job Coach') && await canAccessScooper(user, employeeId);
+    }
+    return canViewScooperForms(user, employeeId);
+  };
+
+  const canFillTemplateResponse = async (user: AuthUser, employeeId: string, template: any) => {
+    if (template?.form_type === 'coach_checkin') {
+      return (user.role === 'Administrator' || user.role === 'Job Coach') && await canAccessScooper(user, employeeId);
+    }
+    return canModifyScooperForms(user, employeeId);
+  };
+
+  // Profile workflows can discover only the active template they are allowed
+  // to use. Template administration remains restricted to Administrators.
+  app.get("/api/form-templates/by-type/:formType", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = typeof req.query.employee_id === 'string' ? req.query.employee_id : '';
+      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+      const [template] = await db.select().from(form_templates)
+        .where(and(eq(form_templates.form_type, req.params.formType), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at))
+        .limit(1);
+      if (!template) return res.status(404).json({ error: 'Active form template not found' });
+       if (!await canViewTemplateResponse(user, employeeId, template)) return res.status(403).json({ error: 'You cannot access this form template' });
+      res.json(await hydrateFormTemplate(template.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load profile form template');
+      res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
+
+  app.get("/api/form-templates", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+      const templates = await db.select().from(form_templates)
+        .where(status ? eq(form_templates.status, status) : undefined)
+        .orderBy(desc(form_templates.updated_at));
+      const result = await Promise.all(templates.map(template => hydrateFormTemplate(template.id)));
+      res.json(result.filter(Boolean));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form templates');
+      res.status(500).json({ error: 'Failed to load form templates' });
+    }
+  });
+
+  app.get("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const template = await hydrateFormTemplate(req.params.id);
+      if (!template) return res.status(404).json({ error: 'Form template not found' });
+      res.json(template);
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form template');
+      res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
+
+  app.post("/api/form-templates", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const body = req.body || {};
+      const parsed = insertFormTemplateSchema.safeParse({
+        name: body.name,
+        description: body.description || null,
+        form_type: body.form_type || 'custom',
+        status: body.status || 'active',
+        version: 1,
+        settings_json: body.settings_json || { allowed_fill_roles: ['Administrator'], lock_on_submit: true },
+        created_by: (req as any).user.id,
+      });
+      if (!parsed.success) return res.status(400).json({ error: 'Invalid form template', details: parsed.error.flatten() });
+      const [created] = await db.insert(form_templates).values(parsed.data).returning();
+      res.status(201).json(await hydrateFormTemplate(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to create form template');
+      res.status(500).json({ error: 'Failed to create form template' });
+    }
+  });
+
+  app.put("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const templateId = req.params.id;
+      const [existing] = await db.select().from(form_templates).where(eq(form_templates.id, templateId)).limit(1);
+      if (!existing) return res.status(404).json({ error: 'Form template not found' });
+      const body = req.body || {};
+      const incomingSections = Array.isArray(body.sections) ? body.sections : [];
+      const incomingQuestions = Array.isArray(body.questions)
+        ? body.questions
+        : incomingSections.flatMap((section: any) => (section.questions || []).map((question: any) => ({ ...question, section_id: question.section_id || section.id })));
+
+      await db.transaction(async (tx) => {
+        await tx.update(form_templates).set({
+          name: body.name ?? existing.name,
+          description: body.description ?? null,
+          form_type: body.form_type ?? existing.form_type,
+          status: body.status ?? existing.status,
+          settings_json: body.settings_json ?? existing.settings_json,
+          version: existing.version + 1,
+          updated_at: new Date(),
+        }).where(eq(form_templates.id, templateId));
+
+        const currentSections = await tx.select().from(form_sections).where(eq(form_sections.template_id, templateId));
+        const currentQuestions = await tx.select().from(form_questions).where(eq(form_questions.template_id, templateId));
+        const seenSectionIds = new Set<string>();
+        const sectionIdMap = new Map<string, string>();
+
+        for (const [index, section] of incomingSections.entries()) {
+          const stableId = typeof section.id === 'string' && currentSections.some(row => row.id === section.id) ? section.id : null;
+          const values = {
+            template_id: templateId,
+            title: String(section.title || `Section ${index + 1}`).trim(),
+            sort_order: Number.isFinite(Number(section.sort_order)) ? Number(section.sort_order) : index,
+            status: section.status || 'active',
+            updated_at: new Date(),
+          };
+          if (stableId) {
+            await tx.update(form_sections).set(values).where(eq(form_sections.id, stableId));
+            seenSectionIds.add(stableId);
+            sectionIdMap.set(String(section.id), stableId);
+          } else {
+            const [createdSection] = await tx.insert(form_sections).values(values).returning();
+            seenSectionIds.add(createdSection.id);
+            if (section.id) sectionIdMap.set(String(section.id), createdSection.id);
+          }
+        }
+        for (const section of currentSections) {
+          if (!seenSectionIds.has(section.id)) {
+            await tx.update(form_sections).set({ status: 'archived', updated_at: new Date() }).where(eq(form_sections.id, section.id));
+          }
+        }
+
+        const seenQuestionIds = new Set<string>();
+        for (const [index, question] of incomingQuestions.entries()) {
+          const stableId = typeof question.id === 'string' && currentQuestions.some(row => row.id === question.id) ? question.id : null;
+          const sectionId = question.section_id ? (sectionIdMap.get(String(question.section_id)) || String(question.section_id)) : null;
+          // An omitted/archived section cannot retain active questions. Skip it
+          // here; the cleanup loop below marks any prior question inactive.
+          if (sectionId && !seenSectionIds.has(sectionId)) continue;
+          const stableKey = String(question.stable_key || question.id || `question_${index + 1}`).trim();
+          const values = {
+            template_id: templateId,
+            section_id: sectionId,
+            stable_key: stableKey,
+            prompt: String(question.prompt || '').trim(),
+            help_text: question.help_text || null,
+            question_type: question.question_type || 'free_text',
+            config_json: question.config_json || {},
+            sort_order: Number.isFinite(Number(question.sort_order)) ? Number(question.sort_order) : index,
+            status: question.status || 'active',
+            updated_at: new Date(),
+          };
+          if (!values.prompt) continue;
+          if (stableId) {
+            await tx.update(form_questions).set(values).where(eq(form_questions.id, stableId));
+            seenQuestionIds.add(stableId);
+          } else {
+            const [createdQuestion] = await tx.insert(form_questions).values(values).returning();
+            seenQuestionIds.add(createdQuestion.id);
+          }
+        }
+        for (const question of currentQuestions) {
+          if (!seenQuestionIds.has(question.id)) {
+            await tx.update(form_questions).set({ status: 'inactive', updated_at: new Date() }).where(eq(form_questions.id, question.id));
+          }
+        }
+      });
+
+      res.json(await hydrateFormTemplate(templateId));
+    } catch (error) {
+      logger.error({ error }, 'Failed to update form template');
+      res.status(500).json({ error: 'Failed to update form template' });
+    }
+  });
+
+  app.post("/api/form-templates/:id/duplicate", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const source = await hydrateFormTemplate(req.params.id);
+      if (!source) return res.status(404).json({ error: 'Form template not found' });
+      const [created] = await db.insert(form_templates).values({
+        name: `${source.name} (Copy)`,
+        description: source.description,
+        form_type: source.form_type,
+        status: 'active',
+        version: 1,
+        settings_json: source.settings_json,
+        created_by: (req as any).user.id,
+      }).returning();
+      const sectionIds = new Map<string, string>();
+      for (const section of source.sections) {
+        const [newSection] = await db.insert(form_sections).values({
+          template_id: created.id,
+          title: section.title,
+          sort_order: section.sort_order,
+          status: section.status,
+        }).returning();
+        sectionIds.set(section.id, newSection.id);
+      }
+      for (const question of source.questions) {
+        await db.insert(form_questions).values({
+          template_id: created.id,
+          section_id: question.section_id ? sectionIds.get(question.section_id) || null : null,
+          stable_key: question.stable_key,
+          prompt: question.prompt,
+          help_text: question.help_text,
+          question_type: question.question_type,
+          config_json: question.config_json,
+          sort_order: question.sort_order,
+          status: question.status,
+        });
+      }
+      res.status(201).json(await hydrateFormTemplate(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to duplicate form template');
+      res.status(500).json({ error: 'Failed to duplicate form template' });
+    }
+  });
+
+  app.delete("/api/form-templates/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const [updated] = await db.update(form_templates)
+        .set({ status: 'archived', updated_at: new Date() })
+        .where(eq(form_templates.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Form template not found' });
+      res.json(await hydrateFormTemplate(updated.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to archive form template');
+      res.status(500).json({ error: 'Failed to archive form template' });
+    }
+  });
+
+  const responsePayload = async (responseId: string) => {
+    const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, responseId)).limit(1);
+    if (!responseSet) return null;
+    const template = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+    const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseId));
+    return { ...responseSet, template, answers };
+  };
+
+  app.get("/api/form-responses/:responseId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      const user = (req as any).user as AuthUser;
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canViewTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot view this form response' });
+      res.json(await responsePayload(responseSet.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load form response');
+      res.status(500).json({ error: 'Failed to load form response' });
+    }
+  });
+
+  app.get(["/api/employees/:employeeId/form-responses", "/api/scoopers/:scooperId/form-responses"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = req.params.employeeId || req.params.scooperId;
+      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot view these form responses' });
+      const filters = [eq(form_response_sets.employee_id, employeeId)];
+      if (typeof req.query.template_id === 'string') filters.push(eq(form_response_sets.template_id, req.query.template_id));
+      if (typeof req.query.cycle_label === 'string') filters.push(eq(form_response_sets.cycle_label, req.query.cycle_label));
+      const responseSets = await db.select().from(form_response_sets).where(and(...filters)).orderBy(desc(form_response_sets.updated_at));
+      const hydrated = await Promise.all(responseSets.map(response => responsePayload(response.id)));
+      res.json(hydrated.filter(Boolean));
+    } catch (error) {
+      logger.error({ error }, 'Failed to load employee form responses');
+      res.status(500).json({ error: 'Failed to load employee form responses' });
+    }
+  });
+
+  app.post(["/api/form-responses", "/api/form-response-sets"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { template_id, employee_id, cycle_label } = req.body || {};
+      if (!template_id || !employee_id) return res.status(400).json({ error: 'template_id and employee_id are required' });
+      const [template] = await db.select().from(form_templates).where(eq(form_templates.id, template_id)).limit(1);
+      if (!template || template.status !== 'active') return res.status(404).json({ error: 'Active form template not found' });
+       if (!await canFillTemplateResponse(user, employee_id, template)) return res.status(403).json({ error: 'You cannot fill forms for this employee' });
+      if (!templateAllowsFilling(template, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      const normalizedCycleLabel = typeof cycle_label === 'string' && cycle_label.trim() ? cycle_label.trim() : null;
+      const existingFilters = [
+        eq(form_response_sets.template_id, template_id),
+        eq(form_response_sets.employee_id, employee_id),
+        normalizedCycleLabel ? eq(form_response_sets.cycle_label, normalizedCycleLabel) : isNull(form_response_sets.cycle_label),
+      ];
+      const [existing] = await db.select().from(form_response_sets).where(and(...existingFilters)).limit(1);
+      if (existing) return res.json(await responsePayload(existing.id));
+      const templateSnapshot = await hydrateFormTemplate(template.id);
+      const [created] = await db.insert(form_response_sets).values({
+        template_id,
+        template_version: template.version,
+        employee_id,
+        cycle_label: normalizedCycleLabel,
+        status: 'draft',
+        template_snapshot_json: templateSnapshot,
+      }).returning();
+      res.status(201).json(await responsePayload(created.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to create form response');
+      res.status(500).json({ error: 'Failed to create form response' });
+    }
+  });
+
+  app.put(["/api/form-responses/:responseId", "/api/form-response-sets/:responseId"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+      const editingSubmitted = responseSet.status === 'submitted' && user.role === 'Administrator';
+      if (responseSet.status === 'submitted' && !editingSubmitted) return res.status(409).json({ error: 'Submitted responses are locked' });
+      const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canFillTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot edit this form response' });
+      if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      // Drafts are versioned records: validate and snapshot against the template
+      // captured at creation, even if the reusable template has since changed.
+      const snapshotQuestions: any[] = Array.isArray(responseTemplate.questions)
+        ? responseTemplate.questions
+        : [];
+       const questionMap = new Map(snapshotQuestions.map((question: any) => [question.id, question]));
+      const incomingAnswers = Array.isArray(req.body?.answers) ? req.body.answers : [];
+       const existingAnswers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+       const effectiveAnswers = new Map(existingAnswers.map(answer => [answer.question_id, answer.value_json]));
+       for (const answer of incomingAnswers) {
+         if (questionMap.has(answer.question_id)) effectiveAnswers.set(answer.question_id, answer.value_json ?? answer.value ?? null);
+       }
+       const normalizedAnswers = normalizeConditionalAnswers(snapshotQuestions, effectiveAnswers);
+       const lookup = normalizedAnswers.lookup;
+      for (const answer of incomingAnswers) {
+        const question = questionMap.get(answer.question_id);
+        if (!question) continue;
+         if (!isQuestionVisible(question, lookup)) continue;
+        const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null);
+        if (validationError) return res.status(400).json({ error: validationError });
+      }
+      if (editingSubmitted) {
+         const missing = missingRequiredQuestionPrompts(snapshotQuestions, effectiveAnswers);
+        if (missing.length) return res.status(400).json({ error: 'Complete all required questions before saving', missing });
+      }
+      const saved = await db.transaction(async (tx) => {
+        // This conditional update is both the draft-state check and the row
+        // lock. A submission waits for any in-progress save, then scores the
+        // answers that save committed; later saves see the submitted state.
+        const [draft] = await tx.update(form_response_sets).set({ updated_at: new Date() })
+          .where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, responseSet.status)))
+          .returning();
+        if (!draft) return false;
+        for (const answer of incomingAnswers) {
+          const question = questionMap.get(answer.question_id);
+          if (!question) continue;
+           if (!isQuestionVisible(question, lookup)) {
+             await tx.delete(form_answers).where(and(
+               eq(form_answers.response_set_id, responseSet.id),
+               eq(form_answers.question_id, question.id),
+             ));
+             continue;
+           }
+          const value = answer.value_json ?? answer.value ?? null;
+          await tx.insert(form_answers).values({
+            response_set_id: responseSet.id,
+            question_id: question.id,
+            value_json: value,
+            snapshot_json: {
+              stable_key: question.stable_key,
+              prompt: question.prompt,
+              help_text: question.help_text,
+              question_type: question.question_type,
+              config_json: question.config_json,
+            },
+            answered_by: user.id,
+            updated_at: new Date(),
+          }).onConflictDoUpdate({
+            target: [form_answers.response_set_id, form_answers.question_id],
+            set: {
+              value_json: value,
+              snapshot_json: {
+                stable_key: question.stable_key,
+                prompt: question.prompt,
+                help_text: question.help_text,
+                question_type: question.question_type,
+                config_json: question.config_json,
+              },
+              answered_by: user.id,
+              updated_at: new Date(),
+            },
+          });
+        }
+        if (editingSubmitted && (responseTemplate.form_type === 'mentor_certification' || responseTemplate.form_type === 'shift_lead_certification')) {
+          const updatedAnswers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+          const scoredAnswers = updatedAnswers
+            .map(answer => String(answer.value_json || '').toLowerCase())
+            .filter(value => value === 'yes' || value === 'no');
+          const correct = scoredAnswers.filter(value => value === 'yes').length;
+          const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+          const certificationType = responseTemplate.form_type === 'mentor_certification' ? 'mentor' : 'shift_lead';
+          const passingScore = Number((responseTemplate.settings_json || {}).passing_score || (certificationType === 'mentor' ? 84 : 90));
+          await tx.update(promotion_certifications).set({
+            score,
+            passing_score: passingScore,
+            passed: score >= passingScore,
+          }).where(eq(promotion_certifications.response_set_id, responseSet.id));
+        }
+        return true;
+      });
+      if (!saved) return res.status(409).json({ error: 'Submitted responses are locked' });
+      res.json(await responsePayload(responseSet.id));
+    } catch (error) {
+      logger.error({ error }, 'Failed to save form response');
+      res.status(500).json({ error: 'Failed to save form response' });
+    }
+  });
+
+  app.post(["/api/form-responses/:responseId/submit", "/api/form-response-sets/:responseId/submit"], authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+       const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+       if (!await canViewTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot access this form response' });
+      if (responseSet.status === 'submitted') return res.json(await responsePayload(responseSet.id));
+       if (!await canFillTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot submit this form response' });
+      if (!responseTemplate || !templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      const questions: any[] = Array.isArray(responseTemplate.questions)
+        ? responseTemplate.questions
+        : [];
+      const questionsById = new Map(questions.map(question => [question.id, question]));
+      const submittedResponseId = await db.transaction(async (tx) => {
+        // Claim the draft before reading answers. This serializes submit with
+        // draft saves and prevents an already-started save from mutating a
+        // submitted response after the certification is scored.
+        const [submitted] = await tx.update(form_response_sets).set({
+          status: 'submitted',
+          submitted_by: user.id,
+          submitted_at: new Date(),
+          updated_at: new Date(),
+        }).where(and(eq(form_response_sets.id, responseSet.id), eq(form_response_sets.status, 'draft'))).returning();
+        if (!submitted) return null;
+         const allAnswers = await tx.select().from(form_answers).where(eq(form_answers.response_set_id, responseSet.id));
+         const answersByQuestion = new Map(allAnswers.map(answer => [answer.question_id, answer.value_json]));
+         const normalizedAnswers = normalizeConditionalAnswers(questions, answersByQuestion);
+         const answers = allAnswers.filter(answer => normalizedAnswers.answers.has(answer.question_id));
+         for (const answer of allAnswers) {
+           if (!normalizedAnswers.answers.has(answer.question_id)) {
+             await tx.delete(form_answers).where(eq(form_answers.id, answer.id));
+           }
+         }
+       const missing = missingRequiredQuestionPrompts(questions, normalizedAnswers.answers);
+        if (missing.length) {
+          throw Object.assign(new Error('Complete all required questions before submitting'), { status: 400, missing });
+        }
+        for (const answer of answers) {
+          const question = questionsById.get(answer.question_id);
+          if (!question) continue;
+          await tx.update(form_answers).set({
+            snapshot_json: {
+              stable_key: question.stable_key,
+              prompt: question.prompt,
+              help_text: question.help_text,
+              question_type: question.question_type,
+              options: (question.config_json as any)?.options || [],
+              config_json: question.config_json,
+              value: answer.value_json,
+            },
+            updated_at: new Date(),
+          }).where(eq(form_answers.id, answer.id));
+        }
+        const submittedId = submitted.id;
+
+        if (responseTemplate.form_type === 'mentor_certification' || responseTemplate.form_type === 'shift_lead_certification') {
+          const scoredAnswers = answers
+            .map(answer => String(answer.value_json || '').toLowerCase())
+            .filter(value => value === 'yes' || value === 'no');
+          const correct = scoredAnswers.filter(value => value === 'yes').length;
+          const score = scoredAnswers.length ? Math.round((correct / scoredAnswers.length) * 100) : 0;
+          const certificationType = responseTemplate.form_type === 'mentor_certification' ? 'mentor' : 'shift_lead';
+          const passingScore = Number((responseTemplate.settings_json || {}).passing_score || (certificationType === 'mentor' ? 84 : 90));
+          await tx.insert(promotion_certifications).values({
+            employee_id: responseSet.employee_id,
+            certification_type: certificationType,
+            response_set_id: submittedId,
+            date_completed: new Date().toISOString().slice(0, 10),
+            score,
+            passing_score: passingScore,
+            passed: score >= passingScore,
+            checklist_results: [],
+            certified_by: user.id,
+          }).onConflictDoNothing();
+        }
+        return submittedId;
+      });
+      if (!submittedResponseId) return res.json(await responsePayload(responseSet.id));
+      res.json(await responsePayload(submittedResponseId));
+    } catch (error) {
+      logger.error({ error }, 'Failed to submit form response');
+      if ((error as any)?.status === 400) {
+        return res.status(400).json({ error: (error as Error).message, missing: (error as any).missing });
+      }
+      res.status(500).json({ error: 'Failed to submit form response' });
+    }
+  });
+
+  await ensureDefaultPermissions();
+  await ensureDefaultProfileCatalog();
+  await backfillGoalStepTemplateLinks();
 
   const httpServer = createServer(app);
   return httpServer;

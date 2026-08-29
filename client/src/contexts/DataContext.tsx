@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import { apiRequest } from '../lib/auth';
+import { clearAllProfileCache, invalidateProfileCache } from '../lib/apiCache';
 import { calculateDateFromRelativeDuration } from '../../../shared/schema';
 
 export interface Employee {
@@ -22,6 +23,8 @@ export interface Employee {
   interestsMotivators: string[];
   challenges: string[];
   regulationStrategies: string[];
+  accommodations: string[];
+  profileFieldValues: Record<string, string[]>;
   hasServiceProvider: boolean;
   serviceProviders: Array<{ name: string; type: string }>;
   date_of_birth?: string | null;
@@ -33,9 +36,13 @@ export interface Employee {
 
 export interface GoalStep {
   id: string;
+  // Reference back to the originating goal_template_steps row, when available.
+  // Used to look up per-step training videos for the assigned employee's goal.
+  templateStepId?: string | null;
   stepOrder: number;
   stepDescription: string;
   isRequired: boolean;
+  timerType?: 'none' | 'optional' | 'required';
 }
 
 export interface RecentSession {
@@ -46,6 +53,7 @@ export interface RecentSession {
 export interface DevelopmentGoal {
   id: string;
   employeeId: string;
+  templateId?: string | null;
   title: string;
   description: string;
   startDate: string;
@@ -104,6 +112,7 @@ export interface PromotionCertification {
   id: string;
   employeeId: string;
   certificationType: 'mentor' | 'shift_lead';
+  responseSetId?: string | null;
   dateCompleted: string;
   score: number;
   passingScore: number;
@@ -149,9 +158,10 @@ interface DataContextType {
   stepProgress: StepProgress[];
   certifications: PromotionCertification[];
   guardianNotes: GuardianNote[];
+  ensureProgressLoaded: () => void;
   loadUserDrafts: (userId: string) => Promise<void>;
   addEmployee: (employee: Omit<Employee, 'id' | 'createdAt' | 'updatedAt'> & { password?: string }) => void;
-  updateEmployee: (id: string, updates: Partial<Employee>) => void;
+  updateEmployee: (id: string, updates: Partial<Employee> & { password?: string }) => Promise<void>;
   createAssessmentSession: (employeeIds: string[], location?: string) => Promise<{ success: boolean; sessionId?: string; error?: string; lockedEmployees?: any[]; lockedByManagers?: any[] }>;
   endAssessmentSession: () => void;
   completeAssessmentSession: (sessionId: string) => Promise<void>;
@@ -163,6 +173,7 @@ interface DataContextType {
   saveStepProgressDraft: (progress: Omit<StepProgress, 'id' | 'date'>, documenterUserId: string) => void;
   submitStepProgress: (employeeId: string, documenterUserId: string, assessmentSessionId?: string) => Promise<any>;
   createGoalFromTemplate: (templateId: string, employeeId: string) => void;
+  bulkAssignGoal: (templateId: string, employeeIds: string[], skipExisting?: boolean) => Promise<{ createdCount: number; skippedCount: number }>;
   addGoalTemplate: (template: Omit<GoalTemplate, 'id'>) => void;
   updateGoalTemplate: (templateId: string, template: Omit<GoalTemplate, 'id'>) => void;
   archiveGoalTemplate: (templateId: string) => void;
@@ -188,6 +199,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
   const [certifications, setCertifications] = useState<PromotionCertification[]>([]);
   const [guardianNotes, setGuardianNotes] = useState<GuardianNote[]>([]);
   const [loading, setLoading] = useState(true);
+  const progressLoadedRef = React.useRef(false);
+  const progressLoadingRef = React.useRef<Promise<void> | null>(null);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -197,12 +210,79 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isAuthenticated]);
 
+  useEffect(() => {
+    if (!isAuthenticated) {
+      progressLoadedRef.current = false;
+      progressLoadingRef.current = null;
+      clearAllProfileCache();
+    }
+  }, [isAuthenticated]);
+
+  const loadProgressAndSummaries = async () => {
+    try {
+      const [progressResponse, summariesResponse] = await Promise.all([
+        apiRequest('/api/step-progress'),
+        apiRequest('/api/assessment-summaries'),
+      ]);
+
+      if (progressResponse.ok) {
+        const progressData = await progressResponse.json();
+        const mappedProgress = progressData.map((progress: any) => ({
+          id: progress.id,
+          developmentGoalId: progress.development_goal_id,
+          goalStepId: progress.goal_step_id,
+          employeeId: progress.employee_id,
+          assessmentSessionId: progress.assessment_session_id,
+          date: progress.date,
+          outcome: progress.outcome,
+          notes: progress.notes,
+          completionTimeSeconds: progress.completion_time_seconds,
+          timerManuallyEntered: progress.timer_manually_entered,
+          status: progress.status || 'submitted'
+        }));
+        setStepProgress(mappedProgress);
+      }
+
+      if (summariesResponse.ok) {
+        const summariesData = await summariesResponse.json();
+        const mappedSummaries = summariesData.map((summary: any) => ({
+          id: summary.id,
+          employeeId: summary.employee_id,
+          assessmentSessionId: summary.assessment_session_id,
+          date: summary.date,
+          summary: summary.summary,
+          createdAt: summary.created_at,
+          updatedAt: summary.updated_at,
+          managerId: summary.manager_id
+        }));
+        setAssessmentSummaries(mappedSummaries);
+      }
+      progressLoadedRef.current = true;
+    } catch (error) {
+      console.error('Error loading progress data:', error);
+    }
+  };
+
+  const ensureProgressLoaded = useCallback(() => {
+    if (progressLoadedRef.current) return;
+    if (progressLoadingRef.current) return;
+    progressLoadingRef.current = loadProgressAndSummaries().finally(() => {
+      progressLoadingRef.current = null;
+    });
+  }, []);
+
   const loadData = async () => {
     try {
       setLoading(true);
+
+      const [employeesResponse, templatesResponse, goalsResponse, assessmentSessionsResponse, certsResponse] = await Promise.all([
+        apiRequest('/api/employees'),
+        apiRequest('/api/goal-templates'),
+        apiRequest('/api/development-goals'),
+        apiRequest('/api/assessment-sessions'),
+        apiRequest('/api/certifications'),
+      ]);
       
-      // Load employees
-      const employeesResponse = await apiRequest('/api/employees');
       if (employeesResponse.ok) {
         const employeesData = await employeesResponse.json();
         const mappedEmployees = employeesData.map((emp: any) => ({
@@ -219,6 +299,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: emp.interests_motivators || [],
           challenges: emp.challenges || [],
           regulationStrategies: emp.regulation_strategies || [],
+          accommodations: emp.accommodations || [],
+          profileFieldValues: emp.profile_field_values || {},
           hasServiceProvider: emp.has_service_provider || false,
           serviceProviders: emp.service_providers || [],
           date_of_birth: emp.date_of_birth || null,
@@ -228,7 +310,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           updatedAt: emp.updated_at
         }));
         
-        // Deduplicate employees by ID (not email, since Super Scoopers may not have emails)
         const uniqueEmployees = mappedEmployees.filter((emp: any, index: number, arr: any[]) => 
           arr.findIndex((e: any) => e.id === emp.id) === index
         );
@@ -236,8 +317,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setEmployees(uniqueEmployees);
       }
 
-      // Load goal templates
-      const templatesResponse = await apiRequest('/api/goal-templates');
       if (templatesResponse.ok) {
         const templatesData = await templatesResponse.json();
         const mappedTemplates = templatesData.map((template: any) => ({
@@ -259,13 +338,12 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setGoalTemplates(mappedTemplates);
       }
 
-      // Load development goals
-      const goalsResponse = await apiRequest('/api/development-goals');
       if (goalsResponse.ok) {
         const goalsData = await goalsResponse.json();
         const mappedGoals = goalsData.map((goal: any) => ({
           id: goal.id,
           employeeId: goal.employee_id,
+          templateId: goal.template_id ?? null,
           title: goal.title,
           description: goal.description,
           startDate: goal.start_date,
@@ -276,9 +354,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           consecutiveAllCorrect: goal.consecutive_all_correct,
           steps: goal.steps.map((step: any) => ({
             id: step.id,
+            templateStepId: step.template_step_id ?? null,
             stepOrder: step.step_order,
             stepDescription: step.step_description,
-            isRequired: step.is_required
+            isRequired: step.is_required,
+            timerType: step.timer_type || 'none'
           })),
           recentSessions: (goal.recent_sessions ?? goal.recentSessions ?? []).map((s: any) => ({
             date: s.date,
@@ -288,45 +368,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         setDevelopmentGoals(mappedGoals);
       }
 
-      // Load step progress (submitted only)
-      const progressResponse = await apiRequest('/api/step-progress');
-      if (progressResponse.ok) {
-        const progressData = await progressResponse.json();
-        const mappedProgress = progressData.map((progress: any) => ({
-          id: progress.id,
-          developmentGoalId: progress.development_goal_id,
-          goalStepId: progress.goal_step_id,
-          employeeId: progress.employee_id,
-          assessmentSessionId: progress.assessment_session_id,
-          date: progress.date,
-          outcome: progress.outcome,
-          notes: progress.notes,
-          completionTimeSeconds: progress.completion_time_seconds,
-          timerManuallyEntered: progress.timer_manually_entered,
-          status: progress.status || 'submitted'
-        }));
-        setStepProgress(mappedProgress);
-      }
-
-      // Load assessment summaries
-      const summariesResponse = await apiRequest('/api/assessment-summaries');
-      if (summariesResponse.ok) {
-        const summariesData = await summariesResponse.json();
-        const mappedSummaries = summariesData.map((summary: any) => ({
-          id: summary.id,
-          employeeId: summary.employee_id,
-          assessmentSessionId: summary.assessment_session_id,
-          date: summary.date,
-          summary: summary.summary,
-          createdAt: summary.created_at,
-          updatedAt: summary.updated_at,
-          managerId: summary.manager_id
-        }));
-        setAssessmentSummaries(mappedSummaries);
-      }
-
-
-      const assessmentSessionsResponse = await apiRequest('/api/assessment-sessions');
       if (assessmentSessionsResponse.ok) {
         const sessionsData = await assessmentSessionsResponse.json();
         const today = new Date().toISOString().split('T')[0];
@@ -355,16 +396,13 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         }
       }
 
-
-
-      // Load certifications
-      const certsResponse = await apiRequest('/api/certifications');
       if (certsResponse.ok) {
         const certsData = await certsResponse.json();
         const mappedCerts = certsData.map((cert: any) => ({
           id: cert.id,
           employeeId: cert.employee_id,
           certificationType: cert.certification_type,
+          responseSetId: cert.response_set_id,
           dateCompleted: cert.date_completed,
           score: cert.score,
           passingScore: cert.passing_score,
@@ -379,7 +417,6 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
     } catch (error) {
       console.error('Error loading data:', error);
-      // Fallback to demo data if API fails
       loadDemoData();
     } finally {
       setLoading(false);
@@ -406,6 +443,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Music', 'Art', 'Praise and recognition'],
         challenges: ['Loud noises', 'Sudden changes'],
         regulationStrategies: ['5-minute breaks', 'Visual schedules', 'Calm voice'],
+        accommodations: [],
+        profileFieldValues: {},
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -429,6 +468,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         interestsMotivators: ['Animals', 'Colorful stickers', 'Team activities'],
         challenges: ['Complex instructions'],
         regulationStrategies: ['Break tasks into steps', 'Use positive reinforcement'],
+        accommodations: [],
+        profileFieldValues: {},
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -522,6 +563,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interests_motivators: employeeData.interestsMotivators,
           challenges: employeeData.challenges,
           regulation_strategies: employeeData.regulationStrategies,
+          ...(employeeData.accommodations !== undefined && { accommodations: employeeData.accommodations }),
+          profile_field_values: employeeData.profileFieldValues || {},
           has_service_provider: employeeData.hasServiceProvider,
           service_providers: employeeData.serviceProviders,
           ...(employeeData.date_of_birth && { date_of_birth: employeeData.date_of_birth }),
@@ -544,6 +587,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           interestsMotivators: newEmployee.interests_motivators || [],
           challenges: newEmployee.challenges || [],
           regulationStrategies: newEmployee.regulation_strategies || [],
+          accommodations: newEmployee.accommodations || [],
+          profileFieldValues: newEmployee.profile_field_values || {},
           hasServiceProvider: newEmployee.has_service_provider || false,
           serviceProviders: newEmployee.service_providers || [],
           date_of_birth: newEmployee.date_of_birth || null,
@@ -565,7 +610,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const updateEmployee = async (id: string, updates: Partial<Employee>) => {
+  const updateEmployee = async (id: string, updates: Partial<Employee> & { password?: string }) => {
     try {
       const updateData: any = {};
       if (updates.first_name) updateData.first_name = updates.first_name;
@@ -581,6 +626,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.interestsMotivators) updateData.interests_motivators = updates.interestsMotivators;
       if (updates.challenges) updateData.challenges = updates.challenges;
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
+      if (updates.accommodations !== undefined) updateData.accommodations = updates.accommodations;
+      if (updates.profileFieldValues !== undefined) updateData.profile_field_values = updates.profileFieldValues;
       if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
       if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
       if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
@@ -593,34 +640,40 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify(updateData),
       });
 
-      if (response.ok) {
-        const updatedEmployee = await response.json();
-        const mappedEmployee = {
-          id: updatedEmployee.id,
-          first_name: updatedEmployee.first_name,
-          last_name: updatedEmployee.last_name,
-          email: updatedEmployee.email,
-          role: updatedEmployee.role,
-          profileImageUrl: updatedEmployee.profile_image_url,
-          isActive: updatedEmployee.is_active,
-          hasSystemAccess: updatedEmployee.has_system_access || false,
-          allergies: updatedEmployee.allergies || [],
-          emergencyContacts: updatedEmployee.emergency_contacts || [],
-          interestsMotivators: updatedEmployee.interests_motivators || [],
-          challenges: updatedEmployee.challenges || [],
-          regulationStrategies: updatedEmployee.regulation_strategies || [],
-          hasServiceProvider: updatedEmployee.has_service_provider || false,
-          serviceProviders: updatedEmployee.service_providers || [],
-          date_of_birth: updatedEmployee.date_of_birth || null,
-          last_login: updatedEmployee.last_login || null,
-          roi_status: updatedEmployee.roi_status || false,
-          createdAt: updatedEmployee.created_at,
-          updatedAt: updatedEmployee.updated_at
-        };
-        setEmployees(prev => prev.map(emp => emp.id === id ? mappedEmployee : emp));
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || `Failed to update employee (${response.status})`);
       }
+
+      const updatedEmployee = await response.json();
+      const mappedEmployee = {
+        id: updatedEmployee.id,
+        first_name: updatedEmployee.first_name,
+        last_name: updatedEmployee.last_name,
+        email: updatedEmployee.email,
+        role: updatedEmployee.role,
+        profileImageUrl: updatedEmployee.profile_image_url,
+        isActive: updatedEmployee.is_active,
+        hasSystemAccess: updatedEmployee.has_system_access || false,
+        allergies: updatedEmployee.allergies || [],
+        emergencyContacts: updatedEmployee.emergency_contacts || [],
+        interestsMotivators: updatedEmployee.interests_motivators || [],
+        challenges: updatedEmployee.challenges || [],
+        regulationStrategies: updatedEmployee.regulation_strategies || [],
+        accommodations: updatedEmployee.accommodations || [],
+        profileFieldValues: updatedEmployee.profile_field_values || {},
+        hasServiceProvider: updatedEmployee.has_service_provider || false,
+        serviceProviders: updatedEmployee.service_providers || [],
+        date_of_birth: updatedEmployee.date_of_birth || null,
+        last_login: updatedEmployee.last_login || null,
+        roi_status: updatedEmployee.roi_status || false,
+        createdAt: updatedEmployee.created_at,
+        updatedAt: updatedEmployee.updated_at
+      };
+      setEmployees(prev => prev.map(emp => emp.id === id ? mappedEmployee : emp));
     } catch (error) {
       console.error('Error updating employee:', error);
+      throw error;
     }
   };
 
@@ -714,6 +767,8 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
       if (!response.ok) {
         console.error('Failed to complete assessment session');
+      } else {
+        invalidateProfileCache('assessmentHistory:');
       }
     } catch (error) {
       console.error('Error completing assessment session:', error);
@@ -892,57 +947,56 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
 
   // Save step progress as draft
   const saveStepProgressDraft = async (progress: Omit<StepProgress, 'id' | 'date'>, documenterUserId: string) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      
-      const response = await apiRequest('/api/step-progress/draft', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          development_goal_id: progress.developmentGoalId,
-          goal_step_id: progress.goalStepId,
-          employee_id: progress.employeeId,
-          assessment_session_id: progress.assessmentSessionId,
-          documenter_user_id: documenterUserId,
-          date: today,
-          outcome: progress.outcome,
-          notes: progress.notes,
-          completionTimeSeconds: progress.completionTimeSeconds,
-          timerManuallyEntered: progress.timerManuallyEntered
-        }),
-      });
+    const today = new Date().toISOString().split('T')[0];
+    
+    const response = await apiRequest('/api/step-progress/draft', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        development_goal_id: progress.developmentGoalId,
+        goal_step_id: progress.goalStepId,
+        employee_id: progress.employeeId,
+        assessment_session_id: progress.assessmentSessionId,
+        documenter_user_id: documenterUserId,
+        date: today,
+        outcome: progress.outcome,
+        notes: progress.notes,
+        completionTimeSeconds: progress.completionTimeSeconds,
+        timerManuallyEntered: progress.timerManuallyEntered
+      }),
+    });
 
-      if (response.ok) {
-        const newProgress = await response.json();
-        const mappedProgress = {
-          id: newProgress.id,
-          developmentGoalId: newProgress.development_goal_id,
-          goalStepId: newProgress.goal_step_id,
-          employeeId: newProgress.employee_id,
-          assessmentSessionId: newProgress.assessment_session_id,
-          date: newProgress.date,
-          outcome: newProgress.outcome,
-          notes: newProgress.notes,
-          completionTimeSeconds: newProgress.completion_time_seconds,
-          timerManuallyEntered: newProgress.timer_manually_entered,
-          status: newProgress.status
-        };
-        
-        setStepProgress(prev => {
-          const filtered = prev.filter(p => 
-            !(p.developmentGoalId === progress.developmentGoalId &&
-              p.goalStepId === progress.goalStepId &&
-              p.employeeId === progress.employeeId &&
-              p.date === today)
-          );
-          return [...filtered, mappedProgress];
-        });
-      }
-    } catch (error) {
-      console.error('Error saving step progress draft:', error);
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: 'Failed to save draft' }));
+      throw new Error(errorData.error || 'Failed to save step progress draft');
     }
+
+    const newProgress = await response.json();
+    const mappedProgress = {
+      id: newProgress.id,
+      developmentGoalId: newProgress.development_goal_id,
+      goalStepId: newProgress.goal_step_id,
+      employeeId: newProgress.employee_id,
+      assessmentSessionId: newProgress.assessment_session_id,
+      date: newProgress.date,
+      outcome: newProgress.outcome,
+      notes: newProgress.notes,
+      completionTimeSeconds: newProgress.completion_time_seconds,
+      timerManuallyEntered: newProgress.timer_manually_entered,
+      status: newProgress.status
+    };
+    
+    setStepProgress(prev => {
+      const filtered = prev.filter(p => 
+        !(p.developmentGoalId === progress.developmentGoalId &&
+          p.goalStepId === progress.goalStepId &&
+          p.employeeId === progress.employeeId &&
+          p.date === today)
+      );
+      return [...filtered, mappedProgress];
+    });
   };
 
   // Submit all draft progress for an employee
@@ -1118,6 +1172,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         },
         body: JSON.stringify({
           employee_id: employeeId,
+          template_id: template.id,
           title: template.name,
           description: template.goalStatement,
           start_date: new Date().toISOString().split('T')[0],
@@ -1126,6 +1181,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           mastery_achieved: false,
           consecutive_all_correct: 0,
           steps: template.steps.map(step => ({
+            // Pass the template step id so the backend can populate
+            // goal_steps.template_step_id and surface per-step videos.
+            template_step_id: step.id,
             step_order: step.stepOrder,
             step_description: step.stepDescription,
             is_required: step.isRequired
@@ -1143,6 +1201,26 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.error('Error creating goal from template:', error);
     }
+  };
+
+  const bulkAssignGoal = async (templateId: string, employeeIds: string[], skipExisting: boolean = true) => {
+    const response = await apiRequest('/api/development-goals/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        template_id: templateId,
+        employee_ids: employeeIds,
+        skip_existing: skipExisting,
+      }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(text || 'Failed to bulk assign goal');
+    }
+    const result = await response.json();
+    await loadData();
+    return { createdCount: result.createdCount ?? 0, skippedCount: result.skippedCount ?? 0 };
   };
 
   const addGoalTemplate = async (templateData: Omit<GoalTemplate, 'id'>) => {
@@ -1191,6 +1269,9 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           relative_target_duration: templateData.relativeTargetDuration,
           status: templateData.status,
           steps: templateData.steps.map(step => ({
+            // Forward existing step ids so the backend upsert can update
+            // existing rows in place and preserve their per-step video links.
+            id: step.id,
             stepDescription: step.stepDescription,
             isRequired: step.isRequired,
             timerType: step.timerType || 'none'
@@ -1304,6 +1385,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           id: cert.id,
           employeeId: cert.employee_id,
           certificationType: cert.certification_type,
+          responseSetId: cert.response_set_id,
           dateCompleted: cert.date_completed,
           score: cert.score,
           passingScore: cert.passing_score,
@@ -1328,6 +1410,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           employee_id: cert.employeeId,
           certification_type: cert.certificationType,
+          response_set_id: cert.responseSetId || null,
           date_completed: cert.dateCompleted,
           score: cert.score,
           passing_score: cert.passingScore,
@@ -1344,6 +1427,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           id: newCert.id,
           employeeId: newCert.employee_id,
           certificationType: newCert.certification_type,
+          responseSetId: newCert.response_set_id,
           dateCompleted: newCert.date_completed,
           score: newCert.score,
           passingScore: newCert.passing_score,
@@ -1425,17 +1509,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           createdAt: savedNote.created_at,
           updatedAt: savedNote.updated_at
         };
-        // Update or add the note in state
+        // Timeline saves append a new row. Replace only when the same legacy
+        // record is returned by an edit, never by guardian/scooper pair.
         setGuardianNotes(prev => {
-          const existingIndex = prev.findIndex(
-            n => n.guardianId === mapped.guardianId && n.scooperId === mapped.scooperId
-          );
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = mapped;
-            return updated;
-          }
-          return [...prev, mapped];
+          const withoutSavedRecord = prev.filter(note => note.id !== mapped.id);
+          return [...withoutSavedRecord, mapped];
         });
         return mapped;
       }
@@ -1483,6 +1561,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       developmentGoals,
       goalTemplates,
       stepProgress,
+      ensureProgressLoaded,
       addEmployee,
       updateEmployee,
       createAssessmentSession,
@@ -1497,6 +1576,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       submitStepProgress,
       loadUserDrafts,
       createGoalFromTemplate,
+      bulkAssignGoal,
       addGoalTemplate,
       updateGoalTemplate,
       archiveGoalTemplate,

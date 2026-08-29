@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Calendar, Clock, User, Target, Eye } from 'lucide-react';
 import AssessmentDetailsModal from './AssessmentDetailsModal';
 import { Employee } from '../contexts/DataContext';
@@ -32,7 +32,7 @@ interface AssessmentDetails {
   stepResults: Array<{
     id: string;
     step: string;
-    outcome: 'correct' | 'verbal_prompt' | 'n/a';
+    outcome: 'correct' | 'verbal_prompt' | 'n/a' | 'incorrect';
     notes?: string;
     completionTime?: number; // Time in seconds
     timerManuallyEntered?: boolean;
@@ -40,7 +40,7 @@ interface AssessmentDetails {
   overallSummary: string;
 }
 
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 
 // Detailed assessment data for the modal
 const mockDetailedAssessments: { [key: string]: AssessmentDetails } = {
@@ -113,7 +113,7 @@ const mockDetailedAssessments: { [key: string]: AssessmentDetails } = {
 };
 
 export default function AssessmentHistory({ employee, onBackToAssessment }: AssessmentHistoryProps) {
-  const { assessmentSummaries, stepProgress, developmentGoals, employees } = useData();
+  const { assessmentSummaries, stepProgress, developmentGoals, employees } = useProgressData();
   const [selectedAssessment, setSelectedAssessment] = useState<AssessmentDetails | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Plus, Search, Edit, Eye, AlertTriangle, Phone, Heart, Brain, Shield, UserMinus, Award, Star, FileCheck } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import EmployeeForm from './EmployeeForm';
 import EmployeeDetail from './EmployeeDetail';
 import EmployeeAvatar from './EmployeeAvatar';
@@ -9,6 +10,8 @@ import EmployeeAvatar from './EmployeeAvatar';
 export default function EmployeeManagement() {
   const { employees, developmentGoals, updateEmployee, certifications } = useData();
   const { user } = useAuth();
+  const { canModify } = usePermissions();
+  const canManageEmployees = canModify('employee_profiles');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState<string | null>(null);
@@ -69,7 +72,9 @@ export default function EmployeeManagement() {
   };
 
   const handleInactivateEmployee = (employeeId: string) => {
-    updateEmployee(employeeId, { isActive: false });
+    void updateEmployee(employeeId, { isActive: false }).catch((error) => {
+      console.error('Failed to inactivate employee:', error);
+    });
   };
 
   if (selectedEmployee) {
@@ -127,7 +132,7 @@ export default function EmployeeManagement() {
           ))}
         </div>
 
-        {user?.role === 'Administrator' && (
+        {canManageEmployees && (
           <button
             onClick={handleAddEmployee}
             className="flex items-center justify-center space-x-2 bg-blue-600 text-white px-4 py-3 rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium whitespace-nowrap"
@@ -238,7 +243,7 @@ export default function EmployeeManagement() {
                 : 'No employees match the current filters'
               }
             </p>
-            {user?.role === 'Administrator' && !searchTerm && (
+            {canManageEmployees && !searchTerm && (
               <button
                 onClick={handleAddEmployee}
                 className="bg-blue-600 text-white px-4 py-2 rounded-xl hover:bg-blue-700 transition-colors"

@@ -1,0 +1,4 @@
+- [Collaborative assessment sessions](collab-assessment.md) — Option B chosen: presence indicator + session joining, no hard locks or WebSockets.
+- [Database schema sync](database-schema-sync.md) — Use the runtime-managed DATABASE_URL for development schema pushes; the separate Neon secret can target another database.
+- [Form response snapshots](form-response-snapshots.md) — Completed responses must render from their creation-time template snapshot, never a mutable current template.
+- [Workflow stale skill paths](workflow-stale-skill-paths.md) — Workflow tools may retain deleted temporary skill paths; only a compute restart clears their external index.

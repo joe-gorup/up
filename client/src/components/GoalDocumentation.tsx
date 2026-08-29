@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Play, Square, Users, Clock, ChevronLeft, ChevronRight, CheckCircle, AlertCircle, Search, AlertTriangle, Phone, Heart, Brain, Target, User } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeProgress from './EmployeeProgress';
 import EmployeeDetail from './EmployeeDetail';
@@ -12,7 +12,7 @@ interface GoalDocumentationProps {
 }
 
 export default function GoalDocumentation({ onNavigateToEmployee }: GoalDocumentationProps = {}) {
-  const { employees, activeAssessmentSession, createAssessmentSession, endAssessmentSession, updateAssessmentSessionEmployees, developmentGoals, stepProgress, checkEmployeeLocks } = useData();
+  const { employees, activeAssessmentSession, createAssessmentSession, endAssessmentSession, updateAssessmentSessionEmployees, developmentGoals, stepProgress, checkEmployeeLocks } = useProgressData();
   const { user } = useAuth();
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [selectedLocation, setSelectedLocation] = useState('9540 Nall Avenue');

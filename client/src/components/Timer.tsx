@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Play, Pause, RotateCcw, Edit2, Check, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, AlertTriangle, Check, X, Pencil } from 'lucide-react';
 
 interface TimerProps {
   onTimeChange: (timeInSeconds: number, manuallyEntered: boolean) => void;
@@ -9,200 +9,244 @@ interface TimerProps {
   className?: string;
 }
 
-export default function Timer({ 
-  onTimeChange, 
-  initialTime = 0, 
+function formatTime(seconds: number): string {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+  return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+}
+
+export default function Timer({
+  onTimeChange,
+  initialTime = 0,
   isManuallyEntered = false,
   disabled = false,
-  className = '' 
+  className = '',
 }: TimerProps) {
   const [timeSeconds, setTimeSeconds] = useState(initialTime);
   const [isRunning, setIsRunning] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
+  const [manualEntry, setManualEntry] = useState(isManuallyEntered);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [showManual, setShowManual] = useState(false);
   const [editMinutes, setEditMinutes] = useState('0');
   const [editSeconds, setEditSeconds] = useState('0');
-  const [manualEntry, setManualEntry] = useState(isManuallyEntered);
-  
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Format time as MM:SS
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Update timer every second when running
   useEffect(() => {
     if (isRunning && !disabled) {
       intervalRef.current = setInterval(() => {
-        setTimeSeconds(prev => {
-          const newTime = prev + 1;
-          onTimeChange(newTime, false);
-          return newTime;
+        setTimeSeconds((prev) => {
+          const next = prev + 1;
+          onTimeChange(next, false);
+          return next;
         });
       }, 1000);
-    } else {
+    } else if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
         intervalRef.current = null;
       }
-    }
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current);
-      }
     };
   }, [isRunning, disabled, onTimeChange]);
 
-  const handleStart = () => {
-    if (!disabled) {
-      setIsRunning(true);
+  const handleToggle = () => {
+    if (disabled) return;
+    if (!isRunning) {
       setManualEntry(false);
+      setIsRunning(true);
+    } else {
+      setIsRunning(false);
     }
   };
 
-  const handleStop = () => {
-    setIsRunning(false);
-  };
-
-  const handleReset = () => {
+  const handleResetConfirmed = () => {
     setIsRunning(false);
     setTimeSeconds(0);
     setManualEntry(false);
+    setConfirmReset(false);
     onTimeChange(0, false);
   };
 
-  const handleEditClick = () => {
-    if (!disabled) {
-      const minutes = Math.floor(timeSeconds / 60);
-      const seconds = timeSeconds % 60;
-      setEditMinutes(minutes.toString());
-      setEditSeconds(seconds.toString());
-      setIsEditing(true);
-    }
+  const openManualEditor = () => {
+    if (disabled) return;
+    setEditMinutes(Math.floor(timeSeconds / 60).toString());
+    setEditSeconds((timeSeconds % 60).toString());
+    setConfirmReset(false);
+    setShowManual(true);
   };
 
-  const handleSaveEdit = () => {
-    const mins = parseInt(editMinutes) || 0;
-    const secs = parseInt(editSeconds) || 0;
-    const totalSeconds = (mins * 60) + secs;
-    
-    setTimeSeconds(totalSeconds);
+  const saveManualEntry = () => {
+    const mins = parseInt(editMinutes, 10) || 0;
+    const secs = parseInt(editSeconds, 10) || 0;
+    const total = mins * 60 + Math.min(secs, 59);
+    setTimeSeconds(total);
     setManualEntry(true);
-    setIsEditing(false);
     setIsRunning(false);
-    onTimeChange(totalSeconds, true);
-  };
-
-  const handleCancelEdit = () => {
-    setIsEditing(false);
+    setShowManual(false);
+    onTimeChange(total, true);
   };
 
   if (disabled) {
     return (
-      <div className={`flex items-center space-x-2 p-3 bg-gray-50 rounded-lg ${className}`}>
-        <div className="text-gray-500 text-sm">Timer disabled</div>
+      <div className={`rounded-2xl bg-gray-50 border border-gray-200 px-4 py-3 ${className}`}>
+        <div className="text-sm text-gray-500">Timer disabled</div>
       </div>
     );
   }
 
   return (
-    <div className={`flex items-center space-x-3 p-3 bg-gray-50 rounded-lg ${className}`}>
-      {/* Timer Display */}
-      <div className="flex items-center space-x-2">
-        {isEditing ? (
-          <div className="flex items-center space-x-1">
-            <input
-              type="number"
-              value={editMinutes}
-              onChange={(e) => setEditMinutes(e.target.value)}
-              className="w-12 px-1 py-1 text-center border border-gray-300 rounded text-sm"
-              placeholder="MM"
-              min="0"
-              max="99"
-              data-testid="input-edit-minutes"
-            />
-            <span className="text-lg font-mono">:</span>
-            <input
-              type="number"
-              value={editSeconds}
-              onChange={(e) => setEditSeconds(e.target.value)}
-              className="w-12 px-1 py-1 text-center border border-gray-300 rounded text-sm"
-              placeholder="SS"
-              min="0"
-              max="59"
-              data-testid="input-edit-seconds"
-            />
-            <button
-              onClick={handleSaveEdit}
-              className="p-1 text-green-600 hover:bg-green-50 rounded"
-              data-testid="button-save-edit"
-            >
-              <Check className="h-4 w-4" />
-            </button>
-            <button
-              onClick={handleCancelEdit}
-              className="p-1 text-red-600 hover:bg-red-50 rounded"
-              data-testid="button-cancel-edit"
-            >
-              <X className="h-4 w-4" />
-            </button>
+    <div
+      className={`rounded-2xl bg-white border border-stone-200 shadow-sm overflow-hidden ${className}`}
+      data-testid="timer-card"
+    >
+      <div className="px-4 pt-3 pb-1">
+        <div className="flex items-center justify-between min-h-[20px]">
+          {isRunning ? (
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold text-emerald-700">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Running
+            </span>
+          ) : (
+            <span />
+          )}
+          <button
+            type="button"
+            onClick={openManualEditor}
+            data-testid="button-edit-time"
+            aria-label="Enter time manually"
+            title="Enter time manually"
+            className="h-6 w-6 rounded-md text-stone-500 hover:text-stone-800 hover:bg-stone-100 flex items-center justify-center"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        </div>
+        <div className="mt-1 flex items-baseline justify-center gap-2">
+          <div
+            className="text-4xl sm:text-5xl font-mono font-semibold tabular-nums text-stone-900 leading-none"
+            data-testid="text-timer-display"
+          >
+            {formatTime(timeSeconds)}
           </div>
-        ) : (
-          <div className="flex items-center space-x-2">
-            <div className="text-lg font-mono font-medium" data-testid="text-timer-display">
-              {formatTime(timeSeconds)}
-            </div>
-            <button
-              onClick={handleEditClick}
-              className="p-1 text-gray-500 hover:text-gray-700 hover:bg-gray-200 rounded"
-              title="Edit time manually"
-              data-testid="button-edit-time"
-            >
-              <Edit2 className="h-4 w-4" />
-            </button>
-            {manualEntry && (
-              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">
-                Manual
-              </span>
-            )}
-          </div>
-        )}
+          {manualEntry && (
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1.5 py-0.5 rounded">
+              Manual
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Control Buttons */}
-      {!isEditing && (
-        <div className="flex items-center space-x-1">
-          {!isRunning ? (
-            <button
-              onClick={handleStart}
-              className="flex items-center justify-center p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-              title="Start timer"
-              data-testid="button-start-timer"
-            >
-              <Play className="h-4 w-4 fill-current" />
-            </button>
-          ) : (
-            <button
-              onClick={handleStop}
-              className="flex items-center justify-center p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-              title="Stop timer"
-              data-testid="button-stop-timer"
-            >
-              <Pause className="h-4 w-4 fill-current" />
-            </button>
-          )}
-          
+      <div className="px-4 pt-3 pb-4">
+        <div className="grid grid-cols-10 gap-2">
           <button
-            onClick={handleReset}
-            className="flex items-center justify-center p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-            title="Reset timer"
-            data-testid="button-reset-timer"
+            type="button"
+            onClick={handleToggle}
+            data-testid={isRunning ? 'button-stop-timer' : 'button-start-timer'}
+            className={`col-span-6 h-8 sm:h-10 rounded-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-1.5 text-white shadow-sm transition-colors ${
+              isRunning
+                ? 'bg-rose-600 hover:bg-rose-700'
+                : 'bg-emerald-600 hover:bg-emerald-700'
+            }`}
           >
-            <RotateCcw className="h-4 w-4" />
+            {isRunning ? (
+              <Pause className="h-3 w-3 sm:h-4 sm:w-4 fill-current" />
+            ) : (
+              <Play className="h-3 w-3 sm:h-4 sm:w-4 fill-current" />
+            )}
+            {isRunning ? 'Stop' : 'Start'}
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowManual(false);
+              setConfirmReset(true);
+            }}
+            disabled={timeSeconds === 0}
+            data-testid="button-reset-timer"
+            className="col-span-4 h-8 sm:h-10 rounded-xl border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1 hover:bg-stone-50 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <RotateCcw className="h-3 w-3" />
+            <span>Reset</span>
+          </button>
+        </div>
+
+      </div>
+
+      {confirmReset && (
+        <div className="border-t border-stone-200 bg-rose-50 px-4 py-3">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-rose-900">Reset to 00:00?</div>
+              <div className="mt-1 text-xs text-rose-800/80">
+                The current time of {formatTime(timeSeconds)} will be cleared.
+              </div>
+            </div>
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmReset(false)}
+              className="flex-1 h-6 rounded-lg border border-stone-300 bg-white text-stone-700 text-xs font-medium"
+              data-testid="button-cancel-reset"
+            >
+              Keep time
+            </button>
+            <button
+              type="button"
+              onClick={handleResetConfirmed}
+              className="flex-1 h-6 rounded-lg bg-rose-600 text-white text-xs font-semibold"
+              data-testid="button-confirm-reset"
+            >
+              Yes, reset
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showManual && (
+        <div className="border-t border-stone-200 bg-stone-50 px-4 py-3">
+          <div className="text-sm font-semibold text-stone-800">Enter time manually</div>
+          <div className="mt-3 flex items-center justify-center gap-2">
+            <input
+              value={editMinutes}
+              onChange={(e) => setEditMinutes(e.target.value)}
+              inputMode="numeric"
+              aria-label="Minutes"
+              data-testid="input-edit-minutes"
+              className="w-12 h-6 text-center text-base font-mono border border-stone-300 rounded bg-white"
+            />
+            <span className="text-base font-mono text-stone-400">:</span>
+            <input
+              value={editSeconds}
+              onChange={(e) => setEditSeconds(e.target.value)}
+              inputMode="numeric"
+              aria-label="Seconds"
+              data-testid="input-edit-seconds"
+              className="w-12 h-6 text-center text-base font-mono border border-stone-300 rounded bg-white"
+            />
+          </div>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              onClick={() => setShowManual(false)}
+              data-testid="button-cancel-edit"
+              className="flex-1 h-6 rounded-lg border border-stone-300 bg-white text-stone-700 text-xs font-medium flex items-center justify-center gap-1"
+            >
+              <X className="h-3 w-3" /> Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveManualEntry}
+              data-testid="button-save-edit"
+              className="flex-1 h-6 rounded-lg bg-stone-900 text-white text-xs font-semibold flex items-center justify-center gap-1"
+            >
+              <Check className="h-3 w-3" /> Save
+            </button>
+          </div>
         </div>
       )}
     </div>

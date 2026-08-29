@@ -1,4 +1,4 @@
-import { pgTable, text, varchar, integer, boolean, date, timestamp, jsonb, index, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, boolean, date, timestamp, jsonb, index, unique, uniqueIndex } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -45,6 +45,10 @@ export const employees = pgTable("employees", {
   interests_motivators: jsonb("interests_motivators").default(sql`'[]'::jsonb`),
   challenges: jsonb("challenges").default(sql`'[]'::jsonb`),
   regulation_strategies: jsonb("regulation_strategies").default(sql`'[]'::jsonb`),
+  accommodations: jsonb("accommodations").default(sql`'[]'::jsonb`),
+  // New catalog-managed values are stored here while legacy profile columns
+  // remain readable and writable during the gradual migration.
+  profile_field_values: jsonb("profile_field_values"),
   
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -54,6 +58,53 @@ export const employees = pgTable("employees", {
   emailIdx: index("employees_email_idx").on(table.email),
   hasSystemAccessIdx: index("employees_has_system_access_idx").on(table.has_system_access),
   roleIdx: index("employees_role_idx").on(table.role),
+}));
+
+// Administrator-managed profile field catalog. Definitions are soft-deactivated
+// so historical values can remain readable after a field leaves the UI.
+export const profile_field_definitions = pgTable("profile_field_definitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  description: text("description"),
+  value_shape: text("value_shape").notNull().default("string_list"),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  applies_to_roles: jsonb("applies_to_roles").notNull().default(sql`'["Super Scooper"]'::jsonb`),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  keyUnique: uniqueIndex("profile_field_definitions_key_unique").on(table.key),
+  statusOrderIdx: index("profile_field_definitions_status_order_idx").on(table.status, table.sort_order),
+}));
+
+// Shared Administrator-managed dropdown lists.
+export const option_lists = pgTable("option_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  status: text("status").notNull().default("active"),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  keyUnique: uniqueIndex("option_lists_key_unique").on(table.key),
+  statusIdx: index("option_lists_status_idx").on(table.status),
+}));
+
+export const option_list_items = pgTable("option_list_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  list_id: varchar("list_id").notNull().references(() => option_lists.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  listOrderIdx: index("option_list_items_list_order_idx").on(table.list_id, table.status, table.sort_order),
+  keyUnique: unique("option_list_items_list_key_unique").on(table.list_id, table.key),
 }));
 
 // Goal templates table
@@ -88,10 +139,133 @@ export const goal_template_steps = pgTable("goal_template_steps", {
   stepOrderIdx: index("goal_template_steps_order_idx").on(table.template_id, table.step_order),
 }));
 
+// Form engine tables - reusable review/check-in/certification templates
+export const form_templates = pgTable("form_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  form_type: text("form_type").notNull().default("custom"),
+  status: text("status").notNull().default("active"),
+  version: integer("version").notNull().default(1),
+  settings_json: jsonb("settings_json").notNull().default(sql`'{"allowed_fill_roles":["Administrator"],"lock_on_submit":true}'::jsonb`),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  statusIdx: index("form_templates_status_idx").on(table.status),
+  typeIdx: index("form_templates_form_type_idx").on(table.form_type),
+  createdByIdx: index("form_templates_created_by_idx").on(table.created_by),
+}));
+
+export const form_sections = pgTable("form_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  title: text("title").notNull(),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("form_sections_template_id_idx").on(table.template_id),
+  sortOrderIdx: index("form_sections_sort_order_idx").on(table.template_id, table.sort_order),
+}));
+
+export const form_questions = pgTable("form_questions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  section_id: varchar("section_id").references(() => form_sections.id, { onDelete: "set null" }),
+  stable_key: text("stable_key").notNull(),
+  prompt: text("prompt").notNull(),
+  help_text: text("help_text"),
+  question_type: text("question_type").notNull().default("free_text"),
+  config_json: jsonb("config_json").notNull().default(sql`'{}'::jsonb`),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("form_questions_template_id_idx").on(table.template_id),
+  sectionIdIdx: index("form_questions_section_id_idx").on(table.section_id),
+  sortOrderIdx: index("form_questions_sort_order_idx").on(table.template_id, table.section_id, table.sort_order),
+  stableKeyIdx: index("form_questions_stable_key_idx").on(table.template_id, table.stable_key),
+}));
+
+export const form_response_sets = pgTable("form_response_sets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  template_id: varchar("template_id").notNull().references(() => form_templates.id, { onDelete: "cascade" }),
+  template_version: integer("template_version").notNull().default(1),
+  employee_id: varchar("employee_id").notNull().references(() => employees.id, { onDelete: "cascade" }),
+  cycle_label: text("cycle_label"),
+  status: text("status").notNull().default("draft"),
+  template_snapshot_json: jsonb("template_snapshot_json"),
+  submitted_by: varchar("submitted_by").references(() => employees.id, { onDelete: "set null" }),
+  submitted_at: timestamp("submitted_at", { withTimezone: true }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("form_response_sets_employee_id_idx").on(table.employee_id),
+  templateIdIdx: index("form_response_sets_template_id_idx").on(table.template_id),
+  statusIdx: index("form_response_sets_status_idx").on(table.status),
+  templateEmployeeCycleUnique: uniqueIndex("form_response_sets_template_employee_cycle_unique")
+    .on(table.template_id, table.employee_id, table.cycle_label)
+    .where(sql`${table.cycle_label} is not null`),
+}));
+
+export const form_answers = pgTable("form_answers", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  response_set_id: varchar("response_set_id").notNull().references(() => form_response_sets.id, { onDelete: "cascade" }),
+  question_id: varchar("question_id").notNull().references(() => form_questions.id, { onDelete: "cascade" }),
+  value_json: jsonb("value_json").notNull().default(sql`'{}'::jsonb`),
+  snapshot_json: jsonb("snapshot_json"),
+  answered_by: varchar("answered_by").references(() => employees.id, { onDelete: "set null" }),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  responseSetIdIdx: index("form_answers_response_set_id_idx").on(table.response_set_id),
+  questionIdIdx: index("form_answers_question_id_idx").on(table.question_id),
+  responseQuestionUnique: unique("form_answers_response_question_unique").on(table.response_set_id, table.question_id),
+}));
+
+export const insertFormTemplateSchema = createInsertSchema(form_templates).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormSectionSchema = createInsertSchema(form_sections).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormQuestionSchema = createInsertSchema(form_questions).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormResponseSetSchema = createInsertSchema(form_response_sets).omit({
+  id: true,
+  created_at: true,
+  updated_at: true,
+});
+export const insertFormAnswerSchema = createInsertSchema(form_answers).omit({
+  id: true,
+  updated_at: true,
+});
+
+export type InsertFormTemplate = z.infer<typeof insertFormTemplateSchema>;
+export type FormTemplate = typeof form_templates.$inferSelect;
+export type InsertFormSection = z.infer<typeof insertFormSectionSchema>;
+export type FormSection = typeof form_sections.$inferSelect;
+export type InsertFormQuestion = z.infer<typeof insertFormQuestionSchema>;
+export type FormQuestion = typeof form_questions.$inferSelect;
+export type InsertFormResponseSet = z.infer<typeof insertFormResponseSetSchema>;
+export type FormResponseSet = typeof form_response_sets.$inferSelect;
+export type InsertFormAnswer = z.infer<typeof insertFormAnswerSchema>;
+export type FormAnswer = typeof form_answers.$inferSelect;
+
 // Development goals table
 export const development_goals = pgTable("development_goals", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }),
+  template_id: varchar("template_id").references(() => goal_templates.id, { onDelete: "set null" }),
   title: text("title").notNull(),
   description: text("description").notNull(),
   start_date: date("start_date").default(sql`CURRENT_DATE`),
@@ -114,13 +288,16 @@ export const development_goals = pgTable("development_goals", {
 export const goal_steps = pgTable("goal_steps", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   goal_id: varchar("goal_id").references(() => development_goals.id, { onDelete: "cascade" }),
+  template_step_id: varchar("template_step_id").references(() => goal_template_steps.id, { onDelete: "set null" }),
   step_order: integer("step_order").notNull(),
   step_description: text("step_description").notNull(),
   is_required: boolean("is_required").default(true),
+  timer_type: varchar("timer_type").default("none"),
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
 }, (table) => ({
   // Performance indexes for JOIN optimization
   goalIdIdx: index("goal_steps_goal_id_idx").on(table.goal_id),
+  templateStepIdIdx: index("goal_steps_template_step_id_idx").on(table.template_step_id),
   stepOrderIdx: index("goal_steps_order_idx").on(table.goal_id, table.step_order),
 }));
 
@@ -136,6 +313,8 @@ export const assessment_sessions = pgTable("assessment_sessions", {
   locked_by: varchar("locked_by").references(() => employees.id), // Manager who currently has the lock
   locked_at: timestamp("locked_at", { withTimezone: true }), // When the session was locked
   expires_at: timestamp("expires_at", { withTimezone: true }), // When the lock expires
+  taken_over_from: varchar("taken_over_from").references(() => employees.id), // Previous owner if an admin took over
+  taken_over_at: timestamp("taken_over_at", { withTimezone: true }), // When the admin takeover occurred
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => ({
@@ -235,7 +414,27 @@ export const guardian_notes = pgTable("guardian_notes", {
 }, (table) => ({
   guardianIdIdx: index("guardian_notes_guardian_id_idx").on(table.guardian_id),
   scooperIdIdx: index("guardian_notes_scooper_id_idx").on(table.scooper_id),
-  uniqueGuardianScooperNote: unique("guardian_notes_unique").on(table.guardian_id, table.scooper_id),
+}));
+
+// Profile-level notes table - extensible source for future shared timeline updates.
+// Legacy guardian and coach notes remain in their original tables during the
+// transition; new notes written through the unified feed use this table.
+export const profile_notes = pgTable("profile_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  scooper_id: varchar("scooper_id").references(() => employees.id, { onDelete: "cascade" }).notNull(),
+  author_id: varchar("author_id").references(() => employees.id, { onDelete: "set null" }),
+  author_role_snapshot: text("author_role_snapshot").notNull(),
+  body: text("body").notNull(),
+  source_type: text("source_type").notNull().default("manual"),
+  source_id: varchar("source_id"),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  scooperIdIdx: index("profile_notes_scooper_id_idx").on(table.scooper_id),
+  authorIdIdx: index("profile_notes_author_id_idx").on(table.author_id),
+  sourceTypeIdx: index("profile_notes_source_type_idx").on(table.source_type),
+  statusIdx: index("profile_notes_status_idx").on(table.status),
 }));
 
 // Employee contacts table - unified contacts for each employee (replaces emergency_contacts JSON + guardian add flow)
@@ -318,7 +517,11 @@ export const insertCoachAssignmentSchema = createInsertSchema(coach_assignments)
 export const insertGuardianRelationshipSchema = createInsertSchema(guardian_relationships).omit({ id: true, created_at: true });
 export const insertAccountInvitationSchema = createInsertSchema(account_invitations).omit({ id: true, created_at: true, used_at: true });
 export const insertGuardianNoteSchema = createInsertSchema(guardian_notes).omit({ id: true, created_at: true, updated_at: true });
+export const insertProfileNoteSchema = createInsertSchema(profile_notes).omit({ id: true, created_at: true, updated_at: true });
 export const insertEmployeeContactSchema = createInsertSchema(employee_contacts).omit({ id: true, created_at: true, updated_at: true });
+export const insertProfileFieldDefinitionSchema = createInsertSchema(profile_field_definitions).omit({ id: true, created_at: true, updated_at: true });
+export const insertOptionListSchema = createInsertSchema(option_lists).omit({ id: true, created_at: true, updated_at: true });
+export const insertOptionListItemSchema = createInsertSchema(option_list_items).omit({ id: true, created_at: true, updated_at: true });
 
 // Utility function to calculate discrete date from relative duration
 export function calculateDateFromRelativeDuration(relativeDuration: string, fromDate: Date = new Date()): string {
@@ -384,6 +587,51 @@ export function canManageEmployees(role: string): boolean {
   return role === "Administrator";
 }
 
+export function canManageAccommodations(role: string): boolean {
+  return role === "Administrator";
+}
+
+export function canUseAccommodations(role: string): boolean {
+  return role === "Super Scooper";
+}
+
+export type AccommodationWriteError = {
+  status: 400 | 403;
+  message: string;
+};
+
+export function hasAccommodationUpdate(updates: Record<string, unknown>): boolean {
+  return updates.accommodations !== undefined;
+}
+
+/**
+ * Validate the two role constraints for accommodation writes.
+ *
+ * Keeping this policy separate from the employee route makes it harder for a
+ * future profile-permission change to accidentally broaden access to this
+ * sensitive field.
+ */
+export function getAccommodationWriteError(
+  actorRole: string,
+  targetRole: string,
+): AccommodationWriteError | null {
+  if (!canManageAccommodations(actorRole)) {
+    return {
+      status: 403,
+      message: "Only administrators can manage accommodations",
+    };
+  }
+
+  if (!canUseAccommodations(targetRole)) {
+    return {
+      status: 400,
+      message: "Accommodations can only be set for Super Scoopers",
+    };
+  }
+
+  return null;
+}
+
 export function canManageAssignments(role: string): boolean {
   return role === "Administrator";
 }
@@ -427,6 +675,7 @@ export const promotion_certifications = pgTable("promotion_certifications", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   employee_id: varchar("employee_id").notNull().references(() => employees.id),
   certification_type: text("certification_type").notNull(), // 'mentor' or 'shift_lead'
+  response_set_id: varchar("response_set_id").references(() => form_response_sets.id, { onDelete: "set null" }),
   date_completed: text("date_completed").notNull(),
   score: integer("score").notNull(),
   passing_score: integer("passing_score").notNull(),
@@ -438,12 +687,28 @@ export const promotion_certifications = pgTable("promotion_certifications", {
 }, (table) => ({
   employeeIdx: index("promotion_certs_employee_idx").on(table.employee_id),
   typeIdx: index("promotion_certs_type_idx").on(table.certification_type),
+  responseSetIdx: index("promotion_certs_response_set_idx").on(table.response_set_id),
+  responseSetUnique: uniqueIndex("promotion_certs_response_set_unique")
+    .on(table.response_set_id)
+    .where(sql`${table.response_set_id} is not null`),
 }));
 
 export const insertPromotionCertificationSchema = createInsertSchema(promotion_certifications).omit({
   id: true,
   created_at: true,
 });
+
+export type ChecklistAnswer = 'correct' | 'incorrect' | 'no_opportunity';
+export type ChecklistResult = { question: string; answer: ChecklistAnswer | boolean };
+
+export function normalizeChecklistAnswer(
+  answer: ChecklistAnswer | boolean | string | null | undefined
+): ChecklistAnswer | undefined {
+  if (answer === true) return 'correct';
+  if (answer === false) return 'incorrect';
+  if (answer === 'correct' || answer === 'incorrect' || answer === 'no_opportunity') return answer;
+  return undefined;
+}
 
 // Coach Check-Ins table
 export const coach_checkins = pgTable("coach_checkins", {
@@ -563,6 +828,9 @@ export const PERMISSION_FEATURES = [
   'guardian_notes',
   'contacts',
   'past_assessments',
+  'employee_reviews',
+  'form_responses',
+  'external_user_invites',
 ] as const;
 
 export type PermissionFeature = typeof PERMISSION_FEATURES[number];
@@ -584,9 +852,88 @@ export const PERMISSION_FEATURE_LABELS: Record<PermissionFeature, string> = {
   guardian_notes: 'Guardian Notes',
   contacts: 'Contacts',
   past_assessments: 'Past Assessments',
+  employee_reviews: 'Employee Reviews',
+  form_responses: 'Form & Review Responses',
+  external_user_invites: 'External User Invites',
 };
 
 export const CONFIGURABLE_ROLES = ['Shift Lead', 'Assistant Manager', 'Job Coach', 'Guardian'] as const;
+
+// Videos table - flexible video library (Golden Scoop curated + employer-specific)
+export const videos = pgTable("videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  title: text("title").notNull(),
+  description: text("description"),
+  youtube_url: text("youtube_url").notNull(),
+  source: text("source").notNull().default("golden_scoop"), // 'golden_scoop' | 'employer'
+  status: text("status").notNull().default("active"), // 'active' | 'archived'
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  sourceIdx: index("videos_source_idx").on(table.source),
+  statusIdx: index("videos_status_idx").on(table.status),
+  createdByIdx: index("videos_created_by_idx").on(table.created_by),
+}));
+
+// Goal Template <-> Video join
+export const goal_template_videos = pgTable("goal_template_videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id").notNull().references(() => videos.id, { onDelete: "cascade" }),
+  template_id: varchar("template_id").notNull().references(() => goal_templates.id, { onDelete: "cascade" }),
+  display_order: integer("display_order").default(0),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateIdIdx: index("goal_template_videos_template_id_idx").on(table.template_id),
+  videoIdIdx: index("goal_template_videos_video_id_idx").on(table.video_id),
+  uniqueVideoTemplate: unique("goal_template_videos_unique").on(table.video_id, table.template_id),
+}));
+
+const youtubeUrlPattern =
+  /^https?:\/\/(?:www\.|m\.)?(?:youtube\.com\/(?:watch\?(?:[^&]*&)*v=|embed\/|shorts\/|v\/)|youtu\.be\/)[\w-]{11}(?:[?&#].*)?$/;
+
+export const insertVideoSchema = createInsertSchema(videos)
+  .omit({ id: true, created_at: true, updated_at: true })
+  .extend({
+    youtube_url: z
+      .string()
+      .url('YouTube URL must be a valid URL')
+      .regex(youtubeUrlPattern, 'Must be a valid YouTube URL (youtube.com/watch?v=… or youtu.be/…)'),
+  });
+
+export const updateVideoSchema = insertVideoSchema.partial().extend({
+  youtube_url: insertVideoSchema.shape.youtube_url.optional(),
+});
+
+export const insertGoalTemplateVideoSchema = createInsertSchema(goal_template_videos).omit({
+  id: true,
+  created_at: true,
+});
+
+// Goal Template Step <-> Video join (videos scoped to a specific template step)
+export const goal_template_step_videos = pgTable("goal_template_step_videos", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  video_id: varchar("video_id").notNull().references(() => videos.id, { onDelete: "cascade" }),
+  template_step_id: varchar("template_step_id").notNull().references(() => goal_template_steps.id, { onDelete: "cascade" }),
+  display_order: integer("display_order").default(0),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  templateStepIdIdx: index("goal_template_step_videos_step_id_idx").on(table.template_step_id),
+  videoIdIdx: index("goal_template_step_videos_video_id_idx").on(table.video_id),
+  uniqueVideoStep: unique("goal_template_step_videos_unique").on(table.video_id, table.template_step_id),
+}));
+
+export const insertGoalTemplateStepVideoSchema = createInsertSchema(goal_template_step_videos).omit({
+  id: true,
+  created_at: true,
+});
+
+export type InsertVideo = z.infer<typeof insertVideoSchema>;
+export type Video = typeof videos.$inferSelect;
+export type InsertGoalTemplateVideo = z.infer<typeof insertGoalTemplateVideoSchema>;
+export type GoalTemplateVideo = typeof goal_template_videos.$inferSelect;
+export type InsertGoalTemplateStepVideo = z.infer<typeof insertGoalTemplateStepVideoSchema>;
+export type GoalTemplateStepVideo = typeof goal_template_step_videos.$inferSelect;
 
 // Types
 export type InsertPromotionCertification = z.infer<typeof insertPromotionCertificationSchema>;
@@ -616,5 +963,36 @@ export type InsertGuardianRelationship = z.infer<typeof insertGuardianRelationsh
 export type GuardianRelationship = typeof guardian_relationships.$inferSelect;
 export type InsertGuardianNote = z.infer<typeof insertGuardianNoteSchema>;
 export type GuardianNote = typeof guardian_notes.$inferSelect;
+export type InsertProfileNote = z.infer<typeof insertProfileNoteSchema>;
+export type ProfileNote = typeof profile_notes.$inferSelect;
 export type InsertEmployeeContact = z.infer<typeof insertEmployeeContactSchema>;
 export type EmployeeContact = typeof employee_contacts.$inferSelect;
+export type InsertProfileFieldDefinition = z.infer<typeof insertProfileFieldDefinitionSchema>;
+export type ProfileFieldDefinition = typeof profile_field_definitions.$inferSelect;
+export type InsertOptionList = z.infer<typeof insertOptionListSchema>;
+export type OptionList = typeof option_lists.$inferSelect;
+export type InsertOptionListItem = z.infer<typeof insertOptionListItemSchema>;
+export type OptionListItem = typeof option_list_items.$inferSelect;
+
+// Employee reviews table
+export const employee_reviews = pgTable("employee_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  employee_id: varchar("employee_id").references(() => employees.id, { onDelete: "cascade" }),
+  reviewer_id: varchar("reviewer_id").references(() => employees.id, { onDelete: "set null" }),
+  review_type: text("review_type").notNull().default("mid_year"), // "mid_year" | "annual"
+  q1: text("q1"),
+  q2: text("q2"),
+  q3: text("q3"),
+  q4: text("q4"),
+  q5: text("q5"),
+  q6: text("q6"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  employeeIdIdx: index("employee_reviews_employee_id_idx").on(table.employee_id),
+  reviewerIdIdx: index("employee_reviews_reviewer_id_idx").on(table.reviewer_id),
+}));
+
+export const insertEmployeeReviewSchema = createInsertSchema(employee_reviews).omit({ id: true, created_at: true, updated_at: true });
+export type InsertEmployeeReview = z.infer<typeof insertEmployeeReviewSchema>;
+export type EmployeeReview = typeof employee_reviews.$inferSelect;

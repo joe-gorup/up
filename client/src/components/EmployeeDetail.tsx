@@ -1,15 +1,75 @@
-import { useState, useEffect } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye } from 'lucide-react';
-import { useData, PromotionCertification } from '../contexts/DataContext';
+import { useState, useEffect, useRef } from 'react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility, SlidersHorizontal } from 'lucide-react';
+import { PromotionCertification } from '../contexts/DataContext';
+import { canManageAccommodations, normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { apiRequest } from '../lib/auth';
+import { cachedApiRequest, getCachedProfileData, setCachedProfileData, invalidateProfileCache } from '../lib/apiCache';
 import GoalAssignment from './GoalAssignment';
+import TemplateVideoManager from './TemplateVideoManager';
+import StepVideoIcons from './StepVideoIcons';
 import CoachCheckin from './CoachCheckin';
+import EmployeeReviews from './EmployeeReviews';
+import EmployeeReviewsCard from './EmployeeReviewsCard';
+import CertificationTemplateFlow from './CertificationTemplateFlow';
+import { FormFiller } from './FormsAndReviews';
 import EmployeeProgress from './EmployeeProgress';
+import CertificationHistory from './CertificationHistory';
 import EmployeeAvatar from './EmployeeAvatar';
+import NotesFeed from './NotesFeed';
 import Modal from './ui/Modal';
 import AssessmentDetailsModal from './AssessmentDetailsModal';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
+
+function ChecklistOutcomeButton({ value, selected, onClick }: { value: ChecklistAnswer; selected: boolean; onClick: () => void }) {
+  const config = {
+    correct: { label: 'Correct', selBg: 'bg-green-50', selText: 'text-green-700', selBorder: 'border-green-200', hover: 'hover:bg-green-50' },
+    incorrect: { label: 'Incorrect', selBg: 'bg-red-50', selText: 'text-red-600', selBorder: 'border-red-200', hover: 'hover:bg-red-50' },
+    no_opportunity: { label: 'No opportunity', selBg: 'bg-slate-100', selText: 'text-slate-700', selBorder: 'border-slate-300', hover: 'hover:bg-slate-100' },
+  }[value];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={selected}
+      className={`px-3 py-1.5 rounded-xl text-sm font-medium border transition-all ${selected ? `${config.selBg} ${config.selText} ${config.selBorder} shadow-sm` : `bg-white text-gray-600 border-gray-300 ${config.hover}`}`}
+    >
+      {config.label}
+    </button>
+  );
+}
+
+function ChecklistAnswerBadge({ answer }: { answer: any }) {
+  const normalized = normalizeChecklistAnswer(answer);
+  if (normalized === 'correct') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-green-50 text-green-700 border-green-200">
+        <CheckCircle2 className="h-3 w-3" /> Correct
+      </span>
+    );
+  }
+  if (normalized === 'incorrect') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-red-50 text-red-600 border-red-200">
+        <XCircle className="h-3 w-3" /> Incorrect
+      </span>
+    );
+  }
+  if (normalized === 'no_opportunity') {
+    return (
+      <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-slate-100 text-slate-700 border-slate-300">
+        <MinusCircle className="h-3 w-3" /> No opportunity
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl text-xs font-semibold border bg-gray-100 text-gray-600 border-gray-200">
+      Unanswered
+    </span>
+  );
+}
 
 interface EmployeeDetailProps {
   employeeId: string;
@@ -19,14 +79,36 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, refreshCertifications, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
   const { user } = useAuth();
+  const { canModify, canView } = usePermissions();
+  const canEdit = canModify('employee_profiles');
+  const canInviteExternalUser = canModify('external_user_invites');
+  const canEditAccommodations = user ? canManageAccommodations(user.role) : false;
+  const canAssignGoal = canModify('goal_assignment');
+  const canAssess = canModify('goal_assessment');
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [assessmentMode, setAssessmentMode] = useState(false);
-  const [showSupportExpanded, setShowSupportExpanded] = useState(user?.role === 'Administrator');
+  const [showSupportExpanded, setShowSupportExpanded] = useState(
+    ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '')
+  );
+  useEffect(() => {
+    setShowSupportExpanded(
+      ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '')
+    );
+  }, [employeeId, user?.role]);
   const [assessmentLocation, setAssessmentLocation] = useState('9540 Nall Avenue');
   const [profileAssessmentSessionId, setProfileAssessmentSessionId] = useState<string | null>(null);
   const [startingAssessment, setStartingAssessment] = useState(false);
+  const [employeeLockStatus, setEmployeeLockStatus] = useState<{
+    locked: boolean;
+    ownSession?: boolean;
+    sessionId?: string;
+    location?: string;
+    ownerName?: string;
+    activeDocumenters?: string[];
+  } | null>(null);
+  const [joiningSession, setJoiningSession] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [expandedGoals, setExpandedGoals] = useState<Record<string, boolean>>({});
   const [editForm, setEditForm] = useState({
@@ -46,8 +128,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [inviteLinkMap, setInviteLinkMap] = useState<Record<string, string>>({});
   const [copiedContactId, setCopiedContactId] = useState<string | null>(null);
   const [assignedCoaches, setAssignedCoaches] = useState<any[]>([]);
-  const [coachNotes, setCoachNotes] = useState<Array<{ id: string; employee_id: string; coach_id: string; title: string; content: string; created_at: string; updated_at: string; coach_name?: string }>>([]);
-  const [loadingCoachNotes, setLoadingCoachNotes] = useState(false);
   const [activeGoalsExpanded, setActiveGoalsExpanded] = useState(() =>
     developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'active').length > 0
   );
@@ -58,6 +138,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingSupportInterests, setEditingSupportInterests] = useState(false);
   const [editingSupportChallenges, setEditingSupportChallenges] = useState(false);
   const [editingSupportStrategies, setEditingSupportStrategies] = useState(false);
+  const [editingAccommodations, setEditingAccommodations] = useState(false);
+  const [editingDynamicField, setEditingDynamicField] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
@@ -67,7 +149,14 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     challenges: [''],
     regulationStrategies: ['']
   });
+  const [accommodationsForm, setAccommodationsForm] = useState<string[]>(['']);
+  const [dynamicFieldForms, setDynamicFieldForms] = useState<Record<string, string[]>>({});
   const [serviceProviderForm, setServiceProviderForm] = useState<Array<{ name: string; type: string }>>([]);
+  const [catalogFields, setCatalogFields] = useState<Array<{
+    id: string; key: string; label: string; description: string | null;
+    sort_order: number; status: string; applies_to_roles?: unknown;
+  }>>([]);
+  const [relationshipOptions, setRelationshipOptions] = useState<Array<{ key: string; label: string }>>([]);
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
@@ -76,8 +165,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [certDate, setCertDate] = useState(new Date().toISOString().split('T')[0]);
   const [certNotes, setCertNotes] = useState('');
   const [savingCert, setSavingCert] = useState(false);
-  const [checklistAnswers, setChecklistAnswers] = useState<Record<number, boolean>>({});
+  const [checklistAnswers, setChecklistAnswers] = useState<Record<number, ChecklistAnswer>>({});
+  const [collapsedCategories, setCollapsedCategories] = useState<Record<number, boolean>>({});
   const [reviewingCert, setReviewingCert] = useState<PromotionCertification | null>(null);
+  const [certificationFlowType, setCertificationFlowType] = useState<'mentor' | 'shift_lead' | null>(null);
+  const [certificationResponse, setCertificationResponse] = useState<any>(null);
 
   // Invitation and relationship states (from remote)
   const [invitationEmail, setInvitationEmail] = useState(employees.find(e => e.id === employeeId)?.email || '');
@@ -91,6 +183,12 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingCoaches, setEditingCoaches] = useState(false);
   const [selectedCoachId, setSelectedCoachId] = useState('');
   const [coachAssignError, setCoachAssignError] = useState('');
+  const [showCoachInvite, setShowCoachInvite] = useState(false);
+  const [coachInviteForm, setCoachInviteForm] = useState({ first_name: '', last_name: '', email: '' });
+  const [coachInviteSaving, setCoachInviteSaving] = useState(false);
+  const [coachInviteError, setCoachInviteError] = useState('');
+  const [coachInviteLink, setCoachInviteLink] = useState('');
+  const [coachInviteCopied, setCoachInviteCopied] = useState(false);
   const [showCheckins, setShowCheckins] = useState(false);
   const [pastAssessments, setPastAssessments] = useState<Array<{
     id: string; manager_id: string; date: string; location: string;
@@ -100,8 +198,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
   const [pastAssessmentsExpanded, setPastAssessmentsExpanded] = useState(false);
   const [menteesExpanded, setMenteesExpanded] = useState(user?.role === 'Administrator');
-  const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(false);
-  const [coachNotesExpanded, setCoachNotesExpanded] = useState(false);
   const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(() =>
     developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'maintenance').length > 0
   );
@@ -228,12 +324,76 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const getChecklistItems = () => certType === 'mentor' ? mentorChecklistItems : shiftManagerCategories.flatMap(c => c.items);
   const getPassingScore = () => certType === 'mentor' ? 84 : 90;
   const calculateScore = () => {
+    const values = Object.values(checklistAnswers);
+    const correct = values.filter(v => v === 'correct').length;
+    const incorrect = values.filter(v => v === 'incorrect').length;
+    const denom = correct + incorrect;
+    if (denom === 0) return 0;
+    return Math.round((correct / denom) * 100);
+  };
+  const allItemsAnswered = () => {
     const items = getChecklistItems();
-    const yesCount = Object.values(checklistAnswers).filter(v => v).length;
-    return Math.round((yesCount / items.length) * 100);
+    for (let i = 0; i < items.length; i++) {
+      if (!checklistAnswers[i]) return false;
+    }
+    return true;
+  };
+  const answeredCount = () => {
+    const items = getChecklistItems();
+    let n = 0;
+    for (let i = 0; i < items.length; i++) {
+      if (checklistAnswers[i]) n++;
+    }
+    return n;
+  };
+  const findNextUnansweredIdx = () => {
+    const items = getChecklistItems();
+    for (let i = 0; i < items.length; i++) {
+      if (!checklistAnswers[i]) return i;
+    }
+    return -1;
+  };
+  const jumpToNextUnanswered = () => {
+    const idx = findNextUnansweredIdx();
+    if (idx < 0) return;
+    if (certType === 'shift_lead') {
+      let count = 0;
+      for (let c = 0; c < shiftManagerCategories.length; c++) {
+        const len = shiftManagerCategories[c].items.length;
+        if (idx < count + len) {
+          if (collapsedCategories[c]) {
+            setCollapsedCategories(prev => ({ ...prev, [c]: false }));
+          }
+          break;
+        }
+        count += len;
+      }
+    }
+    setTimeout(() => {
+      const el = document.getElementById(`checklist-item-${idx}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 60);
+  };
+  const resetChecklistState = () => {
+    setChecklistAnswers({});
+    setCollapsedCategories({});
   };
 
   const employeeCerts = certifications.filter(c => c.employeeId === employeeId);
+
+  const openCertificationReview = async (cert: PromotionCertification) => {
+    if (!cert.responseSetId) {
+      setReviewingCert(cert);
+      return;
+    }
+    try {
+      const response = await apiRequest(`/api/form-responses/${cert.responseSetId}`);
+      if (!response.ok) throw new Error((await response.json()).error || 'Unable to load certification response');
+      setCertificationResponse(await response.json());
+    } catch {
+      setReviewingCert(cert);
+    }
+  };
 
   const handleSaveCertification = async () => {
     setSavingCert(true);
@@ -243,7 +403,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
     const checklistResults = items.map((item, i) => ({
       question: item,
-      answer: checklistAnswers[i] || false
+      answer: checklistAnswers[i]
     }));
 
     await addCertification({
@@ -259,7 +419,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     });
 
     setShowCertForm(false);
-    setChecklistAnswers({});
+    resetChecklistState();
     setCertNotes('');
     setSavingCert(false);
   };
@@ -268,30 +428,43 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     async function fetchRelationships() {
       const isManager = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
       if (!isManager) return;
+
+      const cacheKey = `relationships:${employeeId}`;
+      const cached = getCachedProfileData<{ contacts: any[]; coaches: any[]; mentees: any[] }>(cacheKey);
+      if (cached) {
+        setEmployeeContacts(cached.contacts);
+        setAssignedCoaches(cached.coaches);
+        setCoachMentees(cached.mentees);
+        if (cached.mentees.length > 0) setMenteesExpanded(true);
+        return;
+      }
+
       try {
         const employee = employees.find(e => e.id === employeeId);
+        const result = { contacts: [] as any[], coaches: [] as any[], mentees: [] as any[] };
 
         if (employee?.role === 'Job Coach') {
-          const menteeRes = await apiRequest(`/api/coach-assignments/coach/${employeeId}`);
+          const menteeRes = await cachedApiRequest(`/api/coach-assignments/coach/${employeeId}`);
           if (menteeRes.ok) {
-            const data = await menteeRes.json();
-            setCoachMentees(data);
-            if (data.length > 0) setMenteesExpanded(true);
+            result.mentees = await menteeRes.json();
+            setCoachMentees(result.mentees);
+            if (result.mentees.length > 0) setMenteesExpanded(true);
           }
         } else {
-          const [guardianRes, coachRes, contactsRes] = await Promise.all([
-            apiRequest(`/api/guardian-relationships/scooper/${employeeId}`),
-            apiRequest(`/api/coach-assignments/scooper/${employeeId}`),
-            apiRequest(`/api/employees/${employeeId}/contacts`)
+          const [coachRes, contactsRes] = await Promise.all([
+            cachedApiRequest(`/api/coach-assignments/scooper/${employeeId}`),
+            cachedApiRequest(`/api/employees/${employeeId}/contacts`)
           ]);
           if (contactsRes.ok) {
-            setEmployeeContacts(await contactsRes.json());
+            result.contacts = await contactsRes.json();
+            setEmployeeContacts(result.contacts);
           }
           if (coachRes.ok) {
-            const data = await coachRes.json();
-            setAssignedCoaches(data);
+            result.coaches = await coachRes.json();
+            setAssignedCoaches(result.coaches);
           }
         }
+        setCachedProfileData(cacheKey, result);
       } catch (err) {
       }
     }
@@ -307,53 +480,33 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const employee = employees.find(emp => emp.id === employeeId);
   const employeeGoals = developmentGoals.filter(goal => goal.employeeId === employeeId);
 
-  // Load guardian notes for this employee
-  useEffect(() => {
-    const canViewNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
-    if (canViewNotes && employee?.role === 'Super Scooper') {
-      loadGuardianNotesForScooper(employeeId);
-    }
-  }, [employeeId, user?.role, employee?.role]);
-
-  // Auto-expand guardian notes section once notes load from context
-  useEffect(() => {
-    const notes = guardianNotes.filter(n => n.scooperId === employeeId);
-    if (notes.length > 0) setGuardianNotesExpanded(true);
-  }, [guardianNotes, employeeId]);
-
-  // Load coach notes for this employee
-  useEffect(() => {
-    const canViewCoachNotes = ['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '');
-    if (canViewCoachNotes && employee?.role === 'Super Scooper') {
-      setLoadingCoachNotes(true);
-      apiRequest(`/api/coach-notes/${employeeId}`)
-        .then(res => res.ok ? res.json() : [])
-        .then(notes => {
-          setCoachNotes(notes);
-          if (notes.length > 0) setCoachNotesExpanded(true);
-        })
-        .catch(() => setCoachNotes([]))
-        .finally(() => setLoadingCoachNotes(false));
-    }
-  }, [employeeId, user?.role, employee?.role]);
-
   useEffect(() => {
     async function fetchPastAssessments() {
+      const cacheKey = `assessmentHistory:${employeeId}`;
+      const cached = getCachedProfileData<{ sessions: typeof pastAssessments; details: typeof sessionDetails }>(cacheKey);
+      if (cached) {
+        setPastAssessments(cached.sessions);
+        setSessionDetails(cached.details);
+        return;
+      }
+
       setLoadingPastAssessments(true);
       try {
-        const res = await apiRequest(`/api/employees/${employeeId}/assessment-history`);
+        const res = await cachedApiRequest(`/api/employees/${employeeId}/assessment-history-details`);
         if (res.ok) {
-          const sessions = await res.json();
-          setPastAssessments(sessions);
-          for (const session of sessions) {
-            try {
-              const detailRes = await apiRequest(`/api/assessment-sessions/${session.id}/details?employeeId=${employeeId}`);
-              if (detailRes.ok) {
-                const data = await detailRes.json();
-                setSessionDetails(prev => ({ ...prev, [session.id]: data }));
-              }
-            } catch (err) {}
+          const sessionsWithDetails = await res.json();
+          const sessions = sessionsWithDetails.map((s: any) => ({
+            id: s.id, manager_id: s.manager_id, date: s.date, location: s.location,
+            status: s.status, created_at: s.created_at, updated_at: s.updated_at,
+            managerFirstName: s.managerFirstName, managerLastName: s.managerLastName,
+          }));
+          const details: Record<string, any> = {};
+          for (const s of sessionsWithDetails) {
+            details[s.id] = s.details;
           }
+          setPastAssessments(sessions);
+          setSessionDetails(details);
+          setCachedProfileData(cacheKey, { sessions, details });
         }
       } catch (err) {
       }
@@ -443,6 +596,8 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         challenges: employee.challenges.length > 0 ? [...employee.challenges] : [''],
         regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
       });
+      setAccommodationsForm(employee.accommodations.length > 0 ? [...employee.accommodations] : ['']);
+      setDynamicFieldForms(employee.profileFieldValues || {});
       setServiceProviderForm(
         employee.serviceProviders?.length > 0 
           ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
@@ -451,7 +606,20 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   }, [employee?.id]);
 
-  const canEdit = user?.role === 'Administrator';
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest('/api/profile-catalog?employee_role=Super%20Scooper')
+      .then(async response => {
+        if (!response.ok || cancelled) return;
+        const catalog = await response.json();
+        if (cancelled) return;
+        setCatalogFields(catalog.profileFields || []);
+        const contactList = (catalog.optionLists || []).find((list: any) => list.key === 'contact_relationships');
+        setRelationshipOptions((contactList?.items || []).map((item: any) => ({ key: item.key, label: item.label })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [employeeId, user?.role]);
 
   // Helper functions for array form fields
   const addArrayItem = (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
@@ -520,6 +688,39 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   };
 
+  const handleSaveAccommodations = async () => {
+    setSavingProfile(true);
+    try {
+      await updateEmployee(employeeId, {
+        accommodations: accommodationsForm.filter(accommodation => accommodation.trim() !== '')
+      });
+      setEditingAccommodations(false);
+    } catch (error) {
+      console.error('Error saving accommodations:', error);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleSaveDynamicField = async (key: string) => {
+    setSavingProfile(true);
+    try {
+      const values = (dynamicFieldForms[key] || []).map(value => value.trim()).filter(Boolean);
+      await updateEmployee(employeeId, {
+        profileFieldValues: {
+          ...(employee?.profileFieldValues || {}),
+          [key]: values,
+        },
+      });
+      setDynamicFieldForms(prev => ({ ...prev, [key]: values }));
+      setEditingDynamicField(null);
+    } catch (error) {
+      console.error('Error saving profile field:', error);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleCancelSafety = () => {
     setSafetyForm(employee?.allergies.length ? [...employee.allergies] : ['']);
     setEditingSafety(false);
@@ -538,6 +739,16 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     if (category === 'challenges') setEditingSupportChallenges(false);
     if (category === 'regulationStrategies') setEditingSupportStrategies(false);
   };
+
+  const handleCancelAccommodations = () => {
+    setAccommodationsForm(employee?.accommodations.length ? [...employee.accommodations] : ['']);
+    setEditingAccommodations(false);
+  };
+
+  const profileFieldLabel = (key: string, fallback: string) =>
+    catalogFields.find(field => field.key === key)?.label || fallback;
+
+  const defaultRelationshipLabel = relationshipOptions.find(option => option.key === 'parent_guardian')?.label || 'Parent/Guardian';
 
   const startEditingServiceProvider = () => {
     const providers = employee?.serviceProviders && employee.serviceProviders.length > 0
@@ -568,7 +779,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     setEditingServiceProvider(false);
   };
 
-  const canAssess = ['Administrator', 'Shift Lead', 'Assistant Manager'].includes(user?.role || '');
   const isAssessable = ['Super Scooper', 'Assistant Manager'].includes(employees.find(e => e.id === employeeId)?.role || '');
 
   const handleStartAssessment = async () => {
@@ -579,6 +789,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         setProfileAssessmentSessionId(result.sessionId || null);
         setAssessmentMode(true);
         setActiveGoalsExpanded(false);
+        setEmployeeLockStatus(null);
       } else {
         alert(result.error || 'Could not start assessment. The employee may be locked by another session.');
       }
@@ -590,12 +801,32 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   };
 
+  const handleJoinSession = () => {
+    if (!employeeLockStatus?.sessionId) return;
+    setJoiningSession(true);
+    setProfileAssessmentSessionId(employeeLockStatus.sessionId);
+    setAssessmentLocation(employeeLockStatus.location || '9540 Nall Avenue');
+    setAssessmentMode(true);
+    setActiveGoalsExpanded(false);
+    setEmployeeLockStatus(null);
+    setJoiningSession(false);
+  };
+
   const handleEndAssessment = async () => {
     await endAssessmentSession();
     setAssessmentMode(false);
     setProfileAssessmentSessionId(null);
     setActiveGoalsExpanded(true);
   };
+
+  useEffect(() => {
+    if (!canAssess || assessmentMode) return;
+    let cancelled = false;
+    apiRequest(`/api/employees/${employeeId}/lock-status`).then(async res => {
+      if (res.ok && !cancelled) setEmployeeLockStatus(await res.json());
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [employeeId, canAssess, assessmentMode]);
   
   if (!employee) {
     return (
@@ -610,9 +841,31 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     );
   }
 
+  if (certificationResponse) {
+    return <FormFiller
+      response={certificationResponse}
+      employee={employee}
+      onClose={() => {
+        setCertificationResponse(null);
+        refreshCertifications();
+      }}
+      onComplete={() => {
+        setCertificationResponse(null);
+        refreshCertifications();
+      }}
+    />;
+  }
+
   const activeGoals = employeeGoals.filter(goal => goal.status === 'active');
   const maintenanceGoals = employeeGoals.filter(goal => goal.status === 'maintenance');
   const archivedGoals = employeeGoals.filter(goal => goal.status === 'archived');
+  const guardianRelationshipLabels = new Set([
+    'Parent/Guardian',
+    'Parent',
+    ...relationshipOptions
+      .filter(option => ['parent_guardian', 'parent'].includes(option.key))
+      .map(option => option.label),
+  ]);
 
   const handleEditGoal = (goal: any) => {
     setEditingGoal(goal.id);
@@ -692,7 +945,7 @@ const handleGenerateInvitation = async () => {
       is_emergency_contact: c.is_emergency_contact, has_app_access: c.has_app_access,
     }));
     setContactsEditForm(existing.length > 0 ? existing : [{
-      id: undefined, first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+      id: undefined, first_name: '', last_name: '', relationship_type: defaultRelationshipLabel,
       phone: '', email: '', is_emergency_contact: false, has_app_access: false, _isNew: true,
     }]);
     setContactError('');
@@ -754,6 +1007,7 @@ const handleGenerateInvitation = async () => {
         }
       }
       setEmployeeContacts(updatedContacts.filter(Boolean));
+      invalidateProfileCache(`relationships:${employeeId}`);
       setEditingContacts(false);
       setContactsEditForm([]);
     } catch (err) {
@@ -765,7 +1019,7 @@ const handleGenerateInvitation = async () => {
 
   const addContactToForm = () => {
     setContactsEditForm(prev => [...prev, {
-      first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+      first_name: '', last_name: '', relationship_type: defaultRelationshipLabel,
       phone: '', email: '', is_emergency_contact: false, _isNew: true,
     }]);
   };
@@ -806,6 +1060,63 @@ const handleGenerateInvitation = async () => {
       navigator.clipboard.writeText(link);
       setCopiedContactId(contactId);
       setTimeout(() => setCopiedContactId(null), 2000);
+    }
+  };
+
+  const handleInviteCoach = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const firstName = coachInviteForm.first_name.trim();
+    const lastName = coachInviteForm.last_name.trim();
+    const email = coachInviteForm.email.trim();
+    if (!firstName || !lastName || !email) {
+      setCoachInviteError('First name, last name, and email are required');
+      return;
+    }
+
+    setCoachInviteSaving(true);
+    setCoachInviteError('');
+    try {
+      const res = await apiRequest('/api/coach-assignments/invite', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          scooper_id: employeeId,
+          first_name: firstName,
+          last_name: lastName,
+          email,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setCoachInviteError(data.error || 'Failed to invite coach');
+        return;
+      }
+
+      setAssignedCoaches(prev => [
+        ...prev,
+        {
+          ...data.assignment,
+          coach_first_name: data.coach.first_name,
+          coach_last_name: data.coach.last_name,
+          coach_email: data.coach.email,
+        },
+      ]);
+      setCoachInviteLink(data.setupUrl);
+      setCoachInviteForm({ first_name: '', last_name: '', email: '' });
+    } catch {
+      setCoachInviteError('Failed to invite coach');
+    } finally {
+      setCoachInviteSaving(false);
+    }
+  };
+
+  const handleCopyCoachInviteLink = async () => {
+    try {
+      await navigator.clipboard.writeText(coachInviteLink);
+      setCoachInviteCopied(true);
+      setTimeout(() => setCoachInviteCopied(false), 2000);
+    } catch {
+      setCoachInviteError('Unable to copy the invitation link');
     }
   };
 
@@ -892,7 +1203,7 @@ const handleGenerateInvitation = async () => {
   if (showGoalAssignment) {
     return (
       <GoalAssignment
-        employeeId={employeeId}
+        initialEmployeeId={employeeId}
         onClose={() => setShowGoalAssignment(false)}
         onSuccess={() => setShowGoalAssignment(false)}
       />
@@ -934,7 +1245,7 @@ const handleGenerateInvitation = async () => {
                   <div className="flex items-center flex-wrap gap-2 mt-1.5">
                     <span className="flex items-center text-red-600 text-sm font-medium">
                       <AlertTriangle className="h-4 w-4 mr-1" />
-                      Allergies:
+                      Health:
                     </span>
                     {employee.allergies.map((allergy, i) => (
                       <span key={i} className="bg-red-50 text-red-700 px-3 py-0.5 rounded-full text-sm">{allergy}</span>
@@ -970,7 +1281,7 @@ const handleGenerateInvitation = async () => {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
-              {user?.role === 'Administrator' && (
+              {canEdit && (
                 <button
                   onClick={() => onEdit(employeeId)}
                   className="flex items-center space-x-2 bg-gray-600 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-gray-700 transition-colors text-sm"
@@ -980,7 +1291,7 @@ const handleGenerateInvitation = async () => {
                   <span className="hidden sm:inline">Edit</span>
                 </button>
               )}
-              {employee.role === 'Super Scooper' && user?.role === 'Job Coach' && (
+              {employee.role === 'Super Scooper' && ['Job Coach', 'Administrator'].includes(user?.role || '') && (
                 <button
                   onClick={() => setShowCheckins(true)}
                   className="flex items-center space-x-2 bg-amber-500 text-white px-2 sm:px-4 py-2 rounded-xl hover:bg-amber-600 transition-colors text-sm"
@@ -1012,8 +1323,8 @@ const handleGenerateInvitation = async () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Heart className="h-3.5 w-3.5 text-green-600 mr-1.5" /> Interests & Motivators
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Heart className="h-3.5 w-3.5 text-green-600 mr-1.5" /> {profileFieldLabel('interests_motivators', 'Interests & Motivators')}
                     </h4>
                     {canEdit && !editingSupportInterests && (
                       <button
@@ -1064,8 +1375,8 @@ const handleGenerateInvitation = async () => {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Zap className="h-3.5 w-3.5 text-orange-500 mr-1.5" /> Challenges
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Zap className="h-3.5 w-3.5 text-orange-500 mr-1.5" /> {profileFieldLabel('challenges', 'Challenges')}
                     </h4>
                     {canEdit && !editingSupportChallenges && (
                       <button
@@ -1116,8 +1427,8 @@ const handleGenerateInvitation = async () => {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Brain className="h-3.5 w-3.5 text-purple-600 mr-1.5" /> Regulation Strategies
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Brain className="h-3.5 w-3.5 text-purple-600 mr-1.5" /> {profileFieldLabel('regulation_strategies', 'Regulation Strategies')}
                     </h4>
                     {canEdit && !editingSupportStrategies && (
                       <button
@@ -1167,6 +1478,151 @@ const handleGenerateInvitation = async () => {
                   )}
                 </div>
               </div>
+              {employee.role === 'Super Scooper' && (
+                <section className="mt-5 pt-5 border-t border-gray-200" aria-labelledby="accommodations-heading">
+                  <div className="flex items-center justify-between mb-2">
+                    <div>
+                      <h4 id="accommodations-heading" className="text-sm font-semibold text-gray-700 flex items-center">
+                        <Accessibility className="h-4 w-4 text-teal-600 mr-1.5" /> {profileFieldLabel('accommodations', 'Accommodations')}
+                      </h4>
+                      <p className="text-xs text-gray-500 mt-0.5">Tools and environmental supports that help this employee succeed.</p>
+                    </div>
+                    {canEditAccommodations && !editingAccommodations && (
+                      <button
+                        onClick={() => setEditingAccommodations(true)}
+                        className="p-1.5 text-teal-500 hover:text-teal-700 hover:bg-teal-50 rounded-lg transition-colors"
+                        title="Edit accommodations"
+                        data-testid="button-edit-accommodations"
+                      >
+                        <SquarePen className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  {editingAccommodations ? (
+                    <div data-testid="form-edit-accommodations">
+                      <div className="space-y-1.5">
+                        {accommodationsForm.map((accommodation, index) => (
+                          <div key={index} className="flex space-x-1.5">
+                            <input
+                              type="text"
+                              value={accommodation}
+                              onChange={(e) => updateArrayItem(setAccommodationsForm, index, e.target.value)}
+                              className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
+                              placeholder="Accommodation or support"
+                              data-testid={`input-accommodation-${index}`}
+                            />
+                            {accommodationsForm.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => removeArrayItem(setAccommodationsForm, index)}
+                                className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg"
+                                aria-label={`Remove accommodation ${index + 1}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => addArrayItem(setAccommodationsForm)}
+                        className="flex items-center space-x-1 text-teal-700 hover:text-teal-800 text-xs font-medium mt-2 pt-1"
+                      >
+                        <Plus className="h-3.5 w-3.5" /><span>Add accommodation</span>
+                      </button>
+                      <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                        <button onClick={handleCancelAccommodations} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
+                        <button onClick={handleSaveAccommodations} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-teal-600 text-white rounded-full hover:bg-teal-700 text-xs font-medium disabled:opacity-50 transition-colors" data-testid="button-save-accommodations">
+                          <Save className="h-3 w-3" />
+                          <span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    employee.accommodations.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5" data-testid="accommodation-chips">
+                        {employee.accommodations.map((accommodation, index) => (
+                          <span key={index} className="bg-teal-50 text-teal-800 border border-teal-100 px-2.5 py-1 rounded-full text-sm">
+                            {accommodation}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 text-sm italic" data-testid="text-empty-accommodations">No accommodations have been recorded.</p>
+                    )
+                  )}
+                </section>
+              )}
+              {employee.role === 'Super Scooper' && catalogFields.filter(field => !['interests_motivators', 'challenges', 'regulation_strategies', 'accommodations', 'allergies'].includes(field.key)).length > 0 && (
+                <section className="mt-5 pt-5 border-t border-gray-200" aria-labelledby="additional-fields-heading">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <SlidersHorizontal className="h-4 w-4 text-indigo-500" />
+                    <h3 id="additional-fields-heading" className="text-sm font-semibold text-gray-900">Additional Support Information</h3>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {catalogFields
+                      .filter(field => !['interests_motivators', 'challenges', 'regulation_strategies', 'accommodations', 'allergies'].includes(field.key))
+                      .map(field => {
+                        const values = dynamicFieldForms[field.key] || [];
+                        const editing = editingDynamicField === field.key;
+                        return (
+                          <div key={field.id}>
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-medium text-gray-600">{field.label}</h4>
+                              {canEdit && !editing && (
+                                <button onClick={() => {
+                                  setDynamicFieldForms(prev => ({ ...prev, [field.key]: values.length > 0 ? [...values] : [''] }));
+                                  setEditingDynamicField(field.key);
+                                }} className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title={`Edit ${field.label}`}>
+                                  <SquarePen className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {field.description && <p className="text-xs text-gray-500 mb-2">{field.description}</p>}
+                            {editing ? (
+                              <div>
+                                <div className="space-y-1.5">
+                                  {(dynamicFieldForms[field.key] || ['']).map((value, index) => (
+                                    <div key={index} className="flex space-x-1.5">
+                                      <input
+                                        type="text"
+                                        value={value}
+                                        onChange={e => setDynamicFieldForms(prev => ({ ...prev, [field.key]: (prev[field.key] || []).map((item, i) => i === index ? e.target.value : item) }))}
+                                        className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
+                                        placeholder={field.label}
+                                      />
+                                      {(dynamicFieldForms[field.key] || []).length > 1 && (
+                                        <button type="button" onClick={() => setDynamicFieldForms(prev => ({ ...prev, [field.key]: (prev[field.key] || []).filter((_, i) => i !== index) }))} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                                <button type="button" onClick={() => setDynamicFieldForms(prev => ({ ...prev, [field.key]: [...(prev[field.key] || ['']), ''] }))} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs font-medium mt-2">
+                                  <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                                </button>
+                                <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                                  <button onClick={() => setEditingDynamicField(null)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium">Cancel</button>
+                                  <button onClick={() => handleSaveDynamicField(field.key)} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 text-xs font-medium disabled:opacity-50">
+                                    <Save className="h-3 w-3" /><span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : values.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {values.map((value, index) => <span key={index} className="bg-indigo-50 text-indigo-800 border border-indigo-100 px-2.5 py-1 rounded-full text-sm">{value}</span>)}
+                              </div>
+                            ) : (
+                              <p className="text-gray-400 text-sm italic">None recorded</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </section>
+              )}
             </div>
 
             {/* Contacts, Service Provider & Job Coaches Row */}
@@ -1178,7 +1634,7 @@ const handleGenerateInvitation = async () => {
                       <Users className="h-4 w-4 text-purple-500" />
                       <h3 className="text-sm font-semibold text-gray-900">Contacts</h3>
                     </div>
-                    {canEdit && !editingContacts && (
+                    {canModify('contacts') && !editingContacts && (
                       <button
                         onClick={startEditingContacts}
                         className="p-1.5 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
@@ -1208,13 +1664,15 @@ const handleGenerateInvitation = async () => {
                             <input type="email" value={contact.email} onChange={e => updateContactFormField(index, 'email', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="Email" />
                             <input type="tel" value={contact.phone} onChange={e => updateContactFormField(index, 'phone', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder={contact.is_emergency_contact ? 'Phone *' : 'Phone'} />
                             <select value={contact.relationship_type} onChange={e => updateContactFormField(index, 'relationship_type', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`}>
-                              <option value="Parent/Guardian">Parent/Guardian</option>
-                              <option value="Parent">Parent</option>
-                              <option value="Legal Guardian">Legal Guardian</option>
-                              <option value="Case Manager">Case Manager</option>
-                              <option value="Family Member">Family Member</option>
-                              <option value="Employer">Employer</option>
-                              <option value="Other">Other</option>
+                              {(relationshipOptions.length > 0 ? relationshipOptions : [
+                                { key: 'parent_guardian', label: 'Parent/Guardian' },
+                                { key: 'parent', label: 'Parent' },
+                                { key: 'legal_guardian', label: 'Legal Guardian' },
+                                { key: 'case_manager', label: 'Case Manager' },
+                                { key: 'family_member', label: 'Family Member' },
+                                { key: 'employer', label: 'Employer' },
+                                { key: 'other', label: 'Other' },
+                              ]).map(option => <option key={option.key} value={option.label}>{option.label}</option>)}
                             </select>
                             <label className="flex items-center space-x-2 cursor-pointer self-center">
                               <input type="checkbox" checked={contact.is_emergency_contact} onChange={e => updateContactFormField(index, 'is_emergency_contact', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
@@ -1252,7 +1710,7 @@ const handleGenerateInvitation = async () => {
                                         Emergency
                                       </span>
                                     )}
-                                    {contact.has_app_access && (
+                                     {contact.has_app_access && !['invited', 'accepted'].includes(contact.invite_status) && (
                                       <span className="inline-flex items-center bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
                                         <Check className="h-2.5 w-2.5 mr-0.5" />
                                         App Access
@@ -1267,7 +1725,7 @@ const handleGenerateInvitation = async () => {
                                 </div>
                               </div>
                               <div className="flex items-center space-x-1 ml-2 shrink-0">
-                                {user?.role === 'Administrator' && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
+                                 {canInviteExternalUser && !contact.has_app_access && guardianRelationshipLabels.has(contact.relationship_type) && contact.email && (
                                   <button
                                     onClick={() => handleGrantAccess(contact.id)}
                                     disabled={grantingAccess === contact.id}
@@ -1279,6 +1737,18 @@ const handleGenerateInvitation = async () => {
                                     ) : (
                                       <Link className="h-4 w-4" />
                                     )}
+                                 {contact.invite_status === 'invited' && (
+                                   <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                     <Mail className="h-2.5 w-2.5" />
+                                     Invite pending
+                                   </span>
+                                 )}
+                                 {contact.invite_status === 'accepted' && (
+                                   <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full text-[10px] font-medium">
+                                     <Check className="h-2.5 w-2.5" />
+                                     App access active
+                                   </span>
+                                 )}
                                   </button>
                                 )}
                                 {inviteLinkMap[contact.id] && (
@@ -1372,14 +1842,32 @@ const handleGenerateInvitation = async () => {
                       <UserCheck className="h-4 w-4 text-green-500" />
                       <h3 className="text-sm font-semibold text-gray-900">Job Coach{assignedCoaches.length > 1 ? 'es' : ''}</h3>
                     </div>
-                    {canEdit && !editingCoaches && (
-                      <button
-                        onClick={() => { setEditingCoaches(true); setCoachAssignError(''); }}
-                        className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                        title="Edit job coaches"
-                      >
-                        <SquarePen className="h-3.5 w-3.5" />
-                      </button>
+                    {!editingCoaches && (
+                      <div className="flex items-center gap-1">
+                        {canInviteExternalUser && (
+                          <button
+                            onClick={() => {
+                              setShowCoachInvite(true);
+                              setCoachInviteError('');
+                              setCoachInviteLink('');
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 text-green-700 hover:bg-green-50 rounded-lg transition-colors text-xs font-medium"
+                            title="Invite a new job coach"
+                          >
+                            <Mail className="h-3.5 w-3.5" />
+                            <span>Invite</span>
+                          </button>
+                        )}
+                        {canEdit && (
+                          <button
+                            onClick={() => { setEditingCoaches(true); setCoachAssignError(''); }}
+                            className="p-1.5 text-green-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Edit job coaches"
+                          >
+                            <SquarePen className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
                   {editingCoaches && (
@@ -1416,7 +1904,9 @@ const handleGenerateInvitation = async () => {
                     <div className="space-y-2">
                       {assignedCoaches.map((assignment: any) => (
                         <div key={assignment.id} className="flex items-center justify-between text-sm bg-green-50 text-green-800 px-3 py-2 rounded-lg font-medium">
-                          <span>{getPersonName(assignment.coach_id)}</span>
+                           <span>{assignment.coach_first_name
+                             ? `${assignment.coach_first_name} ${assignment.coach_last_name || ''}`.trim()
+                             : getPersonName(assignment.coach_id)}</span>
                           {editingCoaches && (
                             <button
                               onClick={() => handleRemoveCoach(assignment.id)}
@@ -1452,13 +1942,13 @@ const handleGenerateInvitation = async () => {
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
                     <AlertTriangle className="h-4 w-4 text-amber-500" />
-                    <h3 className="text-sm font-semibold text-gray-900">Allergies & Dietary</h3>
+                    <h3 className="text-sm font-semibold text-gray-900">Health Conditions</h3>
                   </div>
                   {canEdit && !editingSafety && (
                     <button
                       onClick={() => setEditingSafety(true)}
                       className="p-1.5 text-amber-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors"
-                      title="Edit allergies"
+                      title="Edit health conditions"
                     >
                       <SquarePen className="h-3.5 w-3.5" />
                     </button>
@@ -1468,7 +1958,7 @@ const handleGenerateInvitation = async () => {
                   <div className="space-y-2">
                     {safetyForm.map((allergy, index) => (
                       <div key={index} className="flex space-x-2">
-                        <input type="text" value={allergy} onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Allergy or restriction" />
+                        <input type="text" value={allergy} onChange={(e) => updateArrayItem(setSafetyForm, index, e.target.value)} className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`} placeholder="Health condition or restriction" />
                         {safetyForm.length > 1 && (
                           <button type="button" onClick={() => removeArrayItem(setSafetyForm, index)} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
                             <Trash2 className="h-3.5 w-3.5" />
@@ -1499,13 +1989,13 @@ const handleGenerateInvitation = async () => {
                         ))}
                       </div>
                     ) : (
-                      <p className="text-gray-400 text-sm italic">No allergies recorded</p>
+                      <p className="text-gray-400 text-sm italic">No health conditions recorded</p>
                     )}
                   </div>
                 )}
               </div>
 
-              {canEdit && (
+              {canModify('promotion_certifications') && (
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center space-x-2">
@@ -1522,6 +2012,8 @@ const handleGenerateInvitation = async () => {
                     </button>
                   )}
                 </div>
+
+                <CertificationHistory certifications={employeeCerts} />
 
                 {employeeCerts.length > 0 ? (
                   <div className="space-y-2 mb-3">
@@ -1553,7 +2045,7 @@ const handleGenerateInvitation = async () => {
                           </span>
                           <button
                             type="button"
-                            onClick={() => setReviewingCert(cert)}
+                            onClick={() => openCertificationReview(cert)}
                             className="p-1 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors"
                             title="Review answers"
                           >
@@ -1578,22 +2070,16 @@ const handleGenerateInvitation = async () => {
 
                 {editingCerts && (
                   <div className="flex justify-between items-center pt-1">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setChecklistAnswers({});
-                        setCertNotes('');
-                        setCertDate(new Date().toISOString().split('T')[0]);
-                        setCertType('mentor');
-                        setShowCertForm(true);
-                      }}
-                      className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium"
-                      title="Add Certification"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Add</span>
-                    </button>
-                    <div className="flex space-x-2">
+                    {user?.role === 'Administrator' && (
+                      <>
+                        <button type="button" onClick={() => setCertificationFlowType('mentor')} className="flex items-center gap-1.5 text-amber-600 hover:text-amber-700 text-xs font-medium" title="Start Mentor Certification">
+                          <Plus className="h-3.5 w-3.5" />
+                          <span>Mentor</span>
+                        </button>
+                        <button type="button" onClick={() => setCertificationFlowType('shift_lead')} className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs font-medium" title="Start Shift Lead Certification"><Plus className="h-3.5 w-3.5" /><span>Shift Lead</span></button>
+                      </>
+                    )}
+                    <div className="ml-auto flex space-x-2">
                       <button onClick={() => setEditingCerts(false)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium transition-colors">Cancel</button>
                       <button onClick={() => setEditingCerts(false)} className="flex items-center space-x-1 px-3 py-1.5 bg-amber-600 text-white rounded-full hover:bg-amber-700 text-xs font-medium transition-colors">
                         <Save className="h-3 w-3" />
@@ -1605,7 +2091,7 @@ const handleGenerateInvitation = async () => {
 
               <Modal
                 isOpen={showCertForm}
-                onClose={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                onClose={() => { setShowCertForm(false); resetChecklistState(); setCertNotes(''); }}
                 title="Record Certification"
                 titleIcon={<Award className="h-5 w-5 text-amber-600" />}
                 size="lg"
@@ -1614,14 +2100,14 @@ const handleGenerateInvitation = async () => {
                   <div className="flex space-x-2">
                     <button
                       type="button"
-                      onClick={() => { setCertType('mentor'); setChecklistAnswers({}); }}
+                      onClick={() => { setCertType('mentor'); resetChecklistState(); }}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'mentor' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                     >
                       Mentor
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setCertType('shift_lead'); setChecklistAnswers({}); }}
+                      onClick={() => { setCertType('shift_lead'); resetChecklistState(); }}
                       className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${certType === 'shift_lead' ? 'bg-blue-100 text-blue-800 border border-blue-300' : 'bg-gray-100 text-gray-600 border border-gray-200 hover:bg-gray-200'}`}
                     >
                       Shift Lead
@@ -1640,56 +2126,117 @@ const handleGenerateInvitation = async () => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Checklist</label>
-                    <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-xl">
+                    {(() => {
+                      const totalItems = getChecklistItems().length;
+                      const answered = answeredCount();
+                      const score = calculateScore();
+                      const passingScore = getPassingScore();
+                      const pct = totalItems === 0 ? 0 : Math.round((answered / totalItems) * 100);
+                      const nextIdx = findNextUnansweredIdx();
+                      const allDone = nextIdx === -1;
+                      return (
+                        <div className="sticky top-0 z-10 -mx-4 sm:-mx-6 px-4 sm:px-6 py-2.5 bg-white/95 backdrop-blur border-b border-gray-200 mb-3">
+                          <div className="flex items-center justify-between gap-3 mb-1.5">
+                            <span className="text-sm font-medium text-gray-700">
+                              {answered} <span className="text-gray-400">/</span> {totalItems} answered
+                            </span>
+                            <span className={`text-sm font-semibold ${score >= passingScore ? 'text-green-600' : 'text-red-500'}`}>
+                              {score}%
+                              <span className="text-xs font-normal text-gray-400 ml-1">(pass: {passingScore}%)</span>
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full transition-all ${allDone ? 'bg-green-500' : 'bg-blue-500'}`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={jumpToNextUnanswered}
+                              disabled={allDone}
+                              className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed transition-colors whitespace-nowrap"
+                            >
+                              {allDone ? 'All done' : 'Jump to next'}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })()}
+                    <div className="space-y-2">
                       {certType === 'mentor' ? (
                         mentorChecklistItems.map((item, idx) => (
-                          <label
-                            key={idx}
-                            className={`flex items-start space-x-3 px-3 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={checklistAnswers[idx] || false}
-                              onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [idx]: e.target.checked }))}
-                              className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm text-gray-800">{item}</span>
-                          </label>
+                          <div key={idx} id={`checklist-item-${idx}`} className="border border-gray-200 rounded-xl p-3 bg-white">
+                            <div className="flex items-start gap-2 mb-2.5">
+                              <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
+                              <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
+                            </div>
+                            <div className="grid grid-cols-3 gap-2">
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'correct' }))} />
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'incorrect' }))} />
+                              <ChecklistOutcomeButton selected={checklistAnswers[idx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [idx]: 'no_opportunity' }))} />
+                            </div>
+                          </div>
                         ))
                       ) : (
                         (() => {
                           let globalIdx = 0;
-                          return shiftManagerCategories.map((category, catIdx) => (
-                            <div key={catIdx}>
-                              <div className="px-3 py-1.5 bg-gray-200 font-medium text-sm text-gray-700 sticky top-0">
-                                {category.name}
+                          return shiftManagerCategories.map((category, catIdx) => {
+                            const catStart = globalIdx;
+                            const catEnd = catStart + category.items.length;
+                            const catAnswered = category.items.reduce((acc, _item, i) => acc + (checklistAnswers[catStart + i] ? 1 : 0), 0);
+                            const collapsed = !!collapsedCategories[catIdx];
+                            const allCatDone = catAnswered === category.items.length;
+                            return (
+                              <div key={catIdx} className="border border-slate-200 rounded-xl overflow-hidden">
+                                <button
+                                  type="button"
+                                  onClick={() => setCollapsedCategories(prev => ({ ...prev, [catIdx]: !prev[catIdx] }))}
+                                  className="w-full flex items-center justify-between gap-2 px-3 py-2.5 bg-slate-50 hover:bg-slate-100 transition-colors"
+                                  aria-expanded={!collapsed}
+                                >
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    {collapsed ? (
+                                      <ChevronRight className="h-4 w-4 text-slate-500 shrink-0" />
+                                    ) : (
+                                      <ChevronDown className="h-4 w-4 text-slate-500 shrink-0" />
+                                    )}
+                                    <span className="text-xs font-semibold text-slate-700 uppercase tracking-wide truncate text-left">
+                                      {category.name}
+                                    </span>
+                                  </div>
+                                  <span className={`text-xs font-medium shrink-0 px-2 py-0.5 rounded-full ${allCatDone ? 'bg-green-100 text-green-700' : 'bg-white text-slate-600 border border-slate-200'}`}>
+                                    {catAnswered}/{category.items.length}
+                                  </span>
+                                </button>
+                                {!collapsed && (
+                                  <div className="space-y-2 p-2 bg-white">
+                                    {category.items.map((item) => {
+                                      const currentIdx = globalIdx++;
+                                      return (
+                                        <div key={currentIdx} id={`checklist-item-${currentIdx}`} className="border border-gray-200 rounded-xl p-3 bg-white">
+                                          <div className="flex items-start gap-2 mb-2.5">
+                                            <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{currentIdx + 1}.</span>
+                                            <p className="text-sm text-gray-800 leading-snug flex-1">{item}</p>
+                                          </div>
+                                          <div className="grid grid-cols-3 gap-2">
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'correct'} value="correct" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'correct' }))} />
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'incorrect'} value="incorrect" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'incorrect' }))} />
+                                            <ChecklistOutcomeButton selected={checklistAnswers[currentIdx] === 'no_opportunity'} value="no_opportunity" onClick={() => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: 'no_opportunity' }))} />
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                                {collapsed && (() => { globalIdx = catEnd; return null; })()}
                               </div>
-                              {category.items.map((item, itemIdx) => {
-                                const currentIdx = globalIdx++;
-                                return (
-                                  <label
-                                    key={currentIdx}
-                                    className={`flex items-start space-x-3 px-3 py-2.5 cursor-pointer hover:bg-gray-100 transition-colors ${currentIdx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}
-                                  >
-                                    <input
-                                      type="checkbox"
-                                      checked={checklistAnswers[currentIdx] || false}
-                                      onChange={(e) => setChecklistAnswers(prev => ({ ...prev, [currentIdx]: e.target.checked }))}
-                                      className="h-4 w-4 mt-0.5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                                    />
-                                    <span className="text-sm text-gray-800">{item}</span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          ));
+                            );
+                          });
                         })()
                       )}
                     </div>
-                  </div>
-
-                  <div className={`text-sm font-medium ${calculateScore() >= getPassingScore() ? 'text-green-600' : 'text-red-600'}`}>
-                    Score: {calculateScore()}% (Passing: {getPassingScore()}%)
                   </div>
 
                   <div>
@@ -1707,14 +2254,14 @@ const handleGenerateInvitation = async () => {
                     <button
                       type="button"
                       onClick={handleSaveCertification}
-                      disabled={savingCert}
+                      disabled={savingCert || !allItemsAnswered()}
                       className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                     >
                       {savingCert ? 'Saving...' : 'Save Certification'}
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setShowCertForm(false); setChecklistAnswers({}); setCertNotes(''); }}
+                      onClick={() => { setShowCertForm(false); resetChecklistState(); setCertNotes(''); }}
                       className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 transition-colors text-sm font-medium"
                     >
                       Cancel
@@ -1731,6 +2278,28 @@ const handleGenerateInvitation = async () => {
       </div>
 
       {/* Certification Review Modal */}
+      {certificationFlowType && (
+        <Modal isOpen={true} onClose={() => setCertificationFlowType(null)} title={`${certificationFlowType === 'mentor' ? 'Mentor' : 'Shift Lead'} Certification`} size="xl">
+          <CertificationTemplateFlow
+            employee={employee}
+            certificationType={certificationFlowType}
+            onClose={() => setCertificationFlowType(null)}
+            onTemplateUnavailable={() => {
+              const legacyType = certificationFlowType;
+              setCertificationFlowType(null);
+              setCertType(legacyType);
+              resetChecklistState();
+              setCertNotes('');
+              setShowCertForm(true);
+            }}
+            onCompleted={() => {
+              setCertificationFlowType(null);
+              refreshCertifications();
+            }}
+          />
+        </Modal>
+      )}
+
       {reviewingCert && (
         <Modal
           isOpen={true}
@@ -1761,25 +2330,38 @@ const handleGenerateInvitation = async () => {
             )}
 
             {reviewingCert.checklistResults && reviewingCert.checklistResults.length > 0 ? (
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">
-                  Checklist Answers ({reviewingCert.checklistResults.filter((r: any) => r.answer).length} / {reviewingCert.checklistResults.length} passed)
-                </p>
-                <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
-                  {reviewingCert.checklistResults.map((item: any, idx: number) => (
-                    <div key={idx} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${item.answer ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'}`}>
-                      <span className="mt-0.5 shrink-0">
-                        {item.answer ? (
-                          <CheckCircle className="h-4 w-4 text-green-600" />
-                        ) : (
-                          <X className="h-4 w-4 text-red-500" />
-                        )}
-                      </span>
-                      <p className="text-xs text-gray-800 leading-snug">{item.question}</p>
+              (() => {
+                const counts = reviewingCert.checklistResults.reduce(
+                  (acc: { correct: number; incorrect: number; no_opportunity: number }, r: any) => {
+                    const n = normalizeChecklistAnswer(r?.answer);
+                    if (n === 'correct') acc.correct++;
+                    else if (n === 'incorrect') acc.incorrect++;
+                    else if (n === 'no_opportunity') acc.no_opportunity++;
+                    return acc;
+                  },
+                  { correct: 0, incorrect: 0, no_opportunity: 0 }
+                );
+                return (
+                  <div>
+                    <p className="text-sm font-semibold text-gray-700 mb-2">
+                      Checklist ({counts.correct} Correct · {counts.incorrect} Incorrect · {counts.no_opportunity} No opportunity)
+                    </p>
+                    <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                      {reviewingCert.checklistResults.map((item: any, idx: number) => (
+                        <div key={idx} className="border border-gray-200 rounded-xl p-3 bg-white">
+                          <div className="flex items-start gap-2 mb-2">
+                            <span className="text-xs font-bold text-gray-400 mt-0.5 w-5 shrink-0">{idx + 1}.</span>
+                            <p className="text-xs text-gray-800 leading-snug flex-1">{item.question}</p>
+                          </div>
+                          <div className="ml-7">
+                            <ChecklistAnswerBadge answer={item.answer} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              </div>
+                  </div>
+                );
+              })()
             ) : (
               <p className="text-sm text-gray-400 italic text-center py-4">No checklist data available for this certification.</p>
             )}
@@ -1828,7 +2410,7 @@ const handleGenerateInvitation = async () => {
         </div>
       )}
 
-      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? (assessmentMode ? 'lg:grid-cols-2' : 'lg:grid-cols-3') : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
+      <div className={`grid grid-cols-1 ${employee.role === 'Super Scooper' ? (assessmentMode ? 'lg:grid-cols-2' : 'lg:grid-cols-3') : 'lg:grid-cols-3'} gap-6`}>
         {/* Left Column for Super Scoopers: Assessment card (when not in assessment mode) + Guardian/Coach Notes */}
         <div className={employee.role === 'Super Scooper' ? 'lg:col-span-1 space-y-6' : 'contents'}>
 
@@ -1946,30 +2528,59 @@ const handleGenerateInvitation = async () => {
                     </div>
                   ) : (
                     <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                        <select
-                          value={assessmentLocation}
-                          onChange={(e) => setAssessmentLocation(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                        >
-                          <option value="9540 Nall Avenue">9540 Nall Avenue</option>
-                          <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
-                          <option value="Remote">Remote</option>
-                        </select>
-                      </div>
-                      <button
-                        onClick={handleStartAssessment}
-                        disabled={startingAssessment}
-                        className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                      >
-                        <ClipboardCheck className="h-5 w-5" />
-                        <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
-                        <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
-                      </button>
+                      {employeeLockStatus?.locked ? (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3">
+                          <div className="flex items-start gap-2">
+                            <Users className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-amber-700">
+                              <span className="font-semibold text-amber-800">{employeeLockStatus.ownerName}</span> is already assessing this employee. Join to document alongside them.
+                            </p>
+                          </div>
+                          <button
+                            onClick={handleJoinSession}
+                            disabled={joiningSession}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm"
+                          >
+                            <Users className="h-4 w-4" />
+                            <span>{joiningSession ? 'Joining...' : 'Join session'}</span>
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                            <select
+                              value={assessmentLocation}
+                              onChange={(e) => setAssessmentLocation(e.target.value)}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                            >
+                              <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                              <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                              <option value="Remote">Remote</option>
+                            </select>
+                          </div>
+                          <button
+                            onClick={handleStartAssessment}
+                            disabled={startingAssessment}
+                            className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                          >
+                            <ClipboardCheck className="h-5 w-5" />
+                            <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                            <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
+            </div>
+          )}
+
+          {/* Informational note: assessment permission granted but no active goals */}
+          {employee.role === 'Super Scooper' && canAssess && isAssessable && activeGoals.length === 0 && !assessmentMode && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-800">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" /></svg>
+              <span>Assign an active goal to enable assessments for this employee.</span>
             </div>
           )}
 
@@ -2028,99 +2639,16 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Guardian Notes Card - in left column for Super Scoopers */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <button
-                onClick={() => setGuardianNotesExpanded(!guardianNotesExpanded)}
-                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
-              >
-                {guardianNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                <Heart className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-                <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).length}
-                </span>
-              </button>
-              {guardianNotesExpanded && (guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
-                <div className="space-y-3 mt-4">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                    const guardian = employees.find(e => e.id === note.guardianId);
-                    return (
-                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-rose-900 text-sm">
-                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <Users className="h-3 w-3 text-rose-400" />
-                          <span className="text-xs text-rose-600">Guardian</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No guardian notes yet</p>
-                </div>
-              ))}
-            </div>
+          {/* Unified notes timeline */}
+          {employee.role === 'Super Scooper' && (
+            <NotesFeed employeeId={employeeId} />
           )}
 
-          {/* Job Coach Notes Card - in left column for Super Scoopers */}
-          {['Administrator', 'Shift Lead', 'Assistant Manager', 'Job Coach'].includes(user?.role || '') &&
-           employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <button
-                onClick={() => setCoachNotesExpanded(!coachNotesExpanded)}
-                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
-              >
-                {coachNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                <FileText className="h-5 w-5 text-indigo-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
-                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {coachNotes.length}
-                </span>
-              </button>
-              {coachNotesExpanded && (loadingCoachNotes ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
-                </div>
-              ) : coachNotes.length > 0 ? (
-                <div className="space-y-3 mt-4">
-                  {coachNotes.map(note => (
-                      <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-indigo-900 text-sm">{note.title}</h3>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <UserCheck className="h-3 w-3 text-indigo-400" />
-                          <span className="text-xs text-indigo-600">
-                            {note.coach_name || 'Job Coach'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No coach notes yet</p>
-                </div>
-              ))}
-            </div>
+          {/* Employee Reviews */}
+          {employee.role === 'Super Scooper' && (
+            <EmployeeReviewsCard employee={employee}>
+              <EmployeeReviews employeeId={employeeId} embedded />
+            </EmployeeReviewsCard>
           )}
 
         </div>
@@ -2219,30 +2747,59 @@ const handleGenerateInvitation = async () => {
                     <h2 className="text-lg font-semibold text-gray-900">Goal Assessment</h2>
                   </div>
                   <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
-                      <select
-                        value={assessmentLocation}
-                        onChange={(e) => setAssessmentLocation(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                      >
-                        <option value="9540 Nall Avenue">9540 Nall Avenue</option>
-                        <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
-                        <option value="Remote">Remote</option>
-                      </select>
-                    </div>
-                    <button
-                      onClick={handleStartAssessment}
-                      disabled={startingAssessment}
-                      className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
-                    >
-                      <ClipboardCheck className="h-5 w-5" />
-                      <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
-                      <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
-                    </button>
+                    {employeeLockStatus?.locked ? (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl flex flex-col gap-3">
+                        <div className="flex items-start gap-2">
+                          <Users className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                          <p className="text-sm text-amber-700">
+                            <span className="font-semibold text-amber-800">{employeeLockStatus.ownerName}</span> is already assessing this employee. Join to document alongside them.
+                          </p>
+                        </div>
+                        <button
+                          onClick={handleJoinSession}
+                          disabled={joiningSession}
+                          className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl font-medium hover:bg-amber-700 transition-colors disabled:opacity-50 text-sm"
+                        >
+                          <Users className="h-4 w-4" />
+                          <span>{joiningSession ? 'Joining...' : 'Join session'}</span>
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
+                          <select
+                            value={assessmentLocation}
+                            onChange={(e) => setAssessmentLocation(e.target.value)}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                          >
+                            <option value="9540 Nall Avenue">9540 Nall Avenue</option>
+                            <option value="4701 Indian Creek Parkway">4701 Indian Creek Parkway</option>
+                            <option value="Remote">Remote</option>
+                          </select>
+                        </div>
+                        <button
+                          onClick={handleStartAssessment}
+                          disabled={startingAssessment}
+                          className="w-full flex items-center justify-center gap-2 px-4 sm:px-6 py-3 bg-green-600 text-white rounded-xl font-medium hover:bg-green-700 transition-colors disabled:opacity-50"
+                        >
+                          <ClipboardCheck className="h-5 w-5" />
+                          <span className="hidden sm:inline">{startingAssessment ? 'Starting...' : 'Start Assessment'}</span>
+                          <span className="sm:hidden">{startingAssessment ? '...' : 'Start'}</span>
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Informational note: assessment permission granted but no active goals (non-Super Scooper) */}
+          {employee.role !== 'Super Scooper' && canAssess && isAssessable && activeGoals.length === 0 && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 flex items-start gap-2 text-sm text-blue-800">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" /></svg>
+              <span>Assign an active goal to enable assessments for this employee.</span>
             </div>
           )}
 
@@ -2315,7 +2872,7 @@ const handleGenerateInvitation = async () => {
                   {activeGoals.length}/2
                 </span>
               </button>
-              {canEdit && activeGoals.length < 2 && (
+              {canAssignGoal && activeGoals.length < 2 && (
                 <button
                   onClick={() => setShowGoalAssignment(true)}
                   className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 bg-blue-50 text-blue-700 border border-blue-200 rounded-xl hover:bg-blue-100 transition-colors text-sm font-medium"
@@ -2401,7 +2958,7 @@ const handleGenerateInvitation = async () => {
                                 <div className="text-xs text-gray-500">consecutive correct</div>
                               </div>
                               
-                              {user?.role === 'Administrator' && (
+                              {canAssignGoal && (
                                 <div className="flex flex-col space-y-1">
                                   <button
                                     onClick={() => handleEditGoal(goal)}
@@ -2436,82 +2993,76 @@ const handleGenerateInvitation = async () => {
                             </div>
                           </div>
 
-                          {/* Goal Steps */}
-                          {/* Goal Steps - Collapsible */}
-                          <div className="mb-4">
-                            <button
-                              onClick={() => {
-                                const newExpanded = { ...expandedGoals };
-                                newExpanded[goal.id] = !newExpanded[goal.id];
-                                setExpandedGoals(newExpanded);
-                              }}
-                              className="flex items-center space-x-2 text-left w-full hover:bg-gray-50 p-2 rounded-xl transition-colors"
-                            >
-                              {expandedGoals[goal.id] ? (
-                                <ChevronDown className="h-4 w-4 text-gray-500" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-gray-500" />
-                              )}
-                              <h4 className="font-medium text-gray-900">Steps ({progress.totalRequired}) - Click to expand</h4>
-                            </button>
-                            
-                            {expandedGoals[goal.id] && (
-                              <div className="mt-4 space-y-2 border-t border-gray-200 pt-4">
-                                {goal.steps.map((step: any) => (
-                                  <div
-                                    key={step.id}
-                                    className="flex items-center space-x-2 text-sm p-3 rounded-xl bg-white border border-gray-200 shadow-sm"
-                                  >
-                                    <span className="font-medium text-gray-700">
-                                      {step.stepOrder}.
-                                    </span>
-                                    <span className="flex-1 text-gray-900">{step.stepDescription}</span>
+                          {/* Goal Steps — always visible with last outcome */}
+                          <div className="border-t border-slate-100 divide-y divide-slate-50 -mx-4 mb-3">
+                            {goal.steps.map((step: any) => {
+                              const lastEntry = stepProgress
+                                .filter(p => p.goalStepId === step.id && p.status === 'submitted')
+                                .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0];
+                              const outcome = lastEntry?.outcome ?? 'na';
+                              const OutcomeIcon =
+                                outcome === 'correct' ? CheckCircle2 :
+                                outcome === 'incorrect' ? XCircle :
+                                outcome === 'verbal_prompt' ? AlertCircle :
+                                MinusCircle;
+                              const iconClass =
+                                outcome === 'correct' ? 'text-emerald-500' :
+                                outcome === 'incorrect' ? 'text-red-400' :
+                                outcome === 'verbal_prompt' ? 'text-amber-400' :
+                                'text-slate-300';
+                              const labelClass =
+                                outcome === 'correct' ? 'text-emerald-600' :
+                                outcome === 'incorrect' ? 'text-red-500' :
+                                outcome === 'verbal_prompt' ? 'text-amber-600' :
+                                'text-slate-400';
+                              const label =
+                                outcome === 'correct' ? 'Correct' :
+                                outcome === 'incorrect' ? 'Incorrect' :
+                                outcome === 'verbal_prompt' ? 'Verbal' : 'N/A';
+                              return (
+                                <div key={step.id} className="px-4 py-2.5">
+                                  <div className="flex items-center gap-3">
+                                    <OutcomeIcon className={`h-3.5 w-3.5 shrink-0 ${iconClass}`} strokeWidth={2} />
+                                    <span className="text-[11px] text-slate-400 font-medium w-4 shrink-0">{step.stepOrder}.</span>
+                                    <span className="text-xs text-slate-700 leading-snug flex-1">{step.stepDescription}</span>
+                                    {step.templateStepId && (
+                                      <StepVideoIcons templateStepId={step.templateStepId} />
+                                    )}
+                                    <span className={`text-[10px] font-medium shrink-0 ${labelClass}`}>{label}</span>
                                   </div>
-                                ))}
-                              </div>
-                            )}
+                                </div>
+                              );
+                            })}
                           </div>
 
-                          {/* Recent Assessments at a Glance */}
-                          <div>
-                            <h4 className="font-medium text-gray-900 mb-2">Recent Assessments</h4>
-                            <div className="flex items-center space-x-1.5">
+                          {/* Recent Sessions — small colored dots */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-400 font-medium">Recent:</span>
+                            <div className="flex items-center gap-1">
                               {(() => {
                                 const sessions = goal.recentSessions ?? [];
                                 const slots = Array.from({ length: 5 }, (_, i) => {
-                                  const sessionIdx = sessions.length - 5 + i;
-                                  return sessionIdx >= 0 ? sessions[sessionIdx] : null;
+                                  const idx = sessions.length - 5 + i;
+                                  return idx >= 0 ? sessions[idx] : null;
                                 });
                                 return slots.map((session, i) => {
-                                  if (!session) {
-                                    return (
-                                      <div
-                                        key={i}
-                                        className="w-8 h-8 rounded-full border-2 border-dashed border-gray-200 bg-gray-50"
-                                        title="No assessment yet"
-                                      />
-                                    );
-                                  }
-                                  const dateLabel = new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-                                  const config = {
-                                    all_correct:  { bg: 'bg-green-100',  border: 'border-green-400',  text: 'text-green-700',  symbol: '✓', label: 'All correct' },
-                                    verbal_prompt:{ bg: 'bg-yellow-100', border: 'border-yellow-400', text: 'text-yellow-700', symbol: '~', label: 'Verbal prompts' },
-                                    incorrect:    { bg: 'bg-red-100',    border: 'border-red-400',    text: 'text-red-700',    symbol: '✗', label: 'Incorrect' },
-                                    na:           { bg: 'bg-gray-100',   border: 'border-gray-300',   text: 'text-gray-400',   symbol: '—', label: 'N/A' },
-                                  }[session.outcome] ?? { bg: 'bg-gray-100', border: 'border-gray-300', text: 'text-gray-400', symbol: '?', label: 'Unknown' };
+                                  const dotColor = !session ? 'bg-slate-200' :
+                                    session.outcome === 'all_correct' ? 'bg-emerald-400' :
+                                    session.outcome === 'verbal_prompt' ? 'bg-amber-400' :
+                                    session.outcome === 'incorrect' ? 'bg-red-400' : 'bg-slate-300';
+                                  const title = !session ? 'No assessment yet' :
+                                    new Date(session.date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
                                   return (
-                                    <div
+                                    <span
                                       key={i}
-                                      className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold border-2 cursor-default ${config.bg} ${config.border} ${config.text}`}
-                                      title={`${dateLabel}: ${config.label}`}
-                                    >
-                                      {config.symbol}
-                                    </div>
+                                      className={`inline-block w-2 h-2 rounded-full ${dotColor}`}
+                                      title={title}
+                                    />
                                   );
                                 });
                               })()}
                               {(goal.recentSessions ?? []).length === 0 && (
-                                <span className="text-xs text-gray-400 ml-1">No assessments yet</span>
+                                <span className="text-xs text-slate-400 ml-1">No assessments yet</span>
                               )}
                             </div>
                           </div>
@@ -2555,7 +3106,16 @@ const handleGenerateInvitation = async () => {
               <div className="text-center py-8 mt-4">
                 <Target className="h-12 w-12 text-gray-300 mx-auto mb-4" />
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No Active Goals</h3>
-                <p className="text-gray-600">No development goals have been assigned yet</p>
+                <p className="text-gray-600 mb-4">No development goals have been assigned yet</p>
+                {canAssignGoal && (
+                  <button
+                    onClick={() => setShowGoalAssignment(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors text-sm font-medium"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Add First Goal
+                  </button>
+                )}
               </div>
             ) : null}
           </div>
@@ -2588,7 +3148,7 @@ const handleGenerateInvitation = async () => {
                       </div>
                       <div className="flex items-center space-x-2">
                         <CheckCircle className="h-6 w-6 text-green-500" />
-                        {user?.role === 'Administrator' && (
+                        {canAssignGoal && (
                           <button
                             onClick={() => handleArchiveGoal(goal.id, goal.title)}
                             className="p-2 text-gray-600 hover:bg-white hover:bg-opacity-50 rounded-xl transition-colors"
@@ -2648,6 +3208,108 @@ const handleGenerateInvitation = async () => {
         onClose={() => setSelectedModalSessionId(null)}
         assessment={selectedModalSessionId ? buildModalData(pastAssessments.find(s => s.id === selectedModalSessionId)!) : null}
       />
+
+      <Modal
+        isOpen={showCoachInvite}
+        onClose={() => {
+          if (!coachInviteSaving) {
+            setShowCoachInvite(false);
+            setCoachInviteError('');
+            setCoachInviteLink('');
+          }
+        }}
+        title="Invite a Job Coach"
+        titleIcon={<Mail className="h-5 w-5 text-green-600" />}
+        size="md"
+      >
+        {coachInviteLink ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="h-5 w-5 text-green-600 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-semibold text-green-900">Coach assigned and invitation ready</p>
+                  <p className="text-sm text-green-800 mt-1">
+                    Share this one-time setup link with the new coach. It expires in 7 days.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input
+                value={coachInviteLink}
+                readOnly
+                className={`flex-1 text-sm ${INPUT_BASE_CLASSES} bg-gray-50`}
+                aria-label="Job coach invitation link"
+              />
+              <button
+                type="button"
+                onClick={handleCopyCoachInviteLink}
+                className="inline-flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 text-sm font-medium whitespace-nowrap"
+              >
+                {coachInviteCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {coachInviteCopied ? 'Copied' : 'Copy link'}
+              </button>
+            </div>
+            {coachInviteError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl">{coachInviteError}</div>}
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => { setShowCoachInvite(false); setCoachInviteLink(''); setCoachInviteError(''); }}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-xl hover:bg-gray-200 text-sm font-medium"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        ) : (
+          <form onSubmit={handleInviteCoach} className="space-y-4">
+            <p className="text-sm text-gray-600">
+              Create a Job Coach account, assign them to {employee.first_name} {employee.last_name}, and generate a setup link.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <input
+                value={coachInviteForm.first_name}
+                onChange={e => setCoachInviteForm(prev => ({ ...prev, first_name: e.target.value }))}
+                className={`text-sm ${INPUT_BASE_CLASSES}`}
+                placeholder="First name *"
+                autoFocus
+              />
+              <input
+                value={coachInviteForm.last_name}
+                onChange={e => setCoachInviteForm(prev => ({ ...prev, last_name: e.target.value }))}
+                className={`text-sm ${INPUT_BASE_CLASSES}`}
+                placeholder="Last name *"
+              />
+            </div>
+            <input
+              type="email"
+              value={coachInviteForm.email}
+              onChange={e => setCoachInviteForm(prev => ({ ...prev, email: e.target.value }))}
+              className={`w-full text-sm ${INPUT_BASE_CLASSES}`}
+              placeholder="Email address *"
+            />
+            {coachInviteError && <div className="text-sm text-red-600 bg-red-50 p-3 rounded-xl">{coachInviteError}</div>}
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => { setShowCoachInvite(false); setCoachInviteError(''); }}
+                className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={coachInviteSaving}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-xl hover:bg-green-700 disabled:opacity-50 text-sm font-medium"
+              >
+                <Mail className="h-4 w-4" />
+                {coachInviteSaving ? 'Creating invite...' : 'Create & invite'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
     </div>
   );
 }

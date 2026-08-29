@@ -1,11 +1,11 @@
 import React from 'react';
 import { Calendar, Users, Target, CheckCircle, Clock, AlertTriangle, TrendingUp } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
 import EmployeeAvatar from './EmployeeAvatar';
 
 export default function Dashboard() {
-  const { employees, developmentGoals, stepProgress } = useData();
+  const { employees, developmentGoals, stepProgress } = useProgressData();
   const { user } = useAuth();
 
   // Calculate dashboard metrics

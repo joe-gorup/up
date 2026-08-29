@@ -6,6 +6,7 @@ import { logger } from "./logger";
 import pinoHttp from "pino-http";
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -20,7 +21,7 @@ const loginLimiter = rateLimit({
 
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 200, // 200 requests per 15 minutes
+  max: 1000,
   message: { error: 'Too many requests. Please try again later.' },
   standardHeaders: true,
   legacyHeaders: false,

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { invalidatePermissionsCache } from '../lib/permissionsCache';
 
 interface User {
   id: string;
@@ -228,6 +229,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     try {
+      invalidatePermissionsCache();
       setUser(null);
       setIsAuthenticated(false);
       clearSession();

@@ -1,9 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X } from 'lucide-react';
-import { useData, Employee } from '../contexts/DataContext';
+import { Target, CheckCircle, AlertCircle, Clock, MessageSquare, Save, ChevronDown, ChevronUp, User, Phone, Heart, Brain, Shield, Zap, AlertTriangle, ChevronRight, FileText, Edit, Plus, Send, Archive, X, Users } from 'lucide-react';
+import { Employee, type StepProgress } from '../contexts/DataContext';
+import { useProgressData } from '../hooks/useProgressData';
 import { useAuth } from '../contexts/AuthContext';
+import { usePermissions } from '../hooks/usePermissions';
 import { useToast } from '../hooks/use-toast';
+import { apiRequest } from '../lib/auth';
 import Timer from './Timer';
+import StepVideoIcons from './StepVideoIcons';
 
 // Move OutcomeSelector outside the main component to prevent recreation on every render
 const OutcomeSelector = ({ 
@@ -97,13 +101,17 @@ interface EmployeeProgressProps {
 
 export default function EmployeeProgress({ employee, assessmentSessionId, shiftId, onViewProfile, onEditEmployee, onComplete }: EmployeeProgressProps) {
   const { user } = useAuth();
-  const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useData();
+  const { canModify } = usePermissions();
+  const canAssignGoal = canModify('goal_assignment');
+  const { developmentGoals, stepProgress, recordStepProgress, saveAssessmentSummary, assessmentSummaries, saveStepProgressDraft, submitStepProgress, updateGoal, archiveGoal, loadUserDrafts } = useProgressData();
   const { toast } = useToast();
   const [outcomes, setOutcomes] = useState<Record<string, { outcome: 'correct' | 'verbal_prompt' | 'na' | 'incorrect'; notes: string }>>({});
   const [showNotes, setShowNotes] = useState<Record<string, boolean>>({});
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({});
   const [timerData, setTimerData] = useState<Record<string, { seconds: number; manuallyEntered: boolean }>>({}); // Timer state for each step
+  const [openTimers, setOpenTimers] = useState<Record<string, boolean>>({}); // Whether the launcher-pill timer card is expanded for a step
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const [presenceInfo, setPresenceInfo] = useState<{ ownerName: string; activeDocumenters: string[] } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [editingGoal, setEditingGoal] = useState<string | null>(null);
   const [editForm, setEditForm] = useState({
@@ -135,6 +143,29 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       loadUserDrafts(user.id);
     }
   }, [user?.id, loadUserDrafts]);
+
+  // Poll presence info every 15 seconds while assessment is active
+  useEffect(() => {
+    if (!assessmentSessionId) return;
+    const fetchPresence = () => {
+      apiRequest(`/api/employees/${employee.id}/lock-status`).then(async res => {
+        if (res.ok) {
+          const data = await res.json();
+          if (data.sessionId) {
+            setPresenceInfo({
+              ownerName: data.ownerName || '',
+              activeDocumenters: data.activeDocumenters || []
+            });
+          } else {
+            setPresenceInfo(null);
+          }
+        }
+      }).catch(() => {});
+    };
+    fetchPresence();
+    const interval = setInterval(fetchPresence, 15000);
+    return () => clearInterval(interval);
+  }, [assessmentSessionId, employee.id]);
   
   const employeeGoals = developmentGoals.filter(goal => 
     goal.employeeId === employee.id && goal.status === 'active'
@@ -336,15 +367,17 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     const completedRequiredSteps = allRequiredSteps.filter(step => {
       const outcome = outcomes[step.id];
       const hasOutcome = outcome && outcome.outcome;
-      
-      // Check timer requirements (commented out as timerType is not in schema yet)
-      // if (step.timerType === 'required') {
-      //   const timerDuration = timerData[step.id]?.seconds || 0;
-      //   if (timerDuration <= 0) {
-      //     return false; // Required timer not completed
-      //   }
-      // }
-      
+
+      // If the template marks the step's timer as required, a non-zero
+      // duration must be recorded (either by running the stopwatch or by
+      // manually entering a time) before the assessment can be submitted.
+      if (step.timerType === 'required') {
+        const timerDuration = timerData[step.id]?.seconds || 0;
+        if (timerDuration <= 0) {
+          return false;
+        }
+      }
+
       return hasOutcome; // Accept any outcome including 'na', 'correct', or 'verbal_prompt'
     });
     
@@ -357,7 +390,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       setIsSaving(true);
       
       // Save all outcomes only for included goals as drafts
-      const allStepProgressData = [];
+      const allStepProgressData: Array<Omit<StepProgress, 'id' | 'date'>> = [];
       const includedEmployeeGoals = employeeGoals.filter(goal => includedGoals[goal.id] !== false);
       
       for (const goal of includedEmployeeGoals) {
@@ -414,11 +447,49 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
   const handleSubmit = async () => {
     try {
       setIsSaving(true);
-      
-      // First save all changes as drafts
-      await handleSaveDraft();
-      
-      // Then submit all drafts
+
+      const includedEmployeeGoals = employeeGoals.filter(goal => includedGoals[goal.id] !== false);
+      const allStepProgressData: Array<Omit<StepProgress, 'id' | 'date'>> = [];
+
+      for (const goal of includedEmployeeGoals) {
+        for (const step of goal.steps) {
+          const outcome = outcomes[step.id];
+          const notes = localNotes[step.id] || '';
+          const timer = timerData[step.id];
+
+          if (outcome || notes.trim() || timer) {
+            allStepProgressData.push({
+              developmentGoalId: goal.id,
+              goalStepId: step.id,
+              employeeId: employee.id,
+              assessmentSessionId: assessmentSessionId,
+              outcome: outcome?.outcome || 'na',
+              notes,
+              completionTimeSeconds: timer?.seconds || undefined,
+              timerManuallyEntered: timer?.manuallyEntered || false
+            });
+          }
+        }
+      }
+
+      if (allStepProgressData.length === 0) {
+        toast({
+          type: 'error',
+          title: 'Nothing to Submit',
+          description: 'Please document at least one step outcome before submitting.',
+          duration: 5000
+        });
+        return;
+      }
+
+      for (const data of allStepProgressData) {
+        await saveStepProgressDraft(data, user?.id || '');
+      }
+
+      if (shiftSummary.trim() && assessmentSessionId) {
+        await saveAssessmentSummary(employee.id, shiftSummary.trim());
+      }
+
       const result = await submitStepProgress(employee.id, user?.id || '', assessmentSessionId);
       
       toast({
@@ -430,7 +501,6 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       
       setHasUnsavedChanges(false);
 
-      // Exit assessment mode after a brief moment so the toast is visible
       setTimeout(() => {
         if (onComplete) onComplete();
       }, 1500);
@@ -439,7 +509,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
       toast({
         type: 'error',
         title: 'Submission Failed',
-        description: 'Error submitting assessment. Please try again.',
+        description: error instanceof Error ? error.message : 'Error submitting assessment. Please try again.',
         duration: 5000
       });
     } finally {
@@ -504,8 +574,20 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
     };
   };
 
+  const presenceNames = presenceInfo
+    ? [presenceInfo.ownerName, ...presenceInfo.activeDocumenters].filter(Boolean)
+    : [];
+
   return (
     <div className="space-y-6">
+      {/* Presence indicator — shown when others are also in this session */}
+      {presenceNames.length > 0 && (
+        <div className="flex items-center gap-2 px-3 py-2 bg-blue-50 border border-blue-100 rounded-xl text-sm text-blue-700">
+          <Users className="h-4 w-4 flex-shrink-0 text-blue-500" />
+          <span>Also here: <span className="font-medium">{presenceNames.join(', ')}</span></span>
+        </div>
+      )}
+
       {/* Development Goals */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200">
         <div className="border-b border-gray-200 px-3 sm:px-6 py-4">
@@ -688,7 +770,7 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                 </div>
                               </div>
                               <div className="flex flex-row sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2">
-                                {user?.role === 'Administrator' && (
+                                {canAssignGoal && (
                                   <div className="flex space-x-2">
                                     <button
                                       onClick={() => handleEditGoal(goal)}
@@ -746,36 +828,81 @@ export default function EmployeeProgress({ employee, assessmentSessionId, shiftI
                                           key={step.id}
                                           className="border border-gray-300 rounded-xl p-3 sm:p-4 bg-white shadow-sm"
                                         >
-                                          <div className="flex items-start justify-between mb-3">
-                                            <div className="flex-1">
-                                              <div className="flex items-center space-x-2 mb-2">
-                                                <span className="font-medium text-gray-900">
-                                                  {step.stepOrder}.
-                                                </span>
-                                                <span className="text-gray-700">{step.stepDescription}</span>
-                                              </div>
-                                            </div>
-                                          </div>
-
-                                          {step.timerType && step.timerType !== 'none' && (
-                                            <div className="mb-4">
-                                              <div className="flex items-center space-x-2 mb-2">
-                                                <Clock className="h-4 w-4 text-blue-500" />
-                                                <span className="text-sm font-medium text-gray-700">
-                                                  Timer {step.timerType === 'required' && <span className="text-red-500">*</span>}
-                                                </span>
-                                              </div>
-                                              <Timer
-                                                onTimeChange={(timeInSeconds, manuallyEntered) => 
-                                                  handleTimerChange(step.id, timeInSeconds, manuallyEntered)
-                                                }
-                                                initialTime={timerData[step.id]?.seconds || 0}
-                                                isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
-                                                disabled={false}
-                                                className="w-full max-w-md"
-                                              />
-                                            </div>
-                                          )}
+                                          {(() => {
+                                            const hasTimer = step.timerType && step.timerType !== 'none';
+                                            const isOpen = hasTimer && !!openTimers[step.id];
+                                            const tSeconds = timerData[step.id]?.seconds || 0;
+                                            const tManual = timerData[step.id]?.manuallyEntered || false;
+                                            const isRequired = step.timerType === 'required';
+                                            const hasTime = tSeconds > 0;
+                                            const mins = Math.floor(tSeconds / 60).toString().padStart(2, '0');
+                                            const secs = (tSeconds % 60).toString().padStart(2, '0');
+                                            return (
+                                              <>
+                                                <div className="flex items-start justify-between gap-2 mb-3">
+                                                  <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center space-x-2 mb-2 flex-wrap gap-y-1">
+                                                      <span className="font-medium text-gray-900">
+                                                        {step.stepOrder}.
+                                                      </span>
+                                                      <span className="text-gray-700">{step.stepDescription}</span>
+                                                      {step.templateStepId && (
+                                                        <StepVideoIcons templateStepId={step.templateStepId} />
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                  {hasTimer && (
+                                                    <button
+                                                      type="button"
+                                                      onClick={() => setOpenTimers(prev => ({ ...prev, [step.id]: !prev[step.id] }))}
+                                                      aria-expanded={isOpen}
+                                                      data-testid={`button-toggle-timer-${step.id}`}
+                                                      className={`shrink-0 inline-flex items-center gap-1.5 h-6 px-2 rounded-full border text-[11px] leading-none transition-colors ${
+                                                        hasTime
+                                                          ? 'border-emerald-300 bg-emerald-50 hover:bg-emerald-100'
+                                                          : 'border-stone-300 bg-white hover:bg-stone-50'
+                                                      }`}
+                                                    >
+                                                      <Clock className={`h-3 w-3 ${hasTime ? 'text-emerald-600' : 'text-blue-500'}`} />
+                                                      <span className="font-medium text-gray-800">
+                                                        {hasTime ? 'Timer' : 'Record time'}
+                                                        {isRequired && <span className="text-red-500 ml-0.5">*</span>}
+                                                      </span>
+                                                      {hasTime && (
+                                                        <span className="font-mono tabular-nums font-semibold text-emerald-800" data-testid={`text-timer-pill-${step.id}`}>
+                                                          {mins}:{secs}
+                                                        </span>
+                                                      )}
+                                                      {tManual && (
+                                                        <span className="text-[9px] font-semibold uppercase tracking-wider text-amber-700 bg-amber-100 px-1 py-0.5 rounded">
+                                                          Manual
+                                                        </span>
+                                                      )}
+                                                      {isOpen ? (
+                                                        <ChevronDown className="h-3 w-3 text-gray-500" />
+                                                      ) : (
+                                                        <ChevronRight className="h-3 w-3 text-gray-500" />
+                                                      )}
+                                                    </button>
+                                                  )}
+                                                </div>
+                                                {hasTimer && (
+                                                  /* Keep Timer mounted so a running clock keeps ticking and saving while collapsed */
+                                                  <div className={isOpen ? 'mb-4 flex justify-end' : 'sr-only'} aria-hidden={!isOpen}>
+                                                    <Timer
+                                                      onTimeChange={(timeInSeconds, manuallyEntered) =>
+                                                        handleTimerChange(step.id, timeInSeconds, manuallyEntered)
+                                                      }
+                                                      initialTime={timerData[step.id]?.seconds || 0}
+                                                      isManuallyEntered={timerData[step.id]?.manuallyEntered || false}
+                                                      disabled={false}
+                                                      className="w-full max-w-[302px]"
+                                                    />
+                                                  </div>
+                                                )}
+                                              </>
+                                            );
+                                          })()}
 
                                           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                                             <OutcomeSelector

@@ -37,6 +37,7 @@ const GUIDE_SECTIONS: Section[] = [
           'Click anywhere on an employee\'s card to open their full profile.',
           'From their profile, select a location and click "Start Assessment" to begin documenting goals.',
           'During an assessment, mark each step as correct or incorrect, then end the session when finished.',
+          'For steps that need a time recorded, tap the "Record time" pill in the top-right of the step to open the timer card. Use Start/Stop to time the step, or tap the pencil icon to enter a time manually.',
           'To remove everyone from your shift list at once, click "Clear All" at the top of the page.'
         ]
       },
@@ -111,6 +112,23 @@ const GUIDE_SECTIONS: Section[] = [
           'Features marked "N/A" are not applicable to that role (e.g., "My Scoopers" only applies to Job Coaches).',
           'Click "Save Changes" to apply your updates, or "Discard" to undo unsaved changes.'
         ]
+      },
+      {
+        page: 'Employee Reviews',
+        icon: ClipboardList,
+        description: 'Document structured mid-year and annual performance reviews for Super Scoopers directly from their employee profile.',
+        steps: [
+          'Open any Super Scooper\'s employee profile.',
+          'Scroll down the left column to find the "Reviews" section, below Job Coach Notes.',
+          'Click "Reviews" to expand the section.',
+          'Click "New Review" to open the review form.',
+          'Select the review type: Mid-Year Review or Annual Review.',
+          'Answer all 6 guided questions covering strengths, growth areas, goal progress, teamwork, achievements, and goals for the next period.',
+          'Click "Save Review" — all 6 questions must be answered before saving is enabled.',
+          'Past reviews appear in the list. Click any review row to expand it and read the full answers.',
+          'Use the pencil icon to edit a review, or the trash icon to delete it. Administrators can edit or delete any review.',
+          'Click "Export CSV" (visible when the Reviews section is expanded) to download all reviews for that employee as a spreadsheet.'
+        ]
       }
     ]
   },
@@ -131,6 +149,7 @@ const GUIDE_SECTIONS: Section[] = [
           'Click anywhere on an employee\'s card to open their full profile.',
           'From a Super Scooper\'s profile, select a location and click "Start Assessment" to begin an assessment session.',
           'During an assessment, mark each goal step as correct or incorrect. The system tracks consecutive correct responses automatically.',
+          'For steps that need a time recorded, tap the "Record time" pill in the top-right of the step to open the timer card. Use Start/Stop to time the step, or tap the pencil icon in the timer card to enter a time manually.',
           'Click "End Assessment" when you\'re done. The progress is saved immediately.',
           'Review past assessments in the employee\'s profile to see their history.',
           'You can also view Guardian Notes and Coach Notes from the employee profile.',
@@ -146,6 +165,19 @@ const GUIDE_SECTIONS: Section[] = [
           'Review summary statistics: active employees, total active goals, mastered goals, and goals near mastery.',
           'Scroll down to see recent activity and identify employees who may need additional support.',
           'Use this as a quick check-in tool before or after your shift.'
+        ]
+      },
+      {
+        page: 'Employee Reviews',
+        icon: ClipboardList,
+        description: 'Write structured mid-year and annual performance reviews for Super Scoopers as part of their ongoing development.',
+        steps: [
+          'Open a Super Scooper\'s employee profile from My Shift or Employee Management.',
+          'Scroll down the left column and click "Reviews" to expand the section.',
+          'Click "New Review" and select Mid-Year or Annual review type.',
+          'Answer all 6 guided questions and click "Save Review" — all fields must be filled.',
+          'You can edit or delete reviews you have written using the pencil and trash icons.',
+          'Click on any past review to expand it and read the full answers.'
         ]
       }
     ]
@@ -237,6 +269,117 @@ const GUIDE_SECTIONS: Section[] = [
 
 const RELEASE_NOTES: { date: string; groups: { area: string; notes: string[] }[] }[] = [
   {
+    date: 'July 16, 2026',
+    groups: [
+      {
+        area: 'Employee Profiles',
+        notes: [
+          '**Employee Reviews** — Administrators, Shift Leads, and Assistant Managers can now write mid-year and annual reviews for Super Scoopers directly from their profile. Reviews are structured around 6 guided questions covering strengths, growth areas, goal progress, teamwork, achievements, and goals for the next review period.',
+          '**CSV Export** — Administrators can export all reviews for an employee as a CSV file directly from the Reviews section on their profile.',
+        ]
+      },
+      {
+        area: 'Assessments',
+        notes: [
+          '**Collaborative session presence** — When another staff member is already documenting a Super Scooper, an amber banner now appears showing who is in the session. You can join and document alongside them at the same time.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          '**Portrait layout** — Employee profile pages now consistently use a single-column layout on portrait screens (phone and tablet) for all role types, switching to the two-column view only in landscape.',
+        ]
+      }
+    ]
+  },
+  {
+    date: 'April 22, 2026',
+    groups: [
+      {
+        area: 'Assessments',
+        notes: [
+          '**Step Timer redesign** — Timer is collapsed behind a "Record time" pill in the step\'s top-right, keeps ticking in the background, has a guarded Reset, and a pencil icon for manual entry on a more compact, right-anchored card.',
+          '**Step timing on goals** — Timing is now available on goal steps that need it and carries over from the goal template automatically.',
+          '**Always-visible step outcomes** — Goal steps stay visible during an assessment with at-a-glance outcome indicators.',
+          '**Clearer submission errors** — Submitting an assessment now shows clearer messages if something needed is missing.',
+        ]
+      },
+      {
+        area: 'Goal Assignment',
+        notes: [
+          '**Bulk Assign Goals** — From My Shift, assign a goal template to one or many employees in a single step, with a "skip duplicates" option and the list filtered to your current shift. Also available from an individual employee profile.',
+          '**Permission-aware** — The Assign Goals button and screen now follow the Goal Assignment permission, so each role only sees what they\'re allowed to use.',
+        ]
+      },
+      {
+        area: 'Training Videos',
+        notes: [
+          '**Training Video library** — Attach one or more videos to any step on a goal template and manage them from the template edit form.',
+          '**In-assessment playback** — Employees see a video icon on steps during assessments to watch training videos without leaving the screen.',
+          '**Share & copy link** — Videos open in a new tab and include a Copy Link option.',
+          '**Guardian access** — Guardians can see training videos for their loved one\'s active goals (Guardian goal list now active-only).',
+          '**Cleaner video UI** — Rounded icons, tidier placement on cards and step rows, and the videos card collapses when just viewing.',
+        ]
+      },
+      {
+        area: 'Certifications',
+        notes: [
+          '**3-state checklist responses** — Certification checklists now use Yes / No / N/A, matching assessments.',
+          '**Step-card redesign** — Checklists were redesigned as step-style cards and are easier to use on mobile.',
+          '**Certification Score History** — Employee profiles now include score history with a breakdown of past attempts.',
+        ]
+      },
+      {
+        area: 'Permissions',
+        notes: [
+          '**Default permissions for new roles** — New user roles automatically receive a default permission set on creation.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          '**Faster, more reliable** — The app loads faster and is less likely to show "too many requests" errors during normal use.',
+        ]
+      }
+    ]
+  },
+  {
+    date: 'March 28, 2026',
+    groups: [
+      {
+        area: 'Permissions',
+        notes: [
+          'Permission settings now fully take effect across the entire app — changes made in Permission Settings are enforced on both the interface and when saving data.',
+          'The "Edit" button on employee profiles now follows the Employee Profiles permission setting, rather than being limited to Administrators.',
+          'Goal edit and archive buttons now follow the Goal Assignment permission setting for Shift Leads and Assistant Managers.',
+          'The "Start Assessment" button now follows the Goal Assessment permission setting.',
+          'The Guardian Notes and Job Coach Notes sections on employee profiles now show or hide based on each role\'s Guardian Notes and Coach Notes permission settings.',
+          'The Contacts edit button now follows the Contacts permission setting.',
+          'The Promotion Certifications section now follows the Promotion Certifications permission setting.',
+          'The "Add Employee" button on the Employee Management page now respects the Employee Profiles permission setting.',
+        ]
+      },
+      {
+        area: 'Employee Profiles',
+        notes: [
+          '"Allergies & Dietary" has been renamed to "Health Conditions" throughout employee profiles for clearer, more inclusive language.',
+        ]
+      },
+      {
+        area: 'My Shift',
+        notes: [
+          'Fixed an issue where Shift Leads and Assistant Managers received an error when trying to add a goal to an employee from My Shift or an employee profile.',
+        ]
+      },
+      {
+        area: 'System',
+        notes: [
+          'Fixed an issue where a high volume of login attempts could temporarily lock all users out of the app instead of only affecting the source of the attempts.',
+        ]
+      }
+    ]
+  },
+  {
     date: 'March 19, 2026',
     groups: [
       {
@@ -299,6 +442,8 @@ const AREA_COLORS: Record<string, string> = {
   'Help Guide': 'bg-purple-50 text-purple-700 border-purple-200',
   'My Shift': 'bg-cyan-50 text-cyan-700 border-cyan-200',
   'Guardian': 'bg-rose-50 text-rose-700 border-rose-200',
+  'Permissions': 'bg-green-50 text-green-700 border-green-200',
+  'System': 'bg-slate-50 text-slate-700 border-slate-200',
 };
 
 function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
@@ -340,12 +485,24 @@ function ReleaseNotesSection({ autoExpand = false }: { autoExpand?: boolean }) {
                       {group.area}
                     </span>
                     <ul className="space-y-2">
-                      {group.notes.map((note, noteIdx) => (
-                        <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
-                          <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                          <span>{note}</span>
-                        </li>
-                      ))}
+                      {group.notes.map((note, noteIdx) => {
+                        const match = note.match(/^\*\*(.+?)\*\*\s*(?:—|-)?\s*(.*)$/);
+                        return (
+                          <li key={noteIdx} className="flex items-start gap-2.5 text-sm text-gray-700">
+                            <CheckCircle className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                            <span>
+                              {match ? (
+                                <>
+                                  <strong className="font-semibold text-gray-900">{match[1]}</strong>
+                                  {match[2] ? <> — {match[2]}</> : null}
+                                </>
+                              ) : (
+                                note
+                              )}
+                            </span>
+                          </li>
+                        );
+                      })}
                     </ul>
                   </div>
                 ))}
