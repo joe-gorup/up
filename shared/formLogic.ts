@@ -50,7 +50,17 @@ function valuesEqual(left: unknown, right: unknown): boolean {
 export function isMeaningfullyAnswered(value: unknown): boolean {
   if (value === null || value === undefined || value === '') return false;
   if (Array.isArray(value)) return value.length > 0;
-  if (typeof value === 'object') return Object.keys(value as object).length > 0;
+  if (typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value', 'signature', 'file_id']) {
+      if (key in record) return isMeaningfullyAnswered(record[key]);
+    }
+    if ('html' in record) {
+      return typeof record.html === 'string' && record.html.replace(/<[^>]*>/g, '').trim().length > 0;
+    }
+    if ('rows' in record) return Array.isArray(record.rows) && record.rows.length > 0;
+    return Object.keys(record).length > 0;
+  }
   return true;
 }
 

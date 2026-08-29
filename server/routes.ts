@@ -1791,6 +1791,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/employees/:employeeId/assessment-history", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee assessment history' });
       const sessions = await db.select({
         id: assessment_sessions.id,
         manager_id: assessment_sessions.manager_id,
@@ -1817,6 +1819,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/employees/:employeeId/assessment-history-details", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee assessment history' });
 
       const sessions = await db.select({
         id: assessment_sessions.id,
@@ -3498,6 +3502,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Object storage routes for employee images
   app.get("/objects/:objectPath(*)", async (req: Request, res: Response) => {
     try {
+      // Form assets are always served through the response-scoped route below,
+      // which checks the employee/form ACL. Never allow the generic object
+      // handler to turn a private form reference into a public download.
+      if (req.path.startsWith('/objects/form-responses/')) {
+        return res.status(404).json({ error: "File not found" });
+      }
       const objectStorageService = new ObjectStorageService();
       const objectFile = await objectStorageService.getObjectEntityFile(req.path);
       objectStorageService.downloadObject(objectFile, res);
@@ -4260,6 +4270,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/certifications/:employeeId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const { employeeId } = req.params;
+      const user = (req as any).user as AuthUser;
+      if (!await canAccessScooper(user, employeeId)) return res.status(403).json({ error: 'You cannot access this employee certifications' });
       const certs = await db.select().from(promotion_certifications)
         .where(eq(promotion_certifications.employee_id, employeeId))
         .orderBy(desc(promotion_certifications.created_at));
@@ -5812,17 +5824,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
     })), questions };
   };
 
-  const validateQuestionValue = (question: any, value: unknown): string | null => {
+  const validateQuestionValue = (question: any, value: unknown, responseId?: string): string | null => {
     if (value === null || value === undefined || value === '') return null;
-    if (question.question_type !== 'scale') return null;
     const config = (question.config_json || {}) as Record<string, unknown>;
-    const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
-    const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
-    const rating = Number(value);
-    if (!Number.isInteger(rating) || rating < min || rating > max) {
-      return `"${question.prompt}" must be a whole-number rating from ${min} to ${max}`;
+    const primitive = value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : value;
+    const getValue = (key: string) => primitive && typeof primitive === 'object' && key in primitive
+      ? (primitive as Record<string, unknown>)[key]
+      : primitive;
+    if (question.question_type === 'number') {
+      const number = getValue('number');
+      const min = Number.isFinite(Number(config.min)) ? Number(config.min) : undefined;
+      const max = Number.isFinite(Number(config.max)) ? Number(config.max) : undefined;
+      if (number === '' || number === null || number === undefined) return null;
+      if (typeof number !== 'number' || !Number.isFinite(number)) return `"${question.prompt}" must be a valid number`;
+      if (min !== undefined && number < min) return `"${question.prompt}" must be at least ${min}`;
+      if (max !== undefined && number > max) return `"${question.prompt}" must be at most ${max}`;
+    }
+    if (question.question_type === 'scale') {
+      const min = Number.isFinite(Number(config.min)) ? Number(config.min) : 1;
+      const max = Number.isFinite(Number(config.max)) ? Number(config.max) : 5;
+      const rating = Number(getValue('value'));
+      if (!Number.isInteger(rating) || rating < min || rating > max) {
+        return `"${question.prompt}" must be a whole-number rating from ${min} to ${max}`;
+      }
+    }
+    if (question.question_type === 'email') {
+      const email = String(getValue('text') || '').trim();
+      if (!email) return null;
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return `"${question.prompt}" must be a valid email address`;
+    }
+    if (question.question_type === 'phone') {
+      const phone = String(getValue('text') || '').trim();
+      if (!phone) return null;
+      if (!/^\+?[0-9().\-\s]{7,}$/.test(phone)) return `"${question.prompt}" must be a valid phone number`;
+    }
+    if (question.question_type === 'time') {
+      const time = String(getValue('time') || '');
+      if (!time) return null;
+      if (!/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(time)) return `"${question.prompt}" must be a valid time`;
+    }
+    if (question.question_type === 'signature' || question.question_type === 'file') {
+      const fileId = typeof primitive === 'object' && primitive ? String((primitive as Record<string, unknown>).file_id || '') : '';
+      const url = typeof primitive === 'object' && primitive ? String((primitive as Record<string, unknown>).url || (primitive as Record<string, unknown>).signature || '') : '';
+      const expectedPrefix = responseId ? `/api/form-responses/${responseId}/assets/` : '';
+      if (!/^[0-9a-f-]{36}$/i.test(fileId) || !expectedPrefix || !url.startsWith(expectedPrefix) || !url.endsWith(fileId)) {
+        return `"${question.prompt}" contains an invalid ${question.question_type} reference`;
+      }
+    }
+    if (question.question_type === 'repeatable_group') {
+      const rows = typeof primitive === 'object' && primitive ? (primitive as Record<string, unknown>).rows : null;
+      if (!Array.isArray(rows)) return `"${question.prompt}" must contain a list of rows`;
+      const fields = Array.isArray(config.fields) ? config.fields as Array<Record<string, unknown>> : [];
+      for (const row of rows) {
+        if (!row || typeof row !== 'object' || !row.sub_answers || typeof row.sub_answers !== 'object') return `"${question.prompt}" contains an invalid row`;
+        for (const field of fields) {
+          const fieldType = field.type;
+          const fieldValue = (row.sub_answers as Record<string, unknown>)[String(field.key)];
+          if ((fieldType === 'email' || fieldType === 'phone') && fieldValue) {
+            const valid = fieldType === 'email'
+              ? /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(fieldValue))
+              : /^\+?[0-9().\-\s]{7,}$/.test(String(fieldValue));
+            if (!valid) return `"${question.prompt}" contains an invalid ${fieldType}`;
+          }
+        }
+      }
+    }
+    if (question.question_type === 'rich_text') {
+      const html = String(getValue('html') || '');
+      if (html.length > 50000) return `"${question.prompt}" is too long`;
+      if (/<\s*script\b|on[a-z]+\s*=/i.test(html)) return `"${question.prompt}" contains unsupported markup`;
     }
     return null;
+  };
+
+  const applySharedRoiConsent = async (tx: any, responseSet: any, answers: any[]) => {
+    const answerByKey = new Map<string, any>();
+    const snapshotQuestions: any[] = Array.isArray(responseSet.template_snapshot_json?.questions)
+      ? responseSet.template_snapshot_json.questions
+      : [];
+    const questionById = new Map(snapshotQuestions.map(question => [question.id, question]));
+    for (const answer of answers) {
+      const question = questionById.get(answer.question_id);
+      if (question) answerByKey.set(question.stable_key, answer.value_json);
+    }
+    const primitive = (value: any) => value && typeof value === 'object' && !Array.isArray(value)
+      ? value.selected ?? value.value ?? value.text ?? value
+      : value;
+    const consentType = primitive(answerByKey.get('consent_type'));
+    if (consentType !== 'release_all') {
+      throw Object.assign(new Error('Authorization is required to complete ROI consent'), { status: 400 });
+    }
+    const signature = answerByKey.get('signature') as Record<string, unknown> | undefined;
+    const providersValue = answerByKey.get('service_providers') as Record<string, unknown> | undefined;
+    const providers = Array.isArray(providersValue?.rows)
+      ? providersValue.rows
+        .map((row: any) => row?.sub_answers || {})
+        .filter((provider: any) => String(provider.name || '').trim())
+        .map((provider: any) => ({ name: String(provider.name).trim(), type: String(provider.type || '').trim() }))
+      : [];
+    const employeeUpdate = {
+      roi_status: true,
+      roi_signed_at: new Date(),
+      roi_signature: String(signature?.signature || ''),
+      roi_consent_type: String(consentType),
+      has_service_provider: providers.length > 0,
+      service_providers: providers,
+      updated_at: new Date(),
+    };
+    await tx.update(employees).set(employeeUpdate).where(eq(employees.id, responseSet.employee_id));
+    const [employee] = await tx.select({ role: employees.role }).from(employees).where(eq(employees.id, responseSet.employee_id)).limit(1);
+    if (employee?.role === 'Guardian') {
+      const relationships = await tx.select().from(guardian_relationships).where(eq(guardian_relationships.guardian_id, responseSet.employee_id));
+      for (const relationship of relationships) {
+        await tx.update(employees).set({
+          roi_status: true,
+          roi_signed_at: employeeUpdate.roi_signed_at,
+          has_service_provider: employeeUpdate.has_service_provider,
+          service_providers: employeeUpdate.service_providers,
+          updated_at: employeeUpdate.updated_at,
+        }).where(eq(employees.id, relationship.scooper_id));
+      }
+    }
   };
 
   const templateAllowsFilling = (template: any, role: string) => {
@@ -5864,6 +5988,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       logger.error({ error }, 'Failed to load profile form template');
       res.status(500).json({ error: 'Failed to load form template' });
+    }
+  });
+
+  app.get("/api/form-templates/for-employee", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const employeeId = typeof req.query.employee_id === 'string' ? req.query.employee_id : '';
+      if (!employeeId) return res.status(400).json({ error: 'employee_id is required' });
+      if (!await canViewScooperForms(user, employeeId)) return res.status(403).json({ error: 'You cannot view forms for this employee' });
+
+      const templates = await db.select().from(form_templates)
+        .where(and(inArray(form_templates.form_type, ['custom', 'roi_onboarding']), eq(form_templates.status, 'active')))
+        .orderBy(desc(form_templates.updated_at));
+      const hydrated = await Promise.all(templates.map(async template => ({
+        ...(await hydrateFormTemplate(template.id)),
+        can_fill: templateAllowsFilling(template, user.role),
+      })));
+      res.json(hydrated);
+    } catch (error) {
+      logger.error({ error }, 'Failed to load employee custom form templates');
+      res.status(500).json({ error: 'Failed to load custom form templates' });
     }
   });
 
@@ -6073,6 +6218,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return { ...responseSet, template, answers };
   };
 
+  const formAssetUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+  });
+
+  const formAssetResponse = async (responseId: string, assetId: string, user: AuthUser, res: Response) => {
+    if (!/^[0-9a-f-]{36}$/i.test(assetId)) return res.status(404).json({ error: 'File not found' });
+    const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, responseId)).limit(1);
+    if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+    const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+    if (!responseTemplate || !await canViewTemplateResponse(user, responseSet.employee_id, responseTemplate)) {
+      return res.status(403).json({ error: 'You cannot view this form asset' });
+    }
+    const answers = await db.select().from(form_answers).where(eq(form_answers.response_set_id, responseId));
+    const hasReference = answers.some(answer => {
+      const value = answer.value_json as any;
+      return value && typeof value === 'object' && value.file_id === assetId;
+    });
+    if (!hasReference) return res.status(404).json({ error: 'File not found' });
+    const objectStorageService = new ObjectStorageService();
+    const objectFile = await objectStorageService.getObjectEntityFile(`/objects/form-responses/${responseId}/${assetId}`);
+    objectStorageService.downloadObject(objectFile, res);
+    return res;
+  };
+
+  app.post("/api/form-responses/:responseId/assets", authenticateToken, formAssetUpload.single('asset'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
+      if (!responseSet) return res.status(404).json({ error: 'Form response not found' });
+      const responseTemplate: any = responseSet.template_snapshot_json || await hydrateFormTemplate(responseSet.template_id);
+      if (!responseTemplate || !await canFillTemplateResponse(user, responseSet.employee_id, responseTemplate)) return res.status(403).json({ error: 'You cannot upload assets for this response' });
+      if (!templateAllowsFilling(responseTemplate, user.role)) return res.status(403).json({ error: 'Your role is not allowed to fill this form' });
+      if (responseSet.status === 'submitted' && user.role !== 'Administrator') return res.status(409).json({ error: 'Submitted responses are locked' });
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: 'No file uploaded' });
+      const assetType = req.body?.asset_type === 'signature' ? 'signature' : 'file';
+      if (assetType === 'signature' && file.mimetype !== 'image/png') return res.status(400).json({ error: 'Signatures must be PNG images' });
+      const objectStorageService = new ObjectStorageService();
+      const privateDir = objectStorageService.getPrivateObjectDir();
+      if (!privateDir) return res.status(503).json({ error: 'Object storage not configured' });
+      const fileId = crypto.randomUUID();
+      const objectPath = `${privateDir}/form-responses/${responseSet.id}/${fileId}`;
+      const { bucketName, objectName } = parseCoachFilePath(objectPath);
+      await objectStorageClient.bucket(bucketName).file(objectName).save(file.buffer, {
+        contentType: file.mimetype,
+        metadata: { cacheControl: 'private, no-store' },
+      });
+      res.status(201).json({
+        file_id: fileId,
+        file_name: assetType === 'signature' ? 'signature.png' : file.originalname,
+        content_type: file.mimetype,
+        url: `/api/form-responses/${responseSet.id}/assets/${fileId}`,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to upload form asset');
+      res.status(500).json({ error: 'Failed to upload form asset' });
+    }
+  });
+
+  app.get("/api/form-responses/:responseId/assets/:assetId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      await formAssetResponse(req.params.responseId, req.params.assetId, (req as any).user as AuthUser, res);
+    } catch (error) {
+      logger.error({ error }, 'Failed to download form asset');
+      res.status(404).json({ error: 'File not found' });
+    }
+  });
+
   app.get("/api/form-responses/:responseId", authenticateToken, async (req: Request, res: Response) => {
     try {
       const [responseSet] = await db.select().from(form_response_sets).where(eq(form_response_sets.id, req.params.responseId)).limit(1);
@@ -6165,7 +6379,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const question = questionMap.get(answer.question_id);
         if (!question) continue;
          if (!isQuestionVisible(question, lookup)) continue;
-        const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null);
+         const validationError = validateQuestionValue(question, answer.value_json ?? answer.value ?? null, responseSet.id);
         if (validationError) return res.status(400).json({ error: validationError });
       }
       if (editingSubmitted) {
@@ -6283,6 +6497,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (missing.length) {
           throw Object.assign(new Error('Complete all required questions before submitting'), { status: 400, missing });
         }
+         for (const answer of answers) {
+           const question = questionsById.get(answer.question_id);
+           if (!question) continue;
+           const validationError = validateQuestionValue(question, answer.value_json, responseSet.id);
+           if (validationError) throw Object.assign(new Error(validationError), { status: 400 });
+         }
+         if (responseTemplate.form_type === 'roi_onboarding') {
+           await applySharedRoiConsent(tx, responseSet, answers);
+         }
         for (const answer of answers) {
           const question = questionsById.get(answer.question_id);
           if (!question) continue;

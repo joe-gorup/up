@@ -73,6 +73,31 @@ describe('Phase 3 chip display', () => {
   });
 });
 
+describe('Phase 4 advanced answer contracts', () => {
+  test('treats empty structured advanced values as unanswered', () => {
+    assert.equal(isMeaningfullyAnswered({ number: null }), false);
+    assert.equal(isMeaningfullyAnswered({ text: '' }), false);
+    assert.equal(isMeaningfullyAnswered({ time: '' }), false);
+    assert.equal(isMeaningfullyAnswered({ html: '<p></p>' }), false);
+    assert.equal(isMeaningfullyAnswered({ html: '<p>Notes</p>' }), true);
+    assert.equal(isMeaningfullyAnswered({ rows: [] }), false);
+    assert.equal(isMeaningfullyAnswered({ rows: [{ sub_answers: { name: 'Provider' } }] }), true);
+  });
+
+  test('keeps advanced renderer and private asset contracts present', () => {
+    const component = readFileSync('client/src/components/FormsAndReviews.tsx', 'utf8');
+    const routes = readFileSync('server/routes.ts', 'utf8');
+    assert.match(component, /RichTextControl/);
+    assert.match(component, /RepeatableGroupControl/);
+    assert.match(component, /SignatureControl/);
+    assert.match(component, /\/api\/form-responses\/\$\{responseId\}\/assets/);
+    assert.match(routes, /formAssetUpload\.single\('asset'\)/);
+    assert.match(routes, /roi_onboarding/);
+    assert.match(routes, /validateQuestionValue\(question, answer\.value_json, responseSet\.id\)/);
+    assert.match(routes, /form-responses\/\$\{responseId\}\/\$\{assetId\}/);
+  });
+});
+
 describe('Coach Check-In migration contract', () => {
   test('keeps the shared response path and legacy history path present', () => {
     const component = readFileSync('client/src/components/CoachCheckin.tsx', 'utf8');

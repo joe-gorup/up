@@ -1,8 +1,8 @@
 # Product Requirements Document
-## Golden Scoop — Unique Pathway Employee Development System
+## Golden Scoop — Unique Pathway Employee Development & Support System
 
 ### Executive Summary
-Golden Scoop (branded as "Unique Pathway by thegoldenscoop.org") is a web-based employee development and goal-tracking application built for an ice cream shop that employs people with disabilities. It lets managers, job coaches, and administrators document each employee's progress on structured, step-by-step skill goals through scheduled assessment sessions. The system is live in production with real data since September 2025.
+Golden Scoop (branded as "Unique Pathway by thegoldenscoop.org") is a web-based employee development and support-profile application built for an ice cream shop that employs people with disabilities. It lets managers, job coaches, guardians, and administrators document employee progress on structured, step-by-step skill goals; manage support information; capture reviews, certifications, and check-ins; and share authorized notes. The system is live in production with real data since September 2025.
 
 ---
 
@@ -61,7 +61,10 @@ To provide a digital solution for tracking employee skill development, documenti
 - Interests and motivators
 - Challenges
 - Regulation strategies (de-escalation / support strategies)
+- Accommodations (dedicated field, separate from regulation strategies)
 - Service provider tracking (flag + provider name, type, and contact details)
+- Configurable Support Information labels managed through the Profile Catalog
+- Reusable contact relationship options managed by administrators
 
 **ROI Compliance Flow**
 - Legal release-of-information text displayed inline
@@ -71,6 +74,7 @@ To provide a digital solution for tracking employee skill development, documenti
 - Consent toggle checkboxes per the legal text
 - Digital signature capture
 - ROI status and signed-at timestamp stored on the employee record
+- Existing legacy onboarding remains the compliance gate. A limited shared `roi_onboarding` form is also available for consent, signature, and service-provider capture; it does not replace the legacy flow or act as a legal-document CMS.
 
 **Promotion Certifications**
 - Track Mentor and Shift Lead certifications
@@ -116,6 +120,7 @@ To provide a digital solution for tracking employee skill development, documenti
 - Any authorized user can join the existing session and document alongside the session owner
 - No hard lock / no blocked access — collaborative model
 - Presence is polled every 15 seconds; an "Also here: [Name]" badge appears inside the assessment for awareness
+- Administrators can take over an active session when needed; the previous owner and takeover time are retained
 - Sessions expire automatically after 30 minutes of inactivity; abandoned sessions are cleaned up
 
 **Session Locations**
@@ -171,6 +176,7 @@ To provide a digital solution for tracking employee skill development, documenti
 
 **Check-ins**
 - Structured visit notes: date, type, notes, next steps
+- Coach check-ins use the shared form-response path when an active `coach_checkin` template exists, while legacy check-in history remains readable during migration
 
 **Coach Notes**
 - Rich text notes per scooper (title + formatted content)
@@ -189,9 +195,10 @@ To provide a digital solution for tracking employee skill development, documenti
 - Training videos attached to goal steps are visible to guardians (read-only, watch only)
 
 **Guardian Notes**
-- One note per guardian-scooper pair (upsert behavior)
-- Only the creating guardian can edit or delete their note
-- Administrators, Shift Leads, and Job Coaches can view all guardian notes for a scooper
+- Guardian updates appear in the shared, profile-scoped notes timeline
+- Authors can edit their own notes; Administrators can delete any note
+- Administrators, Shift Leads, Job Coaches, and linked guardians see only notes allowed by the scooper's access policy
+- The legacy guardian-note endpoint remains available for compatibility with existing records
 
 ### 2.10 Video Links on Goals & Steps
 **Priority: Medium**
@@ -222,6 +229,28 @@ To provide a digital solution for tracking employee skill development, documenti
 - Client-side profile caching prevents re-fetching data within a session
 - Dashboard: key metrics, active goal summary, employee progress overview
 
+### 2.13 Forms & Reviews
+**Priority: High**
+
+- Administrators manage form templates from the Forms & Reviews area: create, edit, duplicate, archive, and soft-deactivate templates, sections, questions, and options
+- Questions can be reordered within sections; sections can be reordered; stable keys preserve meaning when wording changes
+- Supported answer types include short and long text, yes/no, single select, multi-select, date, date/time, rich text, number, scale, email, phone, time, signature, file, and repeatable group
+- Templates support configurable fill roles, required questions, conditional visibility, conditional required rules, option display styles, validation ranges, and help text
+- Seeded templates support mid-year reviews, Mentor certification, Shift Lead certification, Coach Check-ins, and custom forms
+- Certification submissions are linked to the existing Mentor and Shift Lead certification history; legacy checklist data remains readable
+- Employees can save drafts, resume them, submit responses, and view submitted responses as read-only
+- Submitted answers retain a creation-time template snapshot so later wording or option changes do not rewrite historical responses
+- File and signature answers use private, response-scoped object-storage references served through authenticated routes; raw base64 or public object URLs are not stored as response values
+- A limited `roi_onboarding` shared form captures consent, signature, and service-provider details without replacing the existing legacy ROI onboarding flow or becoming a legal-document CMS
+
+### 2.14 Profile Catalog & Support Configuration
+**Priority: Medium**
+
+- Administrators manage Support Information field labels, descriptions, order, and active/inactive status from the Profile Catalog
+- Existing values are retained when a field is deactivated
+- Administrators manage reusable contact relationship options; inactive options remain valid for existing contacts but are hidden from new edits
+- Profile catalog values use bounded string lists for the current support-information fields, including interests, challenges, regulation strategies, and accommodations
+
 ---
 
 ## 3. Technical Requirements
@@ -240,7 +269,7 @@ To provide a digital solution for tracking employee skill development, documenti
 ### 3.2 Database Schema (Production Tables)
 
 **employees** — unified user + employee record  
-id, name (legacy required), first_name, last_name, email, role, profile_image_url, is_active, has_system_access, password, last_login, date_of_birth, roi_status, roi_signed_at, roi_signature, roi_consent_type, roi_no_release_details, roi_guardian fields, has_service_provider, service_providers (jsonb), allergies (jsonb), emergency_contacts (jsonb), interests_motivators (jsonb), challenges (jsonb), regulation_strategies (jsonb), created_at, updated_at
+id, name (legacy required), first_name, last_name, email, role, profile_image_url, is_active, has_system_access, password, last_login, date_of_birth, roi_status, roi_signed_at, roi_signature, roi_consent_type, roi_no_release_details, roi_guardian fields, has_service_provider, service_providers (jsonb), allergies (jsonb), emergency_contacts (jsonb), interests_motivators (jsonb), challenges (jsonb), regulation_strategies (jsonb), accommodations (jsonb), created_at, updated_at
 
 **goal_templates**  
 id, name, goal_statement, default_mastery_criteria, relative_target_duration, default_target_date, status, created_at, updated_at
@@ -263,10 +292,18 @@ id, manager_id (fk), date, location, employee_ids (jsonb array), notes, status (
 **assessment_summaries**  
 id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, updated_at
 
-**Additional tables (some not yet in production)**
+**Forms & Reviews tables**
+- form_templates — named, versioned templates with fill-role settings
+- form_sections — ordered template sections
+- form_questions — stable-key questions, configuration, conditions, and status
+- form_response_sets — employee-scoped draft/submitted response containers
+- form_answers — structured answers with creation-time snapshots
+
+**Support, access, and communication tables**
 - coach_assignments — links coaches to their Super Scoopers
 - guardian_relationships — links guardians to their loved ones
-- guardian_notes — one note per guardian-scooper pair
+- guardian_notes — compatibility storage for guardian notes
+- profile_notes — unified profile notes and timeline entries
 - account_invitations — email-based setup tokens
 - coach_checkins — structured visit notes
 - coach_files — uploaded documents
@@ -274,6 +311,10 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 - promotion_certifications — mentor/shift lead certs
 - employee_contacts — unified contact management
 - role_permissions — configurable feature × role permission matrix
+- profile_field_definitions — administrator-managed Support Information fields
+- option_lists / option_list_items — reusable contact relationship options
+- videos, goal_template_videos, goal_template_step_videos — training video links and placement
+- employee_reviews — employee review records
 
 ### 3.3 Key File Locations
 
@@ -288,6 +329,11 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 | Assessment UI | client/src/components/EmployeeProgress.tsx |
 | Permission hook | client/src/hooks/usePermissions.ts |
 | Client-side cache | client/src/lib/apiCache.ts |
+| Forms & Reviews UI | client/src/components/FormsAndReviews.tsx |
+| Employee form responses | client/src/components/EmployeeCustomFormsCard.tsx |
+| Certification form flow | client/src/components/CertificationTemplateFlow.tsx |
+| Shared notes timeline | client/src/components/NotesFeed.tsx |
+| Profile Catalog UI | client/src/components/ProfileCatalogManager.tsx |
 | App router | client/src/App.tsx |
 
 ### 3.4 Performance Requirements
@@ -303,6 +349,8 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 - Role-restricted endpoints use requireRole() or requirePermission() middleware
 - Job Coach endpoints verify coach-to-employee assignment before allowing access
 - Guardian endpoints verify guardian-to-scooper relationship
+- Form response reads, writes, and private assets are scoped to the employee response and authorized profile access
+- Form file and signature objects are private; generic object access to form-response paths is blocked
 - All DELETE endpoints protected by role and ownership checks
 - No bulk-delete operations on core tables
 
@@ -351,16 +399,17 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 | Role | Employees | Assessments | Goals | Coach Features | Guardian Features | Admin Settings |
 |------|-----------|-------------|-------|---------------|-------------------|----------------|
 | Administrator | All | All | All | All | All | Yes |
-| Shift Lead | All | Own + join | All | View | View | No |
+| Shift Lead | All | Own + join | All | View | View | No; form access is template/permission scoped |
 | Assistant Manager | All | Own + join | All | View | View | No |
-| Job Coach | Assigned only | Own only | View assigned | Full | No | No |
-| Guardian | Linked only | View only | View linked | No | Own notes | No |
-| Super Scooper | Own profile | No | View own | No | No | No |
+| Job Coach | Assigned only | Own only | View assigned | Check-ins, notes, files | No | No |
+| Guardian | Linked only | View only | View linked | No | Shared notes when permitted | No |
+| Super Scooper | Own profile | No | View own | No | Limited ROI form only where explicitly enabled | No |
 
 ### 5.3 Assessment Session Rules
 - One active session per employee at a time
 - Any authorized user can join an existing session (collaborative model)
 - Session owner renews the 30-minute lock; joiners write step progress without renewing
+- Administrators can take over an active session and receive a renewed 30-minute lock
 - Sessions auto-expire and are marked abandoned after 30 minutes with no renewal
 - Step progress is immutable once submitted (status: submitted)
 
@@ -368,6 +417,8 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 - Only the data creator or an Administrator can delete records
 - Core tables (employees, development_goals, step_progress, goal_templates, assessment_sessions) use soft deletes (status flags) wherever possible
 - Hard deletes only on peripheral records (coach files, invitations, certifications)
+- Form templates, questions, sections, and options are deactivated or archived rather than removed when history depends on them
+- Historical form responses remain readable from their saved template snapshots
 
 ---
 
@@ -389,23 +440,23 @@ id, employee_id (fk), assessment_session_id (fk), date, summary, created_at, upd
 - Push notifications or real-time WebSocket updates
 - Scheduling or shift calendar integration
 - Payroll system integration
-- Multi-location support (single shop currently)
+- Location administration, scheduling, and calendar integration; assessments currently use a fixed location list
 - Native mobile app (web-responsive only)
 - Automated goal recommendations
-- Admin takeover of sessions (non-admin users see join-only option; admin takeover not built)
 
 ---
 
-## 8. Current Production Stats (as of July 2026)
+## 8. Current Production Baseline (as of July 2026)
 - 57 employees
 - 85 goal templates with 1,377 steps
 - 24 active development goals
 - 430 step progress records
 - 81 assessment sessions
 - Live since September 2025
+- Counts are operational baseline figures and should be refreshed separately from this feature requirements document.
 
 ---
 
-*Document Version: 2.0*
-*Last Updated: July 2026*
-*Status: Live in production — collaborative assessment, ROI compliance, configurable permissions, coach/guardian features all shipped*
+*Document Version: 2.1*
+*Last Updated: August 28, 2026*
+*Status: Live in production — collaborative assessments, ROI compliance, configurable permissions, Forms & Reviews, profile catalog, shared notes, and coach/guardian features are shipped*

@@ -387,6 +387,63 @@ const seeds: TemplateSeed[] = [
       },
     ],
   },
+  {
+    name: 'ROI Consent (Shared Form)',
+    description: 'Limited consent, signature, and service-provider capture. The legacy onboarding document remains the authoritative legal workflow.',
+    form_type: 'roi_onboarding',
+    settings_json: {
+      allowed_fill_roles: ['Administrator', 'Super Scooper', 'Guardian'],
+      lock_on_submit: true,
+      allow_draft: true,
+    },
+    sections: ['Consent', 'Signature & Providers'],
+    questions: [
+      {
+        section: 'Consent',
+        stable_key: 'consent_type',
+        prompt: 'Do you authorize The Golden Scoop to exchange the listed information?',
+        question_type: 'single_select',
+        config_json: {
+          required: true,
+          display: { style: 'chips', show_icons: false },
+          options: [
+            { key: 'release_all', label: 'Yes, authorize release' },
+            { key: 'no_release', label: 'No, do not authorize' },
+          ],
+        },
+      },
+      {
+        section: 'Consent',
+        stable_key: 'no_release_details',
+        prompt: 'Are there records you do not consent to releasing?',
+        question_type: 'long_text',
+        config_json: {
+          show_when: { question_stable_key: 'consent_type', operator: 'equals', value: 'release_all' },
+        },
+      },
+      {
+        section: 'Signature & Providers',
+        stable_key: 'signature',
+        prompt: 'Signature',
+        help_text: 'Draw your signature below. It is stored as a private file reference.',
+        question_type: 'signature',
+        config_json: { required: true },
+      },
+      {
+        section: 'Signature & Providers',
+        stable_key: 'service_providers',
+        prompt: 'Service providers or authorized agencies',
+        help_text: 'Add any agency or person The Golden Scoop may contact.',
+        question_type: 'repeatable_group',
+        config_json: {
+          fields: [
+            { key: 'name', label: 'Agency or person', type: 'short_text' },
+            { key: 'type', label: 'Type or relationship', type: 'short_text' },
+          ],
+        },
+      },
+    ],
+  },
 ];
 
 async function seedTemplate(seed: TemplateSeed) {

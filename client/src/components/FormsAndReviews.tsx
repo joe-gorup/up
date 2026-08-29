@@ -1,6 +1,7 @@
 import {
-  Archive, ArrowDown, ArrowLeft, ArrowUp, Check, ClipboardCheck, Copy, Edit, Eye,
-  FileText, GripVertical, Plus, Save, Send, Settings2, Trash2, X,
+  Archive, ArrowDown, ArrowLeft, ArrowUp, Bold, Check, ClipboardCheck, Copy, Edit, Eye,
+  FileText, GripVertical, Italic, List, ListOrdered, Minus, PenLine, Plus, Save, Send,
+  Settings2, Trash2, Underline, Upload, X,
 } from 'lucide-react';
 import { apiRequest } from '../lib/auth';
 import { useAuth } from '../contexts/AuthContext';
@@ -10,6 +11,10 @@ import AppSelect from './ui/AppSelect';
 import Modal from './ui/Modal';
 import { isQuestionRequired, isQuestionVisible, normalizeFormOption } from '@shared/formLogic';
 import React, { useEffect, useMemo, useState } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import UnderlineExtension from '@tiptap/extension-underline';
+import Placeholder from '@tiptap/extension-placeholder';
 
 type QuestionType =
   | 'free_text' | 'long_text' | 'yes_no' | 'single_select' | 'multi_select'
@@ -40,15 +45,15 @@ const questionTypes: Array<{ value: QuestionType; label: string; hint: string }>
   { value: 'date_time', label: 'Date & time', hint: 'Date and time' },
   { value: 'section_header', label: 'Section header', hint: 'Read-only heading' },
   { value: 'help_text', label: 'Help text', hint: 'Read-only guidance' },
-  { value: 'rich_text', label: 'Rich text', hint: 'Coming soon' },
-  { value: 'number', label: 'Number', hint: 'Coming soon' },
+  { value: 'rich_text', label: 'Rich text', hint: 'Formatted response' },
+  { value: 'number', label: 'Number', hint: 'Numeric response' },
   { value: 'scale', label: 'Scale', hint: 'Numeric range' },
-  { value: 'email', label: 'Email', hint: 'Coming soon' },
-  { value: 'phone', label: 'Phone', hint: 'Coming soon' },
-  { value: 'time', label: 'Time', hint: 'Coming soon' },
-  { value: 'signature', label: 'Signature', hint: 'Coming soon' },
-  { value: 'file', label: 'File', hint: 'Coming soon' },
-  { value: 'repeatable_group', label: 'Repeatable group', hint: 'Coming soon' },
+  { value: 'email', label: 'Email', hint: 'Validated email address' },
+  { value: 'phone', label: 'Phone', hint: 'Validated phone number' },
+  { value: 'time', label: 'Time', hint: 'Time of day' },
+  { value: 'signature', label: 'Signature', hint: 'Drawn signature' },
+  { value: 'file', label: 'File', hint: 'Secure attachment' },
+  { value: 'repeatable_group', label: 'Repeatable group', hint: 'Add multiple rows' },
   { value: 'divider', label: 'Divider', hint: 'Coming soon' },
 ];
 
@@ -98,7 +103,7 @@ export function optionParts(option: any): { key: string; label: string; icon?: s
 
 export function answerPrimitive(value: any): any {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value']) {
+    for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value', 'html', 'signature', 'file_id']) {
       if (key in value) return value[key];
     }
   }
@@ -124,6 +129,17 @@ function QuestionEditor({ question, availableQuestions, onChange, onRemove, onMo
     else delete next[name];
     onChange({ ...question, config_json: next });
   };
+  const repeatableFields = Array.isArray(config.fields) ? config.fields : [];
+  const updateRepeatableFields = (text: string) => onChange({
+    ...question,
+    config_json: {
+      ...config,
+      fields: text.split('\n').map(line => {
+        const [key, label, type] = line.split('|').map(part => part.trim());
+        return key ? { key, label: label || key, type: type || 'short_text' } : null;
+      }).filter(Boolean),
+    },
+  });
   const renderCondition = (name: 'show_when' | 'required_when', label: string) => {
     const condition = (config[name] || {}) as Record<string, any>;
     const operator = condition.operator || 'equals';
@@ -220,6 +236,31 @@ function QuestionEditor({ question, availableQuestions, onChange, onRemove, onMo
              <div className="space-y-2 border-t border-slate-100 pt-3">
                {renderCondition('show_when', 'Show this question when')}
                {renderCondition('required_when', 'Require this question when')}
+             </div>
+           )}
+           {question.question_type === 'number' && (
+             <div className="grid gap-2 sm:grid-cols-3">
+               <input type="number" value={config.min ?? ''} onChange={e => updateConfig({ min: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Minimum (optional)" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
+               <input type="number" value={config.max ?? ''} onChange={e => updateConfig({ max: e.target.value === '' ? undefined : Number(e.target.value) })} placeholder="Maximum (optional)" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
+               <input type="number" value={config.step ?? 'any'} onChange={e => updateConfig({ step: e.target.value === '' ? 'any' : Number(e.target.value) })} placeholder="Step" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
+             </div>
+           )}
+           {question.question_type === 'scale' && (
+             <div className="grid gap-2 sm:grid-cols-2">
+               <input type="number" value={config.min ?? 1} onChange={e => updateConfig({ min: Number(e.target.value) })} placeholder="Minimum" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
+               <input type="number" value={config.max ?? 5} onChange={e => updateConfig({ max: Number(e.target.value) })} placeholder="Maximum" className="rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500" />
+             </div>
+           )}
+           {question.question_type === 'repeatable_group' && (
+             <div>
+               <textarea
+                 value={repeatableFields.map((field: any) => `${field.key}|${field.label}|${field.type || 'short_text'}`).join('\n')}
+                 onChange={e => updateRepeatableFields(e.target.value)}
+                 placeholder="Fields, one per line: name | Provider name | short_text"
+                 rows={3}
+                 className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm outline-none focus:border-amber-500"
+               />
+               <p className="mt-1 text-[11px] text-slate-400">Use key | label | type. Types: short_text, long_text, email, phone.</p>
              </div>
            )}
         </div>
@@ -364,6 +405,9 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
                   ]}
                   aria-label="Form type"
                 />
+                <p className="text-[11px] leading-4 text-slate-400">
+                  Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs.
+                </p>
                 <AppSelect
                   value={draft.status || 'active'}
                   onChange={value => setDraft(prev => ({ ...prev, status: value }))}
@@ -415,7 +459,207 @@ function FormBuilder({ initial, onClose, onSaved }: { initial?: FormTemplate; on
   );
 }
 
-export function AnswerControl({ question, value, onChange }: { question: FormQuestion; value: any; onChange: (value: any) => void }) {
+function structuredValue(value: any, key: string): any {
+  return value && typeof value === 'object' && !Array.isArray(value) && key in value ? value[key] : undefined;
+}
+
+function RichTextControl({ value, onChange, disabled = false }: { value: any; onChange: (value: any) => void; disabled?: boolean }) {
+  const initial = structuredValue(value, 'html') ?? (typeof value === 'string' ? value : '');
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      UnderlineExtension,
+      Placeholder.configure({ placeholder: 'Write a formatted response…' }),
+    ],
+    content: initial,
+    editable: !disabled,
+    immediatelyRender: false,
+    onUpdate: ({ editor: current }) => onChange({ html: current.getHTML() }),
+  });
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!disabled);
+    const current = editor.getHTML();
+    if (initial !== current && initial !== '<p></p>') editor.commands.setContent(initial, { emitUpdate: false });
+  }, [editor, disabled, initial]);
+
+  if (!editor) return <div className="min-h-24 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-400">Loading editor…</div>;
+  return (
+    <div className={`overflow-hidden rounded-xl border border-slate-200 bg-white ${disabled ? 'opacity-80' : 'focus-within:border-amber-500 focus-within:ring-2 focus-within:ring-amber-100'}`}>
+      {!disabled && (
+        <div className="flex flex-wrap gap-1 border-b border-slate-100 bg-slate-50 p-2">
+          {([
+            { label: 'Bold', action: () => editor.chain().focus().toggleBold().run(), active: editor.isActive('bold'), icon: <Bold className="h-3.5 w-3.5" /> },
+            { label: 'Italic', action: () => editor.chain().focus().toggleItalic().run(), active: editor.isActive('italic'), icon: <Italic className="h-3.5 w-3.5" /> },
+            { label: 'Underline', action: () => editor.chain().focus().toggleUnderline().run(), active: editor.isActive('underline'), icon: <Underline className="h-3.5 w-3.5" /> },
+            { label: 'Bulleted list', action: () => editor.chain().focus().toggleBulletList().run(), active: editor.isActive('bulletList'), icon: <List className="h-3.5 w-3.5" /> },
+            { label: 'Numbered list', action: () => editor.chain().focus().toggleOrderedList().run(), active: editor.isActive('orderedList'), icon: <ListOrdered className="h-3.5 w-3.5" /> },
+          ] as Array<{ label: string; action: () => boolean; active: boolean; icon: React.ReactNode }>).map(({ label, action, active, icon }) => (
+            <button key={String(label)} type="button" title={String(label)} onClick={action as () => void} className={`rounded-lg p-1.5 ${active ? 'bg-amber-100 text-amber-800' : 'text-slate-500 hover:bg-white hover:text-slate-800'}`}>{icon}</button>
+          ))}
+        </div>
+      )}
+      <EditorContent editor={editor} className="prose prose-sm max-w-none px-3 py-2.5 [&_.ProseMirror]:min-h-24 [&_.ProseMirror]:outline-none" />
+    </div>
+  );
+}
+
+function SignatureControl({ value, onChange, responseId, disabled = false }: { value: any; onChange: (value: any) => void; responseId?: string; disabled?: boolean }) {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  const [drawing, setDrawing] = useState(false);
+  const [hasInk, setHasInk] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const existingUrl = structuredValue(value, 'signature');
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [localPreview, setLocalPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    if (localPreview) return;
+    if (!existingUrl) {
+      setImageUrl(null);
+      return;
+    }
+    void apiRequest(existingUrl).then(async response => {
+      if (!response.ok) return;
+      objectUrl = URL.createObjectURL(await response.blob());
+      setImageUrl(objectUrl);
+    });
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [existingUrl, localPreview]);
+
+  const point = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  };
+  const upload = async () => {
+    if (!responseId || !canvasRef.current || !hasInk) return;
+    setUploading(true);
+    try {
+      const blob = await new Promise<Blob | null>(resolve => canvasRef.current?.toBlob(resolve, 'image/png'));
+      if (!blob) throw new Error('Unable to prepare signature');
+      setLocalPreview(URL.createObjectURL(blob));
+      const formData = new FormData();
+      formData.append('asset', blob, 'signature.png');
+      formData.append('asset_type', 'signature');
+      const result = await apiRequest(`/api/form-responses/${responseId}/assets`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || 'Unable to upload signature');
+      onChange({ signature: data.url, file_id: data.file_id, file_name: 'signature.png' });
+      setHasInk(false);
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      {(imageUrl || localPreview) && <img src={imageUrl || localPreview || ''} alt="Saved signature" className="max-h-24 rounded-xl border border-emerald-200 bg-emerald-50 p-2" />}
+      {existingUrl && !imageUrl && !localPreview && <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">Loading saved signature…</p>}
+      {!disabled && !existingUrl && (
+        <>
+          <canvas
+            ref={canvasRef}
+            width={720}
+            height={180}
+            onPointerDown={event => {
+              const ctx = canvasRef.current?.getContext('2d');
+              if (!ctx) return;
+              const { x, y } = point(event);
+              ctx.strokeStyle = '#172033'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+              ctx.beginPath(); ctx.moveTo(x, y); setDrawing(true);
+            }}
+            onPointerMove={event => {
+              if (!drawing) return;
+              const ctx = canvasRef.current?.getContext('2d');
+              if (!ctx) return;
+              const { x, y } = point(event); ctx.lineTo(x, y); ctx.stroke(); setHasInk(true);
+            }}
+            onPointerUp={() => setDrawing(false)}
+            onPointerLeave={() => setDrawing(false)}
+            className="h-32 w-full touch-none rounded-xl border-2 border-dashed border-slate-300 bg-white"
+            aria-label="Signature drawing area"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => { const ctx = canvasRef.current?.getContext('2d'); if (ctx) { ctx.clearRect(0, 0, 720, 180); setHasInk(false); } }} className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"><Minus className="h-3.5 w-3.5" />Clear</button>
+            <button type="button" onClick={upload} disabled={!hasInk || uploading || !responseId} className="inline-flex items-center gap-1.5 rounded-xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-50"><Upload className="h-3.5 w-3.5" />{uploading ? 'Saving…' : 'Save signature'}</button>
+          </div>
+        </>
+      )}
+      {!existingUrl && disabled && <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">No signature provided.</p>}
+    </div>
+  );
+}
+
+function FileControl({ value, onChange, responseId, disabled = false }: { value: any; onChange: (value: any) => void; responseId?: string; disabled?: boolean }) {
+  const [uploading, setUploading] = useState(false);
+  const file = value && typeof value === 'object' ? value : null;
+  const upload = async (selected: File) => {
+    if (!responseId) return;
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append('asset', selected);
+      formData.append('asset_type', 'file');
+      const result = await apiRequest(`/api/form-responses/${responseId}/assets`, {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await result.json();
+      if (!result.ok) throw new Error(data.error || 'Unable to upload file');
+      onChange({ file_id: data.file_id, file_name: data.file_name, content_type: data.content_type, url: data.url });
+    } finally {
+      setUploading(false);
+    }
+  };
+  return (
+    <div className="space-y-2">
+      {file?.file_id ? (
+        <AssetDownloadLink url={file.url || `/api/form-responses/${responseId}/assets/${file.file_id}`} fileName={file.file_name || 'Attached file'} />
+      ) : !disabled ? (
+        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border-2 border-dashed border-slate-300 px-3 py-5 text-sm font-semibold text-slate-600 hover:border-amber-400 hover:bg-amber-50/40">
+          <Upload className="h-4 w-4" />{uploading ? 'Uploading…' : 'Choose a file'}
+          <input type="file" className="hidden" disabled={uploading || !responseId} onChange={event => { const selected = event.target.files?.[0]; if (selected) void upload(selected); }} />
+        </label>
+      ) : <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">No file attached.</p>}
+    </div>
+  );
+}
+
+function RepeatableGroupControl({ question, value, onChange, disabled = false }: { question: FormQuestion; value: any; onChange: (value: any) => void; disabled?: boolean }) {
+  const fields = Array.isArray(question.config_json?.fields) ? question.config_json.fields : [{ key: 'value', label: 'Value', type: 'short_text' }];
+  const rows = Array.isArray(value?.rows) ? value.rows : [];
+  const setRows = (next: any[]) => onChange({ rows: next });
+  return (
+    <div className="space-y-3">
+      {rows.map((row: any, rowIndex: number) => (
+        <div key={rowIndex} className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+          <div className="space-y-2">
+            {fields.map((field: any) => (
+              <div key={field.key}>
+                <label className="mb-1 block text-xs font-semibold text-slate-500">{field.label || field.key}</label>
+                {field.type === 'long_text' ? (
+                  <textarea rows={2} disabled={disabled} value={row.sub_answers?.[field.key] || ''} onChange={event => setRows(rows.map((item: any, index: number) => index === rowIndex ? { ...item, sub_answers: { ...item.sub_answers, [field.key]: event.target.value } } : item))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                ) : (
+                  <input type={field.type === 'email' ? 'email' : 'text'} disabled={disabled} value={row.sub_answers?.[field.key] || ''} onChange={event => setRows(rows.map((item: any, index: number) => index === rowIndex ? { ...item, sub_answers: { ...item.sub_answers, [field.key]: event.target.value } } : item))} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+                )}
+              </div>
+            ))}
+          </div>
+          {!disabled && <button type="button" onClick={() => setRows(rows.filter((_: any, index: number) => index !== rowIndex))} className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700">Remove row</button>}
+        </div>
+      ))}
+      {!disabled && <button type="button" onClick={() => setRows([...rows, { sub_answers: Object.fromEntries(fields.map((field: any) => [field.key, ''])) }])} className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-semibold text-amber-900 hover:bg-amber-100"><Plus className="h-3.5 w-3.5" />Add row</button>}
+      {disabled && rows.length === 0 && <p className="text-sm text-slate-500">No rows added.</p>}
+    </div>
+  );
+}
+
+export function AnswerControl({ question, value, onChange, responseId, disabled = false }: { question: FormQuestion; value: any; onChange: (value: any) => void; responseId?: string; disabled?: boolean }) {
   const config = question.config_json || {};
   const options = config.options || ['Option 1', 'Option 2'];
   const normalizedOptions = (Array.isArray(options) ? options : [])
@@ -424,6 +668,14 @@ export function AnswerControl({ question, value, onChange }: { question: FormQue
   const primitiveValue = answerPrimitive(value);
   const selectedValues = Array.isArray(value) ? value : Array.isArray(primitiveValue) ? primitiveValue : [];
   const inputClass = 'w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-100';
+  if (question.question_type === 'rich_text') return <RichTextControl value={value} onChange={onChange} disabled={disabled} />;
+  if (question.question_type === 'number') return <input type="number" min={config.min} max={config.max} step={config.step || 'any'} disabled={disabled} value={structuredValue(value, 'number') ?? (typeof value === 'number' ? value : '')} onChange={e => onChange(e.target.value === '' ? null : { number: Number(e.target.value) })} className={inputClass} />;
+  if (question.question_type === 'email') return <input type="email" disabled={disabled} value={structuredValue(value, 'text') ?? ''} onChange={e => onChange({ text: e.target.value })} className={inputClass} placeholder="name@example.com" />;
+  if (question.question_type === 'phone') return <input type="tel" disabled={disabled} value={structuredValue(value, 'text') ?? ''} onChange={e => onChange({ text: e.target.value })} className={inputClass} placeholder="(555) 555-5555" />;
+  if (question.question_type === 'time') return <input type="time" disabled={disabled} value={structuredValue(value, 'time') ?? ''} onChange={e => onChange({ time: e.target.value })} className={inputClass} />;
+  if (question.question_type === 'signature') return <SignatureControl value={value} onChange={onChange} responseId={responseId} disabled={disabled} />;
+  if (question.question_type === 'file') return <FileControl value={value} onChange={onChange} responseId={responseId} disabled={disabled} />;
+  if (question.question_type === 'repeatable_group') return <RepeatableGroupControl question={question} value={value} onChange={onChange} disabled={disabled} />;
   if (question.question_type === 'free_text') return <input type="text" value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
   if (question.question_type === 'long_text') return <textarea rows={5} value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
   if (question.question_type === 'date') return <input type="date" value={primitiveValue || ''} onChange={e => onChange(e.target.value)} className={inputClass} />;
@@ -439,7 +691,7 @@ export function AnswerControl({ question, value, onChange }: { question: FormQue
           <button
             key={option}
             type="button"
-            onClick={() => onChange(option)}
+            onClick={() => onChange({ value: option, max })}
              aria-pressed={Number(primitiveValue) === option}
              className={`min-w-12 rounded-xl border px-3 py-2.5 text-sm font-semibold transition-colors ${Number(primitiveValue) === option ? 'border-amber-500 bg-amber-50 text-amber-900 shadow-sm' : 'border-slate-200 text-slate-600 hover:bg-slate-50'}`}
           >
@@ -465,10 +717,27 @@ export function AnswerControl({ question, value, onChange }: { question: FormQue
   return <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-3 text-sm text-slate-500">This question type is registered and will be available in a future phase.</div>;
 }
 
-function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuestion }) {
+function ReadOnlyAnswer({ value, question, responseId }: { value: any; question?: FormQuestion; responseId?: string }) {
+  if (question?.question_type === 'rich_text') {
+    const html = structuredValue(value, 'html') ?? (typeof value === 'string' ? value : '');
+    return <div className="prose prose-sm max-w-none rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(html) }} />;
+  }
+  if (question?.question_type === 'signature') {
+    const signature = structuredValue(value, 'signature');
+    return signature ? <SignaturePreview url={signature} /> : <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">No signature provided.</div>;
+  }
+  if (question?.question_type === 'file') {
+    const file = value && typeof value === 'object' ? value : {};
+    return file.file_id ? <AssetDownloadLink url={file.url || `/api/form-responses/${responseId}/assets/${file.file_id}`} fileName={file.file_name || 'Attached file'} /> : <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">No file attached.</div>;
+  }
+  if (question?.question_type === 'repeatable_group') {
+    const rows = Array.isArray(value?.rows) ? value.rows : [];
+    return rows.length ? <div className="space-y-2">{rows.map((row: any, index: number) => <div key={index} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">{Object.entries(row.sub_answers || {}).map(([key, item]) => <div key={key}><span className="font-semibold">{key}:</span> {String(item || '—')}</div>)}</div>)}</div> : <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">No rows added.</div>;
+  }
   if (question?.question_type === 'scale' && value !== undefined && value !== null && value !== '') {
     const labels = question.config_json?.labels || {};
-    return <div className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">Rating: {labels[String(value)] || value}</div>;
+    const rating = answerPrimitive(value);
+    return <div className="min-h-10 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-semibold text-amber-900">Rating: {labels[String(rating)] || rating}</div>;
   }
   const primitiveValue = answerPrimitive(value);
   const options = question?.config_json?.options;
@@ -484,6 +753,54 @@ function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuesti
       ? primitiveValue === true || primitiveValue === 'yes' ? 'Yes' : primitiveValue === false || primitiveValue === 'no' ? 'No' : primitiveValue
       : labels.get(String(primitiveValue)) || primitiveValue;
   return <div className="min-h-10 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-700">{rendered === undefined || rendered === null || rendered === '' ? 'No response provided.' : String(rendered)}</div>;
+}
+
+function SignaturePreview({ url }: { url: string }) {
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let objectUrl: string | null = null;
+    void apiRequest(url).then(async response => {
+      if (!response.ok) return;
+      objectUrl = URL.createObjectURL(await response.blob());
+      setImageUrl(objectUrl);
+    });
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [url]);
+  return imageUrl ? <img src={imageUrl} alt="Submitted signature" className="max-h-24 rounded-xl border border-slate-200 bg-white p-2" /> : <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-500">Loading signature…</p>;
+}
+
+function AssetDownloadLink({ url, fileName }: { url: string; fileName: string }) {
+  const [downloading, setDownloading] = useState(false);
+  const download = async (event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault();
+    setDownloading(true);
+    try {
+      const response = await apiRequest(url);
+      if (!response.ok) throw new Error('Unable to download file');
+      const objectUrl = URL.createObjectURL(await response.blob());
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl; anchor.download = fileName; anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } finally {
+      setDownloading(false);
+    }
+  };
+  return <button type="button" onClick={download} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-slate-100"><FileText className="h-4 w-4" />{downloading ? 'Preparing…' : fileName}</button>;
+}
+
+function sanitizeRichHtml(html: string): string {
+  if (typeof document === 'undefined') return html.replace(/<[^>]+>/g, '');
+  const wrapper = document.createElement('div');
+  wrapper.innerHTML = html;
+  const allowed = new Set(['P', 'BR', 'STRONG', 'B', 'EM', 'I', 'U', 'UL', 'OL', 'LI']);
+  wrapper.querySelectorAll('*').forEach(element => {
+    if (!allowed.has(element.tagName)) {
+      element.replaceWith(...Array.from(element.childNodes));
+      return;
+    }
+    Array.from(element.attributes).forEach(attribute => element.removeAttribute(attribute.name));
+  });
+  return wrapper.innerHTML;
 }
 
 export function FormFiller({ response, employee, onClose, onComplete, allowAdminEditSubmitted = true }: { response: ResponseSet; employee: Pick<Employee, 'first_name' | 'last_name'>; onClose: () => void; onComplete: (response?: ResponseSet) => void; allowAdminEditSubmitted?: boolean }) {
@@ -554,7 +871,7 @@ export function FormFiller({ response, employee, onClose, onComplete, allowAdmin
                   return <div key={question.id || question.stable_key}>
                      <label className="mb-2 block text-sm font-semibold text-slate-800">{question.prompt || 'Untitled question'}{isQuestionRequired(question, answerLookup) && <span className="ml-1 text-amber-700">*</span>}</label>
                     {question.help_text && <p className="mb-2 text-xs text-slate-500">{question.help_text}</p>}
-                    {isReadOnly ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
+                    {isReadOnly ? <ReadOnlyAnswer question={question} value={answers[question.id || question.stable_key]} responseId={response.id} /> : <AnswerControl question={question} value={answers[question.id || question.stable_key]} responseId={response.id} onChange={value => setAnswers(prev => ({ ...prev, [question.id || question.stable_key]: value }))} />}
                   </div>;
                 })}
               </div>
