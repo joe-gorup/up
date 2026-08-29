@@ -21,6 +21,7 @@ import PermissionsManager from './components/PermissionsManager';
 import HelpGuide from './components/HelpGuide';
 import ReleaseIndicator from './components/ReleaseIndicator';
 import FormsAndReviews from './components/FormsAndReviews';
+import ProfileCatalogManager from './components/ProfileCatalogManager';
 
 // Map route paths to section IDs for sidebar active state
 const routeToSection: Record<string, string> = {
@@ -32,6 +33,7 @@ const routeToSection: Record<string, string> = {
   '/forms-reviews': 'forms-reviews',
   '/bulk-upload': 'bulk-upload',
   '/permissions': 'permissions',
+  '/profile-catalog': 'profile-catalog',
   '/employee-dashboard': 'employee-dashboard',
   '/my-profile': 'my-profile',
   '/my-scoopers': 'my-scoopers',
@@ -47,6 +49,7 @@ const sectionToRoute: Record<string, string> = {
   'forms-reviews': '/forms-reviews',
   'bulk-upload': '/bulk-upload',
   'permissions': '/permissions',
+  'profile-catalog': '/profile-catalog',
   'employee-dashboard': '/employee-dashboard',
   'my-profile': '/my-profile',
   'my-scoopers': '/my-scoopers',
@@ -110,6 +113,8 @@ function AppContent() {
         return { title: 'Bulk Data Upload', description: 'Import assessment data, mastered goals, and goal templates from CSV files' };
       case 'permissions':
         return { title: 'Permission Settings', description: 'Configure role-based access permissions for all features' };
+      case 'profile-catalog':
+        return { title: 'Profile Catalog', description: 'Manage support information fields and shared contact options' };
       case 'employee-dashboard':
         return { title: 'My Dashboard', description: 'Track your development goals and progress' };
       case 'my-profile':
@@ -201,6 +206,9 @@ function AppContent() {
             </Route>
             <Route path="/permissions">
               {user?.role === 'Administrator' ? <PermissionsManager /> : <Dashboard />}
+            </Route>
+            <Route path="/profile-catalog">
+              {user?.role === 'Administrator' ? <ProfileCatalogManager /> : <Dashboard />}
             </Route>
             <Route path="/employee-dashboard" component={EmployeeDashboard} />
             <Route path="/my-profile" component={EmployeeDashboard} />

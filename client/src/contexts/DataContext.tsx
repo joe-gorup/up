@@ -24,6 +24,7 @@ export interface Employee {
   challenges: string[];
   regulationStrategies: string[];
   accommodations: string[];
+  profileFieldValues: Record<string, string[]>;
   hasServiceProvider: boolean;
   serviceProviders: Array<{ name: string; type: string }>;
   date_of_birth?: string | null;
@@ -299,6 +300,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: emp.challenges || [],
           regulationStrategies: emp.regulation_strategies || [],
           accommodations: emp.accommodations || [],
+          profileFieldValues: emp.profile_field_values || {},
           hasServiceProvider: emp.has_service_provider || false,
           serviceProviders: emp.service_providers || [],
           date_of_birth: emp.date_of_birth || null,
@@ -442,6 +444,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         challenges: ['Loud noises', 'Sudden changes'],
         regulationStrategies: ['5-minute breaks', 'Visual schedules', 'Calm voice'],
         accommodations: [],
+        profileFieldValues: {},
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -466,6 +469,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         challenges: ['Complex instructions'],
         regulationStrategies: ['Break tasks into steps', 'Use positive reinforcement'],
         accommodations: [],
+        profileFieldValues: {},
         hasServiceProvider: false,
         serviceProviders: [],
         last_login: null,
@@ -560,6 +564,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: employeeData.challenges,
           regulation_strategies: employeeData.regulationStrategies,
           ...(employeeData.accommodations !== undefined && { accommodations: employeeData.accommodations }),
+          profile_field_values: employeeData.profileFieldValues || {},
           has_service_provider: employeeData.hasServiceProvider,
           service_providers: employeeData.serviceProviders,
           ...(employeeData.date_of_birth && { date_of_birth: employeeData.date_of_birth }),
@@ -583,6 +588,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           challenges: newEmployee.challenges || [],
           regulationStrategies: newEmployee.regulation_strategies || [],
           accommodations: newEmployee.accommodations || [],
+          profileFieldValues: newEmployee.profile_field_values || {},
           hasServiceProvider: newEmployee.has_service_provider || false,
           serviceProviders: newEmployee.service_providers || [],
           date_of_birth: newEmployee.date_of_birth || null,
@@ -621,6 +627,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
       if (updates.challenges) updateData.challenges = updates.challenges;
       if (updates.regulationStrategies) updateData.regulation_strategies = updates.regulationStrategies;
       if (updates.accommodations !== undefined) updateData.accommodations = updates.accommodations;
+      if (updates.profileFieldValues !== undefined) updateData.profile_field_values = updates.profileFieldValues;
       if (updates.hasServiceProvider !== undefined) updateData.has_service_provider = updates.hasServiceProvider;
       if (updates.serviceProviders) updateData.service_providers = updates.serviceProviders;
       if (updates.date_of_birth !== undefined) updateData.date_of_birth = updates.date_of_birth;
@@ -654,6 +661,7 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
         challenges: updatedEmployee.challenges || [],
         regulationStrategies: updatedEmployee.regulation_strategies || [],
         accommodations: updatedEmployee.accommodations || [],
+        profileFieldValues: updatedEmployee.profile_field_values || {},
         hasServiceProvider: updatedEmployee.has_service_provider || false,
         serviceProviders: updatedEmployee.service_providers || [],
         date_of_birth: updatedEmployee.date_of_birth || null,

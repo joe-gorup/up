@@ -46,6 +46,9 @@ export const employees = pgTable("employees", {
   challenges: jsonb("challenges").default(sql`'[]'::jsonb`),
   regulation_strategies: jsonb("regulation_strategies").default(sql`'[]'::jsonb`),
   accommodations: jsonb("accommodations").default(sql`'[]'::jsonb`),
+  // New catalog-managed values are stored here while legacy profile columns
+  // remain readable and writable during the gradual migration.
+  profile_field_values: jsonb("profile_field_values"),
   
   created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
@@ -55,6 +58,53 @@ export const employees = pgTable("employees", {
   emailIdx: index("employees_email_idx").on(table.email),
   hasSystemAccessIdx: index("employees_has_system_access_idx").on(table.has_system_access),
   roleIdx: index("employees_role_idx").on(table.role),
+}));
+
+// Administrator-managed profile field catalog. Definitions are soft-deactivated
+// so historical values can remain readable after a field leaves the UI.
+export const profile_field_definitions = pgTable("profile_field_definitions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  description: text("description"),
+  value_shape: text("value_shape").notNull().default("string_list"),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  applies_to_roles: jsonb("applies_to_roles").notNull().default(sql`'["Super Scooper"]'::jsonb`),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  keyUnique: uniqueIndex("profile_field_definitions_key_unique").on(table.key),
+  statusOrderIdx: index("profile_field_definitions_status_order_idx").on(table.status, table.sort_order),
+}));
+
+// Shared Administrator-managed dropdown lists.
+export const option_lists = pgTable("option_lists", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  status: text("status").notNull().default("active"),
+  created_by: varchar("created_by").references(() => employees.id, { onDelete: "set null" }),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  keyUnique: uniqueIndex("option_lists_key_unique").on(table.key),
+  statusIdx: index("option_lists_status_idx").on(table.status),
+}));
+
+export const option_list_items = pgTable("option_list_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  list_id: varchar("list_id").notNull().references(() => option_lists.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
+  label: text("label").notNull(),
+  sort_order: integer("sort_order").notNull().default(0),
+  status: text("status").notNull().default("active"),
+  created_at: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updated_at: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => ({
+  listOrderIdx: index("option_list_items_list_order_idx").on(table.list_id, table.status, table.sort_order),
+  keyUnique: unique("option_list_items_list_key_unique").on(table.list_id, table.key),
 }));
 
 // Goal templates table
@@ -469,6 +519,9 @@ export const insertAccountInvitationSchema = createInsertSchema(account_invitati
 export const insertGuardianNoteSchema = createInsertSchema(guardian_notes).omit({ id: true, created_at: true, updated_at: true });
 export const insertProfileNoteSchema = createInsertSchema(profile_notes).omit({ id: true, created_at: true, updated_at: true });
 export const insertEmployeeContactSchema = createInsertSchema(employee_contacts).omit({ id: true, created_at: true, updated_at: true });
+export const insertProfileFieldDefinitionSchema = createInsertSchema(profile_field_definitions).omit({ id: true, created_at: true, updated_at: true });
+export const insertOptionListSchema = createInsertSchema(option_lists).omit({ id: true, created_at: true, updated_at: true });
+export const insertOptionListItemSchema = createInsertSchema(option_list_items).omit({ id: true, created_at: true, updated_at: true });
 
 // Utility function to calculate discrete date from relative duration
 export function calculateDateFromRelativeDuration(relativeDuration: string, fromDate: Date = new Date()): string {
@@ -914,6 +967,12 @@ export type InsertProfileNote = z.infer<typeof insertProfileNoteSchema>;
 export type ProfileNote = typeof profile_notes.$inferSelect;
 export type InsertEmployeeContact = z.infer<typeof insertEmployeeContactSchema>;
 export type EmployeeContact = typeof employee_contacts.$inferSelect;
+export type InsertProfileFieldDefinition = z.infer<typeof insertProfileFieldDefinitionSchema>;
+export type ProfileFieldDefinition = typeof profile_field_definitions.$inferSelect;
+export type InsertOptionList = z.infer<typeof insertOptionListSchema>;
+export type OptionList = typeof option_lists.$inferSelect;
+export type InsertOptionListItem = z.infer<typeof insertOptionListItemSchema>;
+export type OptionListItem = typeof option_list_items.$inferSelect;
 
 // Employee reviews table
 export const employee_reviews = pgTable("employee_reviews", {

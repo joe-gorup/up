@@ -6,15 +6,16 @@ import { logger } from "./logger";
 import { 
   employees, goal_templates, goal_template_steps,
   development_goals, goal_steps, assessment_sessions, step_progress, assessment_summaries,
-  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, profile_notes, coach_checkins, coach_files, coach_notes, employee_contacts, role_permissions, employee_reviews,
+  coach_assignments, guardian_relationships, account_invitations, promotion_certifications, guardian_notes, profile_notes, coach_checkins, coach_files, coach_notes, employee_contacts, profile_field_definitions, option_lists, option_list_items, role_permissions, employee_reviews,
   form_templates, form_sections, form_questions, form_response_sets, form_answers,
-  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertProfileNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertEmployeeReviewSchema,
+  insertCoachAssignmentSchema, insertGuardianRelationshipSchema, insertPromotionCertificationSchema, insertGuardianNoteSchema, insertProfileNoteSchema, insertCoachCheckinSchema, insertCoachNoteSchema, insertEmployeeContactSchema, insertProfileFieldDefinitionSchema, insertOptionListSchema, insertOptionListItemSchema, insertEmployeeReviewSchema,
   insertFormTemplateSchema, insertFormSectionSchema, insertFormQuestionSchema,
   videos, goal_template_videos, goal_template_step_videos, insertVideoSchema, updateVideoSchema,
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration, getAccommodationWriteError, hasAccommodationUpdate
 } from "@shared/schema";
 import { buildNotesFeed, plainTextFromRichContent, type NotesFeedEntry } from "@shared/notesFeed";
+import { DEFAULT_CONTACT_RELATIONSHIP_OPTIONS, DEFAULT_PROFILE_FIELDS, PROFILE_FIELD_KEY_PATTERN, cleanProfileFieldValues, isCatalogRoleMatch, normalizeCatalogKey } from "@shared/profileCatalog";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
@@ -117,6 +118,39 @@ async function ensureDefaultPermissions() {
   }
 }
 
+async function ensureDefaultProfileCatalog() {
+  try {
+    for (const field of DEFAULT_PROFILE_FIELDS) {
+      await db.insert(profile_field_definitions).values(field).onConflictDoNothing({
+        target: profile_field_definitions.key,
+      });
+    }
+
+    const [contactList] = await db.insert(option_lists).values({
+      key: 'contact_relationships',
+      label: 'Contact Relationships',
+    }).onConflictDoNothing({
+      target: option_lists.key,
+    }).returning();
+
+    const existingContactList = contactList || (await db.select({ id: option_lists.id })
+      .from(option_lists)
+      .where(eq(option_lists.key, 'contact_relationships'))
+      .limit(1))[0];
+
+    if (existingContactList) {
+      for (const option of DEFAULT_CONTACT_RELATIONSHIP_OPTIONS) {
+        await db.insert(option_list_items).values({
+          ...option,
+          list_id: existingContactList.id,
+        }).onConflictDoNothing();
+      }
+    }
+  } catch (error) {
+    logger.error({ error }, 'Failed to seed default profile catalog — non-fatal, continuing startup');
+  }
+}
+
 // Helper to strip sensitive fields from employee objects before sending to clients
 function stripSensitiveFields<T extends Record<string, any>>(obj: T): Omit<T, 'password'> {
   const { password, ...safe } = obj;
@@ -133,6 +167,7 @@ const EMPLOYEE_ALLOWED_FIELDS = [
   'is_active', 'has_system_access', 'password',
   'allergies', 'emergency_contacts', 'interests_motivators', 'challenges',
   'regulation_strategies', 'accommodations', 'has_service_provider', 'service_providers',
+  'profile_field_values',
   'profile_image_url', 'location',
   'roi_status', 'roi_signed_at', 'roi_signature', 'roi_consent_type',
   'roi_no_release_details', 'roi_guardian_name', 'roi_guardian_address',
@@ -147,6 +182,26 @@ function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): 
     }
   }
   return result;
+}
+
+async function validateProfileFieldValues(values: unknown, employeeRole: string): Promise<Record<string, string[]> | null> {
+  const cleaned = cleanProfileFieldValues(values);
+  if (!cleaned) return null;
+
+  const definitions = await db.select({
+    key: profile_field_definitions.key,
+    value_shape: profile_field_definitions.value_shape,
+    applies_to_roles: profile_field_definitions.applies_to_roles,
+  }).from(profile_field_definitions);
+  const definitionByKey = new Map(definitions.map(definition => [definition.key, definition]));
+
+  for (const key of Object.keys(cleaned)) {
+    const definition = definitionByKey.get(key);
+    if (!definition || definition.value_shape !== 'string_list' || !isCatalogRoleMatch(definition.applies_to_roles, employeeRole)) {
+      return null;
+    }
+  }
+  return cleaned;
 }
 
 function noteAuthorName(employee: { name?: string | null; first_name?: string | null; last_name?: string | null } | undefined): string {
@@ -636,6 +691,217 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Profile field definitions and shared options are authenticated catalog data.
+  // Administrators receive inactive entries for management; other roles only
+  // receive active fields that apply to their role.
+  app.get("/api/profile-catalog", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const includeInactive = user.role === 'Administrator' && req.query.include_inactive === 'true';
+      const requestedProfileRole = typeof req.query.employee_role === 'string'
+        ? req.query.employee_role.trim()
+        : '';
+      const catalogRole = requestedProfileRole || user.role;
+      const definitions = await db.select().from(profile_field_definitions)
+        .orderBy(profile_field_definitions.sort_order, profile_field_definitions.label);
+      const visibleDefinitions = definitions.filter(definition =>
+        (includeInactive || definition.status === 'active') &&
+        (user.role === 'Administrator' || isCatalogRoleMatch(definition.applies_to_roles, catalogRole))
+      );
+
+      const lists = await db.select().from(option_lists).orderBy(option_lists.label);
+      const listIds = lists.map(list => list.id);
+      const items = listIds.length > 0
+        ? await db.select().from(option_list_items)
+          .where(includeInactive ? inArray(option_list_items.list_id, listIds) : and(
+            inArray(option_list_items.list_id, listIds),
+            eq(option_list_items.status, 'active'),
+          ))
+          .orderBy(option_list_items.sort_order, option_list_items.label)
+        : [];
+
+      res.json({
+        profileFields: visibleDefinitions,
+        optionLists: lists
+          .filter(list => includeInactive || list.status === 'active')
+          .map(list => ({
+            ...list,
+            items: items.filter(item => item.list_id === list.id),
+          })),
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to fetch profile catalog');
+      res.status(500).json({ error: 'Failed to fetch profile catalog' });
+    }
+  });
+
+  app.post("/api/profile-catalog/fields", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const key = normalizeCatalogKey(req.body.key || req.body.label);
+      const label = String(req.body.label || '').trim();
+      const description = req.body.description === null ? null : String(req.body.description || '').trim() || null;
+      const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : 0;
+      const appliesToRoles = Array.isArray(req.body.applies_to_roles) && req.body.applies_to_roles.length > 0
+        ? req.body.applies_to_roles.filter((role: unknown): role is string => typeof role === 'string')
+        : ['Super Scooper'];
+
+      if (!PROFILE_FIELD_KEY_PATTERN.test(key) || !label || label.length > 120) {
+        return res.status(400).json({ error: 'A valid key and a field label are required' });
+      }
+      if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+        return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+      }
+      if (req.body.value_shape && req.body.value_shape !== 'string_list') {
+        return res.status(400).json({ error: 'Only string_list profile fields are supported' });
+      }
+
+      const [created] = await db.insert(profile_field_definitions).values({
+        key,
+        label,
+        description,
+        sort_order: sortOrder,
+        status: 'active',
+        value_shape: 'string_list',
+        applies_to_roles: appliesToRoles,
+        created_by: user.id,
+      }).returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'A profile field with that key already exists' });
+      }
+      logger.error({ error }, 'Failed to create profile field');
+      res.status(500).json({ error: 'Failed to create profile field' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/fields/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'A field label is required' });
+        updateData.label = label;
+      }
+      if (req.body.description !== undefined) {
+        updateData.description = req.body.description === null ? null : String(req.body.description).trim() || null;
+      }
+      if (req.body.sort_order !== undefined) {
+        if (!Number.isInteger(req.body.sort_order) || req.body.sort_order < 0 || req.body.sort_order > 10000) {
+          return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+        }
+        updateData.sort_order = req.body.sort_order;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid field status' });
+        updateData.status = req.body.status;
+      }
+      if (req.body.applies_to_roles !== undefined) {
+        if (!Array.isArray(req.body.applies_to_roles) || req.body.applies_to_roles.some((role: unknown) => typeof role !== 'string')) {
+          return res.status(400).json({ error: 'applies_to_roles must be an array of role names' });
+        }
+        updateData.applies_to_roles = req.body.applies_to_roles;
+      }
+
+      const [updated] = await db.update(profile_field_definitions)
+        .set(updateData)
+        .where(eq(profile_field_definitions.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Profile field not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, fieldId: req.params.id }, 'Failed to update profile field');
+      res.status(500).json({ error: 'Failed to update profile field' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/option-lists/:key", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'An option list label is required' });
+        updateData.label = label;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid option list status' });
+        updateData.status = req.body.status;
+      }
+      const [updated] = await db.update(option_lists)
+        .set(updateData)
+        .where(eq(option_lists.key, req.params.key))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Option list not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, listKey: req.params.key }, 'Failed to update option list');
+      res.status(500).json({ error: 'Failed to update option list' });
+    }
+  });
+
+  app.post("/api/profile-catalog/option-lists/:key/items", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const key = normalizeCatalogKey(req.body.key || req.body.label);
+      const label = String(req.body.label || '').trim();
+      const sortOrder = Number.isInteger(req.body.sort_order) ? req.body.sort_order : 0;
+      if (!PROFILE_FIELD_KEY_PATTERN.test(key) || !label || label.length > 120) {
+        return res.status(400).json({ error: 'A valid option key and label are required' });
+      }
+      if (!Number.isInteger(sortOrder) || sortOrder < 0 || sortOrder > 10000) {
+        return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+      }
+      const [list] = await db.select({ id: option_lists.id }).from(option_lists)
+        .where(eq(option_lists.key, req.params.key)).limit(1);
+      if (!list) return res.status(404).json({ error: 'Option list not found' });
+
+      const [created] = await db.insert(option_list_items).values({
+        list_id: list.id,
+        key,
+        label,
+        sort_order: sortOrder,
+        status: 'active',
+      }).returning();
+      res.status(201).json(created);
+    } catch (error: any) {
+      if (error?.code === '23505') {
+        return res.status(409).json({ error: 'An option with that key already exists' });
+      }
+      logger.error({ error, listKey: req.params.key }, 'Failed to create option list item');
+      res.status(500).json({ error: 'Failed to create option list item' });
+    }
+  });
+
+  app.patch("/api/profile-catalog/options/:id", authenticateToken, requireRole('Administrator'), async (req: Request, res: Response) => {
+    try {
+      const updateData: Record<string, any> = { updated_at: new Date() };
+      if (req.body.label !== undefined) {
+        const label = String(req.body.label).trim();
+        if (!label || label.length > 120) return res.status(400).json({ error: 'An option label is required' });
+        updateData.label = label;
+      }
+      if (req.body.sort_order !== undefined) {
+        if (!Number.isInteger(req.body.sort_order) || req.body.sort_order < 0 || req.body.sort_order > 10000) {
+          return res.status(400).json({ error: 'sort_order must be an integer between 0 and 10000' });
+        }
+        updateData.sort_order = req.body.sort_order;
+      }
+      if (req.body.status !== undefined) {
+        if (!['active', 'inactive'].includes(req.body.status)) return res.status(400).json({ error: 'Invalid option status' });
+        updateData.status = req.body.status;
+      }
+      const [updated] = await db.update(option_list_items)
+        .set(updateData)
+        .where(eq(option_list_items.id, req.params.id))
+        .returning();
+      if (!updated) return res.status(404).json({ error: 'Option not found' });
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, optionId: req.params.id }, 'Failed to update option list item');
+      res.status(500).json({ error: 'Failed to update option list item' });
+    }
+  });
+
   app.post("/api/employees", authenticateToken, requirePermission('employee_profiles', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
@@ -682,6 +948,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (employeeData.password) {
         employeeData.password = await hashPassword(employeeData.password);
       }
+
+      if (req.body.profile_field_values !== undefined) {
+        const profileValues = await validateProfileFieldValues(
+          req.body.profile_field_values,
+          employeeData.role || 'Super Scooper',
+        );
+        if (!profileValues) {
+          return res.status(400).json({ error: 'Profile field values must match active string-list fields for this role' });
+        }
+        employeeData.profile_field_values = profileValues;
+      }
       
       const [newEmployee] = await db.insert(employees).values(employeeData as any).returning();
       logger.info({ employeeId: newEmployee.id, name: `${newEmployee.first_name} ${newEmployee.last_name}` }, 'Employee created successfully');
@@ -722,6 +999,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (accommodationError) {
           return res.status(accommodationError.status).json({ error: accommodationError.message });
         }
+      }
+
+      if (req.body.profile_field_values !== undefined) {
+        const [currentEmployee] = await db
+          .select({ role: employees.role })
+          .from(employees)
+          .where(eq(employees.id, id))
+          .limit(1);
+        if (!currentEmployee) return res.status(404).json({ error: 'Employee not found' });
+        if (user.role !== 'Administrator' && !(await canAccessScooper(user, id))) {
+          return res.status(403).json({ error: 'You do not have access to update this profile' });
+        }
+        const profileValues = await validateProfileFieldValues(req.body.profile_field_values, req.body.role ?? currentEmployee.role);
+        if (!profileValues) {
+          return res.status(400).json({ error: 'Profile field values must match active string-list fields for this role' });
+        }
+        req.body.profile_field_values = profileValues;
       }
 
       const updateData: Record<string, any> = { ...pickAllowedFields(req.body, EMPLOYEE_ALLOWED_FIELDS), updated_at: new Date() };
@@ -6013,6 +6307,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   await ensureDefaultPermissions();
+  await ensureDefaultProfileCatalog();
   await backfillGoalStepTemplateLinks();
 
   const httpServer = createServer(app);

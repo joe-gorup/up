@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility } from 'lucide-react';
+import { ArrowLeft, Edit, Plus, Target, CheckCircle, CheckCircle2, XCircle, MinusCircle, AlertCircle, Clock, AlertTriangle, Phone, Heart, Brain, Shield, Zap, Archive, X, Save, ChevronDown, ChevronRight, ChevronUp, Star, Lightbulb, Users, UserCheck, Link, Copy, Check, Mail, SquarePen, Award, Trash2, FileText, ClipboardCheck, Building2, Eye, Accessibility, SlidersHorizontal } from 'lucide-react';
 import { PromotionCertification } from '../contexts/DataContext';
 import { canManageAccommodations, normalizeChecklistAnswer, type ChecklistAnswer } from '@shared/schema';
 import { useProgressData } from '../hooks/useProgressData';
@@ -139,6 +139,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [editingSupportChallenges, setEditingSupportChallenges] = useState(false);
   const [editingSupportStrategies, setEditingSupportStrategies] = useState(false);
   const [editingAccommodations, setEditingAccommodations] = useState(false);
+  const [editingDynamicField, setEditingDynamicField] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   
   // Form data for inline editing
@@ -149,7 +150,13 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     regulationStrategies: ['']
   });
   const [accommodationsForm, setAccommodationsForm] = useState<string[]>(['']);
+  const [dynamicFieldForms, setDynamicFieldForms] = useState<Record<string, string[]>>({});
   const [serviceProviderForm, setServiceProviderForm] = useState<Array<{ name: string; type: string }>>([]);
+  const [catalogFields, setCatalogFields] = useState<Array<{
+    id: string; key: string; label: string; description: string | null;
+    sort_order: number; status: string; applies_to_roles?: unknown;
+  }>>([]);
+  const [relationshipOptions, setRelationshipOptions] = useState<Array<{ key: string; label: string }>>([]);
 
   // Certification states
   const [showCertForm, setShowCertForm] = useState(false);
@@ -590,6 +597,7 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
         regulationStrategies: employee.regulationStrategies.length > 0 ? [...employee.regulationStrategies] : ['']
       });
       setAccommodationsForm(employee.accommodations.length > 0 ? [...employee.accommodations] : ['']);
+      setDynamicFieldForms(employee.profileFieldValues || {});
       setServiceProviderForm(
         employee.serviceProviders?.length > 0 
           ? employee.serviceProviders.map((p: any) => ({ name: p.name || '', type: p.type || '' }))
@@ -597,6 +605,21 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
       );
     }
   }, [employee?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiRequest('/api/profile-catalog?employee_role=Super%20Scooper')
+      .then(async response => {
+        if (!response.ok || cancelled) return;
+        const catalog = await response.json();
+        if (cancelled) return;
+        setCatalogFields(catalog.profileFields || []);
+        const contactList = (catalog.optionLists || []).find((list: any) => list.key === 'contact_relationships');
+        setRelationshipOptions((contactList?.items || []).map((item: any) => ({ key: item.key, label: item.label })));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [employeeId, user?.role]);
 
   // Helper functions for array form fields
   const addArrayItem = (setter: React.Dispatch<React.SetStateAction<string[]>>) => {
@@ -679,6 +702,25 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     }
   };
 
+  const handleSaveDynamicField = async (key: string) => {
+    setSavingProfile(true);
+    try {
+      const values = (dynamicFieldForms[key] || []).map(value => value.trim()).filter(Boolean);
+      await updateEmployee(employeeId, {
+        profileFieldValues: {
+          ...(employee?.profileFieldValues || {}),
+          [key]: values,
+        },
+      });
+      setDynamicFieldForms(prev => ({ ...prev, [key]: values }));
+      setEditingDynamicField(null);
+    } catch (error) {
+      console.error('Error saving profile field:', error);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   const handleCancelSafety = () => {
     setSafetyForm(employee?.allergies.length ? [...employee.allergies] : ['']);
     setEditingSafety(false);
@@ -702,6 +744,11 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
     setAccommodationsForm(employee?.accommodations.length ? [...employee.accommodations] : ['']);
     setEditingAccommodations(false);
   };
+
+  const profileFieldLabel = (key: string, fallback: string) =>
+    catalogFields.find(field => field.key === key)?.label || fallback;
+
+  const defaultRelationshipLabel = relationshipOptions.find(option => option.key === 'parent_guardian')?.label || 'Parent/Guardian';
 
   const startEditingServiceProvider = () => {
     const providers = employee?.serviceProviders && employee.serviceProviders.length > 0
@@ -812,6 +859,13 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const activeGoals = employeeGoals.filter(goal => goal.status === 'active');
   const maintenanceGoals = employeeGoals.filter(goal => goal.status === 'maintenance');
   const archivedGoals = employeeGoals.filter(goal => goal.status === 'archived');
+  const guardianRelationshipLabels = new Set([
+    'Parent/Guardian',
+    'Parent',
+    ...relationshipOptions
+      .filter(option => ['parent_guardian', 'parent'].includes(option.key))
+      .map(option => option.label),
+  ]);
 
   const handleEditGoal = (goal: any) => {
     setEditingGoal(goal.id);
@@ -891,7 +945,7 @@ const handleGenerateInvitation = async () => {
       is_emergency_contact: c.is_emergency_contact, has_app_access: c.has_app_access,
     }));
     setContactsEditForm(existing.length > 0 ? existing : [{
-      id: undefined, first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+      id: undefined, first_name: '', last_name: '', relationship_type: defaultRelationshipLabel,
       phone: '', email: '', is_emergency_contact: false, has_app_access: false, _isNew: true,
     }]);
     setContactError('');
@@ -965,7 +1019,7 @@ const handleGenerateInvitation = async () => {
 
   const addContactToForm = () => {
     setContactsEditForm(prev => [...prev, {
-      first_name: '', last_name: '', relationship_type: 'Parent/Guardian',
+      first_name: '', last_name: '', relationship_type: defaultRelationshipLabel,
       phone: '', email: '', is_emergency_contact: false, _isNew: true,
     }]);
   };
@@ -1269,8 +1323,8 @@ const handleGenerateInvitation = async () => {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Heart className="h-3.5 w-3.5 text-green-600 mr-1.5" /> Interests & Motivators
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Heart className="h-3.5 w-3.5 text-green-600 mr-1.5" /> {profileFieldLabel('interests_motivators', 'Interests & Motivators')}
                     </h4>
                     {canEdit && !editingSupportInterests && (
                       <button
@@ -1321,8 +1375,8 @@ const handleGenerateInvitation = async () => {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Zap className="h-3.5 w-3.5 text-orange-500 mr-1.5" /> Challenges
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Zap className="h-3.5 w-3.5 text-orange-500 mr-1.5" /> {profileFieldLabel('challenges', 'Challenges')}
                     </h4>
                     {canEdit && !editingSupportChallenges && (
                       <button
@@ -1373,8 +1427,8 @@ const handleGenerateInvitation = async () => {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-gray-600 flex items-center">
-                      <Brain className="h-3.5 w-3.5 text-purple-600 mr-1.5" /> Regulation Strategies
+                      <h4 className="text-sm font-medium text-gray-600 flex items-center">
+                        <Brain className="h-3.5 w-3.5 text-purple-600 mr-1.5" /> {profileFieldLabel('regulation_strategies', 'Regulation Strategies')}
                     </h4>
                     {canEdit && !editingSupportStrategies && (
                       <button
@@ -1429,7 +1483,7 @@ const handleGenerateInvitation = async () => {
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <h4 id="accommodations-heading" className="text-sm font-semibold text-gray-700 flex items-center">
-                        <Accessibility className="h-4 w-4 text-teal-600 mr-1.5" /> Accommodations
+                        <Accessibility className="h-4 w-4 text-teal-600 mr-1.5" /> {profileFieldLabel('accommodations', 'Accommodations')}
                       </h4>
                       <p className="text-xs text-gray-500 mt-0.5">Tools and environmental supports that help this employee succeed.</p>
                     </div>
@@ -1500,6 +1554,75 @@ const handleGenerateInvitation = async () => {
                   )}
                 </section>
               )}
+              {employee.role === 'Super Scooper' && catalogFields.filter(field => !['interests_motivators', 'challenges', 'regulation_strategies', 'accommodations', 'allergies'].includes(field.key)).length > 0 && (
+                <section className="mt-5 pt-5 border-t border-gray-200" aria-labelledby="additional-fields-heading">
+                  <div className="flex items-center space-x-2 mb-4">
+                    <SlidersHorizontal className="h-4 w-4 text-indigo-500" />
+                    <h3 id="additional-fields-heading" className="text-sm font-semibold text-gray-900">Additional Support Information</h3>
+                  </div>
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    {catalogFields
+                      .filter(field => !['interests_motivators', 'challenges', 'regulation_strategies', 'accommodations', 'allergies'].includes(field.key))
+                      .map(field => {
+                        const values = dynamicFieldForms[field.key] || [];
+                        const editing = editingDynamicField === field.key;
+                        return (
+                          <div key={field.id}>
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="text-sm font-medium text-gray-600">{field.label}</h4>
+                              {canEdit && !editing && (
+                                <button onClick={() => {
+                                  setDynamicFieldForms(prev => ({ ...prev, [field.key]: values.length > 0 ? [...values] : [''] }));
+                                  setEditingDynamicField(field.key);
+                                }} className="p-1.5 text-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title={`Edit ${field.label}`}>
+                                  <SquarePen className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                            {field.description && <p className="text-xs text-gray-500 mb-2">{field.description}</p>}
+                            {editing ? (
+                              <div>
+                                <div className="space-y-1.5">
+                                  {(dynamicFieldForms[field.key] || ['']).map((value, index) => (
+                                    <div key={index} className="flex space-x-1.5">
+                                      <input
+                                        type="text"
+                                        value={value}
+                                        onChange={e => setDynamicFieldForms(prev => ({ ...prev, [field.key]: (prev[field.key] || []).map((item, i) => i === index ? e.target.value : item) }))}
+                                        className={`flex-1 text-sm ${INPUT_BASE_CLASSES}`}
+                                        placeholder={field.label}
+                                      />
+                                      {(dynamicFieldForms[field.key] || []).length > 1 && (
+                                        <button type="button" onClick={() => setDynamicFieldForms(prev => ({ ...prev, [field.key]: (prev[field.key] || []).filter((_, i) => i !== index) }))} className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg">
+                                          <Trash2 className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                                <button type="button" onClick={() => setDynamicFieldForms(prev => ({ ...prev, [field.key]: [...(prev[field.key] || ['']), ''] }))} className="flex items-center space-x-1 text-indigo-600 hover:text-indigo-700 text-xs font-medium mt-2">
+                                  <Plus className="h-3.5 w-3.5" /><span>Add</span>
+                                </button>
+                                <div className="flex justify-end space-x-2 pt-3 mt-2 border-t border-gray-100">
+                                  <button onClick={() => setEditingDynamicField(null)} className="px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-full text-xs font-medium">Cancel</button>
+                                  <button onClick={() => handleSaveDynamicField(field.key)} disabled={savingProfile} className="flex items-center space-x-1 px-3 py-1.5 bg-indigo-600 text-white rounded-full hover:bg-indigo-700 text-xs font-medium disabled:opacity-50">
+                                    <Save className="h-3 w-3" /><span>{savingProfile ? 'Saving...' : 'Save'}</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ) : values.length > 0 ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {values.map((value, index) => <span key={index} className="bg-indigo-50 text-indigo-800 border border-indigo-100 px-2.5 py-1 rounded-full text-sm">{value}</span>)}
+                              </div>
+                            ) : (
+                              <p className="text-gray-400 text-sm italic">None recorded</p>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
+                </section>
+              )}
             </div>
 
             {/* Contacts, Service Provider & Job Coaches Row */}
@@ -1541,13 +1664,15 @@ const handleGenerateInvitation = async () => {
                             <input type="email" value={contact.email} onChange={e => updateContactFormField(index, 'email', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder="Email" />
                             <input type="tel" value={contact.phone} onChange={e => updateContactFormField(index, 'phone', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`} placeholder={contact.is_emergency_contact ? 'Phone *' : 'Phone'} />
                             <select value={contact.relationship_type} onChange={e => updateContactFormField(index, 'relationship_type', e.target.value)} className={`w-full text-sm ${INPUT_BASE_CLASSES}`}>
-                              <option value="Parent/Guardian">Parent/Guardian</option>
-                              <option value="Parent">Parent</option>
-                              <option value="Legal Guardian">Legal Guardian</option>
-                              <option value="Case Manager">Case Manager</option>
-                              <option value="Family Member">Family Member</option>
-                              <option value="Employer">Employer</option>
-                              <option value="Other">Other</option>
+                              {(relationshipOptions.length > 0 ? relationshipOptions : [
+                                { key: 'parent_guardian', label: 'Parent/Guardian' },
+                                { key: 'parent', label: 'Parent' },
+                                { key: 'legal_guardian', label: 'Legal Guardian' },
+                                { key: 'case_manager', label: 'Case Manager' },
+                                { key: 'family_member', label: 'Family Member' },
+                                { key: 'employer', label: 'Employer' },
+                                { key: 'other', label: 'Other' },
+                              ]).map(option => <option key={option.key} value={option.label}>{option.label}</option>)}
                             </select>
                             <label className="flex items-center space-x-2 cursor-pointer self-center">
                               <input type="checkbox" checked={contact.is_emergency_contact} onChange={e => updateContactFormField(index, 'is_emergency_contact', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
@@ -1600,7 +1725,7 @@ const handleGenerateInvitation = async () => {
                                 </div>
                               </div>
                               <div className="flex items-center space-x-1 ml-2 shrink-0">
-                                 {canInviteExternalUser && !contact.has_app_access && ['Parent/Guardian', 'Parent'].includes(contact.relationship_type) && contact.email && (
+                                 {canInviteExternalUser && !contact.has_app_access && guardianRelationshipLabels.has(contact.relationship_type) && contact.email && (
                                   <button
                                     onClick={() => handleGrantAccess(contact.id)}
                                     disabled={grantingAccess === contact.id}
