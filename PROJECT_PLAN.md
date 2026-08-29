@@ -251,5 +251,5 @@ Report back: what changed, how tested, any blockers
 
 1. ~~PACKET-001 … 003C~~ ✅ **Done** (through 003C Aug 29).  
 2. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
-3. **Replit (now):** **PACKET-005** — unified notes feed (T5). *Or* **003D** if product wants advanced form types first.  
-4. **Then:** 006 invites → 003D (if not done) → 007 profile catalog.
+3. **Replit (now):** **PACKET-003B-FIX** — dedupe reviews + Forms card + polish (see audit Aug 29).  
+4. **Re-audit** after fix, then **PACKET-004** (Allison data) + **003D**.

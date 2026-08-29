@@ -14,13 +14,14 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 2 | PACKET-002 | ✅ **Done** (Joe, Aug 25) | ~half day |
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
 | **3b** | **PACKET-003A-UX** | ✅ **Done** (Joe, Aug 28) | ~half day |
-| **4** | **PACKET-003B** | ✅ **Done** (Joe, Aug 28) | multi-day |
+| **4** | **PACKET-003B** | ✅ Done — **repair:** PACKET-003B-FIX | multi-day |
+| **4-fix** | **PACKET-003B-FIX** | **Ready — do before 004 / new features** | ~half day |
 | **6** | **PACKET-003C** | ✅ **Done** (Joe, Aug 29) | multi-day |
 | 7 | PACKET-004 | Optional — historical mid-year data entry (product) | small |
-| **8** | **PACKET-003D** or **005** | **Next engineering** — see below | multi-day |
+| **8** | **PACKET-003D** | **After 003B-FIX** | multi-day |
 
-**Do next (Replit):** **PACKET-005** (unified notes feed) **or** **PACKET-003D** (advanced form types) — product call.  
-**Parallel (Allison):** **PACKET-004** — enter historical PDF mid-year scores in Reviews UI (no code required unless bulk script wanted).
+**Do next (Replit):** **PACKET-003B-FIX** — repair audit findings from Aug 29 code review.  
+**Then:** re-audit → **PACKET-004** (Allison data) + **003D** in parallel.
 
 ### Packet numbering (locked — do not mix)
 
@@ -516,13 +517,82 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 ---
 
+## PACKET-003B-FIX — Reviews / Forms repair (post-audit)
+
+**Status:** Ready — do **before** PACKET-004 data entry or new features  
+**Priority:** High  
+**Prerequisite:** PACKET-003B + 003C ✅ on `main`  
+**Effort:** ~half day  
+**Source:** Cursor code review of `main` (Aug 29, 2026)
+
+### Why
+
+003B/003C shipped most of the form engine, but the profile still has **two review systems** and is **missing the custom Forms card** (B20). Fix these before Allison enters PDF data (004) or users create custom templates.
+
+### A. One mid-year path only — remove legacy reviews from profile
+
+**Problem:** `EmployeeDetail.tsx` mounts **both**:
+- `EmployeeReviewsCard` (form engine — correct, locked mid-year questions)
+- `EmployeeReviews` embedded as “Previous Reviews” (legacy `employee_reviews` table — **wrong questions**)
+
+**Do:**
+1. **Remove** `<EmployeeReviews employeeId={…} embedded />` from inside `EmployeeReviewsCard` (and remove unused import if nothing else uses it on profile).
+2. **Do not** show legacy `EmployeeReviews` on Super Scooper profiles unless product explicitly wants a separate “archive” (default: **hide entirely**).
+3. If any rows exist in `employee_reviews`: either leave table/API for admin export only, or one-time migrate text into form responses — **not required for this packet** unless Allison already entered data there (unlikely). Document choice in report-back.
+
+**Keep:** `EmployeeReviewsCard` + `FormFiller` for `form_type = mid_year_review` only.
+
+### B. Add **Forms** card for custom templates (B20)
+
+**Problem:** Admin can create `form_type = custom` templates, but profiles have **no entry point** to start/fill them.
+
+**Do:** New component `EmployeeCustomFormsCard.tsx` (mirror `EmployeeReviewsCard.tsx`):
+
+- Mount on Super Scooper profiles in `EmployeeDetail` **below** Reviews card (separate section — not nested inside Reviews).
+- List **active** templates where `form_type = custom`.
+- Per template: list response sets for this scooper — **Start**, **Continue draft**, **View submitted**.
+- Reuse `FormFiller` from `FormsAndReviews.tsx`.
+- ACL: same as Reviews — `form_responses` permission + template `allowed_fill_roles`.
+- Empty state: “No custom forms yet” when no active custom templates.
+
+### C. Polish (same packet if quick)
+
+| Item | Action |
+|------|--------|
+| **B23** | Replace native `<select>` in `GoalTemplates.tsx` (duration unit, timer type) with `AppSelect` |
+| **B21 helper** | Under form type dropdown in builder modal, add: “Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs.” |
+| **Security** | Add `canAccessScooper` (or `canAccessSuperScooper`) to `GET /api/employees/:id/assessment-history`, `assessment-history-details`, and `GET /api/certifications/:employeeId` |
+
+### Out of scope
+
+- PACKET-004 PDF bulk import
+- Removing hardcoded cert fallback arrays (only if templates always seeded in prod)
+- Deprecating `employee_reviews` table/API entirely (optional follow-up)
+
+### Acceptance tests
+
+1. Super Scooper profile shows **one** Reviews area — mid-year via form engine only; **no** “Previous Reviews” legacy block.
+2. Admin creates active **Custom form** template → appears on profile **Forms** card (not inside Reviews) → Shift Lead can Start → draft → submit.
+3. Guardian (default): cannot see mid-year or custom form answers; Admin enables `form_responses` View → can see.
+4. Goal Templates duration/timer use `AppSelect` (same open-menu styling as Forms builder).
+5. Unassigned user cannot `GET` another employee’s assessment-history or certifications by ID (403).
+
+### Report back
+
+- Screenshot: profile with Reviews + **separate** Forms cards
+- Confirm legacy `EmployeeReviews` removed from profile (and whether any `employee_reviews` rows existed)
+- Note any assessment/cert ACL changes
+
+---
+
 ## Later packets
 
 | Packet | Topic | Blocked by | Next? |
 |--------|--------|------------|-------|
+| **PACKET-003B-FIX** | Reviews dedupe + Forms card + polish | 003B ✅ | **Replit — do next** |
 | **PACKET-003C** | Conditionals + coach check-in migration | 003B ✅ | ✅ Done |
-| PACKET-004 | Historical PDF mid-year answers (Allison / optional bulk script) | 003B ✅ | **Product now** |
-| **PACKET-005** | Unified notes feed (T5) | 003C ✅ | **Replit — recommended next** |
-| PACKET-006 | Invites + `external_user_invites` (T6) | 005 optional | After 005 |
-| PACKET-003D | Advanced types + ROI subset | 003C ✅ | Can parallel with 005 |
-| PACKET-007 | Profile field catalog (T3-B) | 003A ✅ | Last platform phase |
+| PACKET-004 | Historical PDF mid-year answers (Allison / optional bulk script) | 003B-FIX ✅ | **Product after fix** |
+| PACKET-005 | Unified notes feed (T5) | 003C ✅ | ✅ Likely on main — verify in re-audit |
+| PACKET-006 | Invites + `external_user_invites` (T6) | 005 optional | Partial on main — verify |
+| PACKET-003D | Advanced types + ROI subset | 003B-FIX ✅ | After fix |
+| PACKET-007 | Profile field catalog (T3-B) | 003A ✅ | Partial on main — verify |
