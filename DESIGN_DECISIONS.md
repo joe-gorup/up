@@ -140,10 +140,10 @@
 4. PACKET-003A-UX Form builder UX parity with Goal Templates ✅
 5. PACKET-003B Phase 2 — mid-year Reviews card + Forms card + cert migration + seed scripts ✅
 6. PACKET-004  Historical PDF mid-year answer entry (Allison / optional Replit bulk script)
-7. PACKET-003C Phase 3 — conditionals + coach check-in migration **← Replit next**
-8. PACKET-005  T5 notes aggregator + timeline guardian notes
+7. PACKET-003C Phase 3 — conditionals + coach check-in migration ✅
+8. PACKET-005  T5 unified notes feed **← Replit recommended next**
 9. PACKET-006  T6 invites + permission enforcement
-10. PACKET-003D Phase 4 — signature, file, rich text, ROI subset
+10. PACKET-003D Phase 4 — signature, file, rich text, ROI subset (can parallel 005)
 11. PACKET-007 Phase 5 — profile catalog + option_lists
 ```
 
@@ -163,9 +163,9 @@
 | PACKET-002 | T2 accommodations | No |
 | PACKET-003A | Form engine Phase 1 (schema, Admin CRUD, core types) | No |
 | PACKET-003B | Reviews + Forms cards + cert migration + mid-year seed | No — ✅ done Aug 28 |
-| PACKET-003C | Conditionals + coach check-in migration | No — **next** |
-| PACKET-004 | Historical PDF mid-year data entry | Content ready — product |
-| PACKET-005+ | Notes, invites, advanced types, profile catalog | No |
+| PACKET-003C | Conditionals + coach check-in migration | No — ✅ done Aug 29 |
+| PACKET-004 | Historical PDF mid-year data entry | Content ready — **Allison now** |
+| PACKET-005 | Unified notes feed | No — **Replit next** |
 
 **Tip:** Seed template questions from `MIDYEAR_REVIEW_QUESTIONS.md` in 003B. Allison can then enter historical PDF scores into each scooper’s mid-year response.
 

@@ -15,12 +15,19 @@ Paste one packet at a time into Replit. Do not implement from this repo’s Curs
 | 3 | PACKET-003A | ✅ **Done** (Joe, Aug 25) | multi-day |
 | **3b** | **PACKET-003A-UX** | ✅ **Done** (Joe, Aug 28) | ~half day |
 | **4** | **PACKET-003B** | ✅ **Done** (Joe, Aug 28) | multi-day |
-| 5 | PACKET-004 | Optional — historical mid-year data entry | small |
-| **6** | **PACKET-003C** | **Ready — do next (engineering)** | multi-day |
-| 7 | PACKET-005 | Notes feed (can parallel) | multi-day |
+| **6** | **PACKET-003C** | ✅ **Done** (Joe, Aug 29) | multi-day |
+| 7 | PACKET-004 | Optional — historical mid-year data entry (product) | small |
+| **8** | **PACKET-003D** or **005** | **Next engineering** — see below | multi-day |
 
-**Do next (Replit):** **PACKET-003C** — conditionals + coach check-in migration.  
-**Parallel (product):** **PACKET-004** — Allison enters historical PDF mid-year scores via Reviews UI.
+**Do next (Replit):** **PACKET-005** (unified notes feed) **or** **PACKET-003D** (advanced form types) — product call.  
+**Parallel (Allison):** **PACKET-004** — enter historical PDF mid-year scores in Reviews UI (no code required unless bulk script wanted).
+
+### Packet numbering (locked — do not mix)
+
+| Packet | What it is |
+|--------|------------|
+| **PACKET-004** | **Historical mid-year PDF data entry** — Allison (or optional Replit bulk import script). **Not** profile catalog. |
+| **PACKET-007** | **Profile field catalog** — admin-configurable interests, challenges, accommodations labels, contact relationship options (`profile_field_definitions`, `option_lists`). **Later.** |
 
 ---
 
@@ -513,9 +520,9 @@ Mount on Super Scooper profiles in `EmployeeDetail` (near goals / notes area).
 
 | Packet | Topic | Blocked by | Next? |
 |--------|--------|------------|-------|
-| PACKET-004 | Enter historical PDF mid-year answers (Allison / manual; optional bulk script) | 003B ✅ | **Product — can start now** |
-| **PACKET-003C** | Conditionals + coach check-in migration | 003B ✅ | **Replit — do next** |
-| PACKET-005 | Unified notes feed (T5) | 003A ACL ✅ | Can parallel after 003C or stagger |
-| PACKET-006 | Invites + `external_user_invites` enforcement (T6) | 005 optional | After 005 or parallel |
-| PACKET-003D | Advanced types + ROI subset | 003C | |
-| PACKET-007 | Profile catalog (T3-B) | 003A | |
+| **PACKET-003C** | Conditionals + coach check-in migration | 003B ✅ | ✅ Done |
+| PACKET-004 | Historical PDF mid-year answers (Allison / optional bulk script) | 003B ✅ | **Product now** |
+| **PACKET-005** | Unified notes feed (T5) | 003C ✅ | **Replit — recommended next** |
+| PACKET-006 | Invites + `external_user_invites` (T6) | 005 optional | After 005 |
+| PACKET-003D | Advanced types + ROI subset | 003C ✅ | Can parallel with 005 |
+| PACKET-007 | Profile field catalog (T3-B) | 003A ✅ | Last platform phase |

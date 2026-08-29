@@ -306,7 +306,7 @@ Aiming for “almost everything” does **not** mean one big bang. Ship in layer
 - ROI onboarding template (or subset)
 - Wire file/signature to existing storage patterns
 
-### Phase 5 — Profile catalog + option lists (T3-B, PACKET-004)
+### Phase 5 — Profile catalog + option lists (T3-B, **PACKET-007**)
 - `profile_field_definitions`, `profile_field_values`
 - `option_lists` for contacts
 - Gradual migration off hardcoded Support Information labels

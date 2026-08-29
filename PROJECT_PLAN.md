@@ -249,7 +249,7 @@ Report back: what changed, how tested, any blockers
 
 ## 10. Next actions
 
-1. ~~PACKET-001 / 002 / 003A / 003A-UX / 003B~~ ✅ **Done** (003B Aug 28).  
-2. **Replit (now):** **PACKET-003C** — conditionals + migrate `CoachCheckin` to form templates.  
-3. **Product (parallel):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
-4. **Then:** PACKET-005 notes feed → PACKET-006 invites → PACKET-003D advanced types.
+1. ~~PACKET-001 … 003C~~ ✅ **Done** (through 003C Aug 29).  
+2. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
+3. **Replit (now):** **PACKET-005** — unified notes feed (T5). *Or* **003D** if product wants advanced form types first.  
+4. **Then:** 006 invites → 003D (if not done) → 007 profile catalog.
