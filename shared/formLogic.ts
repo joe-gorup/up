@@ -6,6 +6,23 @@ export type ConditionalRule = {
   value?: unknown;
 };
 
+export type FormOption = {
+  key: string;
+  label: string;
+  icon?: string;
+};
+
+export function normalizeFormOption(option: unknown): FormOption {
+  if (typeof option === 'string') return { key: option, label: option };
+  const record = option && typeof option === 'object' ? option as Record<string, unknown> : {};
+  const key = String(record.key || record.value || '');
+  return {
+    key,
+    label: String(record.label || record.key || record.value || ''),
+    icon: record.icon ? String(record.icon) : undefined,
+  };
+}
+
 function comparable(value: unknown): unknown {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const record = value as Record<string, unknown>;
@@ -81,4 +98,40 @@ export function isQuestionRequired(
   const conditional = config.required_when || config.conditional_required;
   const validation = config.validation && typeof config.validation === 'object' ? config.validation as Record<string, unknown> : {};
   return Boolean(config.required || validation.required) || Boolean(conditional && evaluateConditional(conditional as ConditionalRule, answersByStableKey));
+}
+
+type ConditionalQuestion = {
+  id: string;
+  stable_key: string;
+  config_json?: Record<string, unknown> | null;
+};
+
+export function normalizeConditionalAnswers(
+  questions: ConditionalQuestion[],
+  answers: Map<string, unknown>,
+) {
+  const visibleAnswers = new Map(answers);
+  for (let pass = 0; pass <= questions.length; pass += 1) {
+    const lookup = new Map<string, unknown>();
+    for (const question of questions) lookup.set(question.stable_key, visibleAnswers.get(question.id));
+    let removed = false;
+    for (const question of questions) {
+      if (!isQuestionVisible(question, lookup) && visibleAnswers.delete(question.id)) removed = true;
+    }
+    if (!removed) return { answers: visibleAnswers, lookup };
+  }
+  const lookup = new Map<string, unknown>();
+  for (const question of questions) lookup.set(question.stable_key, visibleAnswers.get(question.id));
+  return { answers: visibleAnswers, lookup };
+}
+
+export function missingRequiredQuestionPrompts(
+  questions: ConditionalQuestion[],
+  answers: Map<string, unknown>,
+): string[] {
+  const normalized = normalizeConditionalAnswers(questions, answers);
+  return questions
+    .filter(question => isQuestionVisible(question, normalized.lookup) && isQuestionRequired(question, normalized.lookup))
+    .filter(question => !isMeaningfullyAnswered(normalized.answers.get(question.id)))
+    .map(question => (question as ConditionalQuestion & { prompt?: string }).prompt || question.stable_key);
 }

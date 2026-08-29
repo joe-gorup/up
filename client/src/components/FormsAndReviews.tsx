@@ -9,7 +9,7 @@ import { type Employee } from '../contexts/DataContext';
 import { useToast } from '../hooks/use-toast';
 import AppSelect from './ui/AppSelect';
 import Modal from './ui/Modal';
-import { isQuestionRequired, isQuestionVisible } from '@shared/formLogic';
+import { isQuestionRequired, isQuestionVisible, normalizeFormOption } from '@shared/formLogic';
 
 type QuestionType =
   | 'free_text' | 'long_text' | 'yes_no' | 'single_select' | 'multi_select'
@@ -84,13 +84,8 @@ function isSameQuestion(candidate: FormQuestion, target: FormQuestion) {
   return target.id ? candidate.id === target.id : candidate.stable_key === target.stable_key;
 }
 
-function optionParts(option: any): { key: string; label: string; icon?: string } {
-  if (typeof option === 'string') return { key: option, label: option };
-  return { key: String(option?.key || option?.value || ''), label: String(option?.label || option?.key || option?.value || ''), icon: option?.icon || undefined };
-}
-
 function optionText(option: any): string {
-  const item = optionParts(option);
+  const item = normalizeFormOption(option);
   return [item.key, item.label, item.icon].filter(Boolean).join(' | ');
 }
 
@@ -417,7 +412,7 @@ function AnswerControl({ question, value, onChange }: { question: FormQuestion; 
   const config = question.config_json || {};
   const options = config.options || ['Option 1', 'Option 2'];
   const normalizedOptions = (Array.isArray(options) ? options : [])
-    .map((option: any) => optionParts(option))
+    .map((option: any) => normalizeFormOption(option))
     .filter((option: { key: string }) => option.key);
   const primitiveValue = answerPrimitive(value);
   const selectedValues = Array.isArray(value) ? value : Array.isArray(primitiveValue) ? primitiveValue : [];
@@ -472,7 +467,7 @@ function ReadOnlyAnswer({ value, question }: { value: any; question?: FormQuesti
   const options = question?.config_json?.options;
   const labels = Array.isArray(options)
     ? new Map(options.map((option: any) => {
-      const item = optionParts(option);
+      const item = normalizeFormOption(option);
       return [item.key, `${question?.config_json?.display?.show_icons && item.icon ? `${item.icon} ` : ''}${item.label}`];
     }))
     : new Map<string, string>();

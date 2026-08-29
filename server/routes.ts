@@ -30,7 +30,7 @@ import {
   type AuthUser 
 } from "./auth";
 import { canAccessScooper, canModifyScooperForms, canViewScooperForms, hasFormPermission } from "./formAccess";
-import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible } from "@shared/formLogic";
+import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible, missingRequiredQuestionPrompts, normalizeConditionalAnswers } from "@shared/formLogic";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
 // but whose parent development_goal references a template, look up the matching
@@ -5076,37 +5076,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return canModifyScooperForms(user, employeeId);
   };
 
-  const answerLookup = (questions: any[], answers: Map<string, unknown>) => {
-    const byStableKey = new Map<string, unknown>();
-    for (const question of questions) {
-      byStableKey.set(question.stable_key, answers.get(question.id));
-    }
-    return byStableKey;
-  };
-
-  const normalizeConditionalAnswers = (questions: any[], answers: Map<string, unknown>) => {
-    const visibleAnswers = new Map(answers);
-    // A hidden answer must not keep a later dependent question visible. Walk
-    // until the visibility graph settles, bounded by the number of questions.
-    for (let pass = 0; pass <= questions.length; pass += 1) {
-      const lookup = answerLookup(questions, visibleAnswers);
-      let removed = false;
-      for (const question of questions) {
-        if (!isQuestionVisible(question, lookup) && visibleAnswers.delete(question.id)) removed = true;
-      }
-      if (!removed) return { answers: visibleAnswers, lookup };
-    }
-    return { answers: visibleAnswers, lookup: answerLookup(questions, visibleAnswers) };
-  };
-
-  const missingRequiredQuestions = (questions: any[], answers: Map<string, unknown>) => {
-    const normalized = normalizeConditionalAnswers(questions, answers);
-    return questions
-      .filter(question => isQuestionVisible(question, normalized.lookup) && isQuestionRequired(question, normalized.lookup))
-      .filter(question => !isMeaningfullyAnswered(normalized.answers.get(question.id)))
-      .map(question => question.prompt);
-  };
-
   // Profile workflows can discover only the active template they are allowed
   // to use. Template administration remains restricted to Administrators.
   app.get("/api/form-templates/by-type/:formType", authenticateToken, async (req: Request, res: Response) => {
@@ -5429,7 +5398,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (validationError) return res.status(400).json({ error: validationError });
       }
       if (editingSubmitted) {
-         const missing = missingRequiredQuestions(snapshotQuestions, effectiveAnswers);
+         const missing = missingRequiredQuestionPrompts(snapshotQuestions, effectiveAnswers);
         if (missing.length) return res.status(400).json({ error: 'Complete all required questions before saving', missing });
       }
       const saved = await db.transaction(async (tx) => {
@@ -5539,7 +5508,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
              await tx.delete(form_answers).where(eq(form_answers.id, answer.id));
            }
          }
-         const missing = missingRequiredQuestions(questions, normalizedAnswers.answers);
+       const missing = missingRequiredQuestionPrompts(questions, normalizedAnswers.answers);
         if (missing.length) {
           throw Object.assign(new Error('Complete all required questions before submitting'), { status: 400, missing });
         }
