@@ -18,6 +18,7 @@ import { FormFiller } from './FormsAndReviews';
 import EmployeeProgress from './EmployeeProgress';
 import CertificationHistory from './CertificationHistory';
 import EmployeeAvatar from './EmployeeAvatar';
+import NotesFeed from './NotesFeed';
 import Modal from './ui/Modal';
 import AssessmentDetailsModal from './AssessmentDetailsModal';
 import { PhoneInput, INPUT_BASE_CLASSES } from './ui/FormInput';
@@ -78,15 +79,13 @@ interface EmployeeDetailProps {
 }
 
 export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCards = false }: EmployeeDetailProps) {
-  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, refreshCertifications, guardianNotes, loadGuardianNotesForScooper, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
+  const { employees, developmentGoals, stepProgress, goalTemplates, updateGoal, archiveGoal, updateEmployee, certifications, addCertification, deleteCertification, refreshCertifications, createAssessmentSession, endAssessmentSession, activeAssessmentSession } = useProgressData();
   const { user } = useAuth();
   const { canModify, canView } = usePermissions();
   const canEdit = canModify('employee_profiles');
   const canEditAccommodations = user ? canManageAccommodations(user.role) : false;
   const canAssignGoal = canModify('goal_assignment');
   const canAssess = canModify('goal_assessment');
-  const canViewGuardianNotes = canView('guardian_notes');
-  const canViewCoachNotes = canView('coach_notes');
   const [showGoalAssignment, setShowGoalAssignment] = useState(false);
   const [assessmentMode, setAssessmentMode] = useState(false);
   const [showSupportExpanded, setShowSupportExpanded] = useState(
@@ -128,8 +127,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [inviteLinkMap, setInviteLinkMap] = useState<Record<string, string>>({});
   const [copiedContactId, setCopiedContactId] = useState<string | null>(null);
   const [assignedCoaches, setAssignedCoaches] = useState<any[]>([]);
-  const [coachNotes, setCoachNotes] = useState<Array<{ id: string; employee_id: string; coach_id: string; title: string; content: string; created_at: string; updated_at: string; coach_name?: string }>>([]);
-  const [loadingCoachNotes, setLoadingCoachNotes] = useState(false);
   const [activeGoalsExpanded, setActiveGoalsExpanded] = useState(() =>
     developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'active').length > 0
   );
@@ -187,8 +184,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
   const [loadingPastAssessments, setLoadingPastAssessments] = useState(false);
   const [pastAssessmentsExpanded, setPastAssessmentsExpanded] = useState(false);
   const [menteesExpanded, setMenteesExpanded] = useState(user?.role === 'Administrator');
-  const [guardianNotesExpanded, setGuardianNotesExpanded] = useState(false);
-  const [coachNotesExpanded, setCoachNotesExpanded] = useState(false);
   const [maintenanceGoalsExpanded, setMaintenanceGoalsExpanded] = useState(() =>
     developmentGoals.filter(g => g.employeeId === employeeId && g.status === 'maintenance').length > 0
   );
@@ -470,43 +465,6 @@ export default function EmployeeDetail({ employeeId, onClose, onEdit, hideGoalCa
 
   const employee = employees.find(emp => emp.id === employeeId);
   const employeeGoals = developmentGoals.filter(goal => goal.employeeId === employeeId);
-
-  const guardianNotesLoadedRef = useRef(false);
-  useEffect(() => {
-    if (guardianNotesExpanded && canViewGuardianNotes && employee?.role === 'Super Scooper' && !guardianNotesLoadedRef.current) {
-      guardianNotesLoadedRef.current = true;
-      loadGuardianNotesForScooper(employeeId);
-    }
-  }, [guardianNotesExpanded, employeeId, canViewGuardianNotes, employee?.role]);
-
-  useEffect(() => {
-    guardianNotesLoadedRef.current = false;
-  }, [employeeId]);
-
-  const coachNotesLoadedRef = useRef(false);
-  useEffect(() => {
-    if (!coachNotesExpanded || !canViewCoachNotes || employee?.role !== 'Super Scooper' || coachNotesLoadedRef.current) return;
-    coachNotesLoadedRef.current = true;
-    const cacheKey = `coachNotes:${employeeId}`;
-    const cached = getCachedProfileData<any[]>(cacheKey);
-    if (cached) {
-      setCoachNotes(cached);
-      return;
-    }
-    setLoadingCoachNotes(true);
-    cachedApiRequest(`/api/coach-notes/${employeeId}`)
-      .then(res => res.ok ? res.json() : [])
-      .then(notes => {
-        setCoachNotes(notes);
-        setCachedProfileData(cacheKey, notes);
-      })
-      .catch(() => setCoachNotes([]))
-      .finally(() => setLoadingCoachNotes(false));
-  }, [coachNotesExpanded, employeeId, canViewCoachNotes, employee?.role]);
-
-  useEffect(() => {
-    coachNotesLoadedRef.current = false;
-  }, [employeeId]);
 
   useEffect(() => {
     async function fetchPastAssessments() {
@@ -2460,97 +2418,9 @@ const handleGenerateInvitation = async () => {
             </div>
           )}
 
-          {/* Guardian Notes Card - in left column for Super Scoopers */}
-          {canViewGuardianNotes && employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <button
-                onClick={() => setGuardianNotesExpanded(!guardianNotesExpanded)}
-                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
-              >
-                {guardianNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                <Heart className="h-5 w-5 text-rose-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Guardian Notes</h2>
-                <span className="bg-rose-100 text-rose-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).length}
-                </span>
-              </button>
-              {guardianNotesExpanded && (guardianNotes.filter(n => n.scooperId === employeeId).length > 0 ? (
-                <div className="space-y-3 mt-4">
-                  {guardianNotes.filter(n => n.scooperId === employeeId).map(note => {
-                    const guardian = employees.find(e => e.id === note.guardianId);
-                    return (
-                      <div key={note.id} className="p-4 bg-rose-50 border border-rose-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-semibold text-rose-900 text-sm">
-                            {guardian ? `${guardian.first_name} ${guardian.last_name}` : 'Guardian'}
-                          </span>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updatedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.note}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <Users className="h-3 w-3 text-rose-400" />
-                          <span className="text-xs text-rose-600">Guardian</span>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <Heart className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No guardian notes yet</p>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Job Coach Notes Card - in left column for Super Scoopers */}
-          {canViewCoachNotes && employee.role === 'Super Scooper' && (
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-3 sm:p-6">
-              <button
-                onClick={() => setCoachNotesExpanded(!coachNotesExpanded)}
-                className="flex items-center space-x-2 py-1 text-left hover:bg-gray-50 rounded-lg px-1 transition-colors"
-              >
-                {coachNotesExpanded ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
-                <FileText className="h-5 w-5 text-indigo-500" />
-                <h2 className="text-lg font-semibold text-gray-900">Job Coach Notes</h2>
-                <span className="bg-indigo-100 text-indigo-800 px-2 py-1 rounded-full text-xs font-medium">
-                  {coachNotes.length}
-                </span>
-              </button>
-              {coachNotesExpanded && (loadingCoachNotes ? (
-                <div className="flex items-center justify-center py-6">
-                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-500" />
-                </div>
-              ) : coachNotes.length > 0 ? (
-                <div className="space-y-3 mt-4">
-                  {coachNotes.map(note => (
-                      <div key={note.id} className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
-                        <div className="flex items-center justify-between mb-2">
-                          <h3 className="font-semibold text-indigo-900 text-sm">{note.title}</h3>
-                          <span className="text-xs text-gray-500">
-                            {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          </span>
-                        </div>
-                        <p className="text-gray-700 text-sm whitespace-pre-wrap">{note.content}</p>
-                        <div className="mt-2 flex items-center space-x-1">
-                          <UserCheck className="h-3 w-3 text-indigo-400" />
-                          <span className="text-xs text-indigo-600">
-                            {note.coach_name || 'Job Coach'}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              ) : (
-                <div className="text-center py-6">
-                  <FileText className="h-10 w-10 text-gray-300 mx-auto mb-2" />
-                  <p className="text-sm text-gray-500">No coach notes yet</p>
-                </div>
-              ))}
-            </div>
+          {/* Unified notes timeline */}
+          {employee.role === 'Super Scooper' && (
+            <NotesFeed employeeId={employeeId} />
           )}
 
           {/* Employee Reviews */}

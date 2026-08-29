@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import { coach_assignments, guardian_relationships, role_permissions } from '@shared/schema';
+import { isNotesWriterRole } from '@shared/notesFeed';
 import type { AuthUser } from './auth';
 
 type PermissionLevel = 'can_view' | 'can_modify' | 'can_delete';
@@ -57,4 +58,14 @@ export async function canModifyScooperForms(user: AuthUser, employeeId: string):
     canAccessScooper(user, employeeId),
   ]);
   return hasPermission && hasAccess;
+}
+
+/**
+ * Notes use the same profile relationship ACL as the profile itself, with a
+ * smaller, explicit list of roles allowed to write. Super Scoopers can view
+ * their own profile but are never writers.
+ */
+export async function canWriteNotes(user: AuthUser, employeeId: string): Promise<boolean> {
+  if (!isNotesWriterRole(user.role)) return false;
+  return canAccessScooper(user, employeeId);
 }

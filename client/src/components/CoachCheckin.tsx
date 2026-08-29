@@ -1,11 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { ClipboardCheck, ChevronLeft, ChevronDown, ChevronRight, Plus, AlertTriangle, FileText, Upload, Download, Trash2, Edit, X, Save, Paperclip, StickyNote } from 'lucide-react';
+import { ClipboardCheck, ChevronLeft, ChevronDown, ChevronRight, Plus, AlertTriangle, Upload, Download, Trash2, Paperclip, StickyNote } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { apiRequest } from '../lib/auth';
-import { invalidateProfileCache } from '../lib/apiCache';
-import RichTextEditor, { RichTextViewer } from './RichTextEditor';
 import { FormFiller } from './FormsAndReviews';
 import { type Employee } from '../contexts/DataContext';
+import NotesFeed from './NotesFeed';
 
 interface CheckinData {
   id: string;
@@ -36,17 +35,6 @@ interface CoachFileData {
   file_type: string;
   file_size: number;
   uploaded_at: string;
-}
-
-interface CoachNoteData {
-  id: string;
-  employee_id: string;
-  coach_id: string;
-  coach_name: string;
-  title: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
 }
 
 interface CoachCheckinProps {
@@ -175,181 +163,6 @@ function CheckinCard({ checkin, isOwner, onDelete }: { checkin: CheckinData; isO
               <button onClick={onDelete} className="text-xs text-red-500 hover:text-red-700">Delete check-in</button>
             </div>
           )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ========== Notes Tab ==========
-
-function NotesTab({ employeeId, isCoachOrAdmin, userId }: { employeeId: string; isCoachOrAdmin: boolean; userId?: string }) {
-  const [notes, setNotes] = useState<CoachNoteData[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [view, setView] = useState<'list' | 'create' | 'edit' | 'view'>('list');
-  const [selectedNote, setSelectedNote] = useState<CoachNoteData | null>(null);
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-
-  useEffect(() => { fetchNotes(); }, [employeeId]);
-
-  async function fetchNotes() {
-    try {
-      const res = await apiRequest(`/api/coach-notes/${employeeId}`);
-      if (res.ok) setNotes(await res.json());
-    } catch (err) {
-      console.error('Failed to fetch notes', err);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  async function handleSave() {
-    if (!title.trim() || !content.trim()) return;
-    setSaving(true);
-    setError('');
-    try {
-      const body = { employee_id: employeeId, title, content };
-      const res = selectedNote
-        ? await apiRequest(`/api/coach-notes/${selectedNote.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content }) })
-        : await apiRequest('/api/coach-notes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-      if (res.ok) {
-        setTitle(''); setContent(''); setSelectedNote(null); setView('list');
-        invalidateProfileCache(`coachNotes:${employeeId}`);
-        fetchNotes();
-      } else {
-        const data = await res.json();
-        setError(data.error || 'Failed to save note');
-      }
-    } catch { setError('Failed to save note'); } finally { setSaving(false); }
-  }
-
-  async function handleDelete(id: string) {
-    if (!confirm('Delete this note?')) return;
-    try {
-      await apiRequest(`/api/coach-notes/${id}`, { method: 'DELETE' });
-      invalidateProfileCache(`coachNotes:${employeeId}`);
-      fetchNotes();
-    } catch { console.error('Failed to delete note'); }
-  }
-
-  if (view === 'create' || view === 'edit') {
-    return (
-      <div className="space-y-4">
-        <input
-          value={title}
-          onChange={e => setTitle(e.target.value)}
-          placeholder="Note title..."
-          className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm font-medium"
-        />
-        <RichTextEditor
-          content={content}
-          onChange={setContent}
-          placeholder="Write your note here..."
-        />
-        {error && (
-          <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-xl">
-            <AlertTriangle className="h-4 w-4 flex-shrink-0" />
-            <span>{error}</span>
-          </div>
-        )}
-        <div className="flex gap-3">
-          <button
-            onClick={() => { setView('list'); setTitle(''); setContent(''); setSelectedNote(null); setError(''); }}
-            className="flex-1 py-3 px-4 border border-gray-300 rounded-xl text-gray-700 font-medium hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={!title.trim() || !content.trim() || saving}
-            className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-xl font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {saving ? 'Saving...' : (selectedNote ? 'Update Note' : 'Save Note')}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  if (view === 'view' && selectedNote) {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <button onClick={() => { setView('list'); setSelectedNote(null); }} className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1">
-            <ChevronLeft className="h-4 w-4" /> Back
-          </button>
-          {selectedNote.coach_id === userId && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => { setTitle(selectedNote.title); setContent(selectedNote.content); setView('edit'); }}
-                className="text-sm text-gray-600 hover:text-gray-800 flex items-center gap-1"
-              >
-                <Edit className="h-3.5 w-3.5" /> Edit
-              </button>
-              <button
-                onClick={() => handleDelete(selectedNote.id)}
-                className="text-sm text-red-500 hover:text-red-700 flex items-center gap-1"
-              >
-                <Trash2 className="h-3.5 w-3.5" /> Delete
-              </button>
-            </div>
-          )}
-        </div>
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900">{selectedNote.title}</h3>
-          <p className="text-xs text-gray-500 mt-1">
-            by {selectedNote.coach_name} &middot; {new Date(selectedNote.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </p>
-        </div>
-        <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <RichTextViewer content={selectedNote.content} />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div>
-      {isCoachOrAdmin && (
-        <button
-          onClick={() => { setView('create'); setTitle(''); setContent(''); setSelectedNote(null); }}
-          className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-medium hover:bg-blue-700 transition-colors mb-4"
-        >
-          <Plus className="h-4 w-4" />
-          New Note
-        </button>
-      )}
-
-      {loading ? (
-        <div className="text-center py-12 text-gray-400">Loading...</div>
-      ) : notes.length === 0 ? (
-        <div className="text-center py-12">
-          <StickyNote className="h-12 w-12 text-gray-300 mx-auto mb-3" />
-          <p className="text-gray-500 mb-1">No notes yet</p>
-          {isCoachOrAdmin && <p className="text-sm text-gray-400">Tap "New Note" to write one.</p>}
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {notes.map(note => (
-            <button
-              key={note.id}
-              onClick={() => { setSelectedNote(note); setView('view'); }}
-              className="w-full bg-white rounded-xl border border-gray-200 shadow-sm p-4 text-left hover:shadow-md hover:border-blue-300 transition-all"
-            >
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-gray-900 truncate">{note.title}</h4>
-                  <p className="text-xs text-gray-500 mt-1">
-                    by {note.coach_name} &middot; {new Date(note.updated_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                  </p>
-                </div>
-                <ChevronRight className="h-4 w-4 text-gray-400 mt-0.5 flex-shrink-0" />
-              </div>
-            </button>
-          ))}
         </div>
       )}
     </div>
@@ -692,7 +505,7 @@ export default function CoachCheckin({ employeeId, employeeName, onClose }: Coac
       )}
 
       {activeTab === 'notes' && (
-        <NotesTab employeeId={employeeId} isCoachOrAdmin={isCoachOrAdmin} userId={user?.id} />
+        <NotesFeed employeeId={employeeId} />
       )}
 
       {activeTab === 'files' && (

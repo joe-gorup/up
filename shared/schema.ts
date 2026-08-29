@@ -364,7 +364,6 @@ export const guardian_notes = pgTable("guardian_notes", {
 }, (table) => ({
   guardianIdIdx: index("guardian_notes_guardian_id_idx").on(table.guardian_id),
   scooperIdIdx: index("guardian_notes_scooper_id_idx").on(table.scooper_id),
-  uniqueGuardianScooperNote: unique("guardian_notes_unique").on(table.guardian_id, table.scooper_id),
 }));
 
 // Employee contacts table - unified contacts for each employee (replaces emergency_contacts JSON + guardian add flow)

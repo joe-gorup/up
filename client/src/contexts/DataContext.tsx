@@ -1501,17 +1501,11 @@ export function DataProvider({ children }: { children: React.ReactNode }) {
           createdAt: savedNote.created_at,
           updatedAt: savedNote.updated_at
         };
-        // Update or add the note in state
+        // Timeline saves append a new row. Replace only when the same legacy
+        // record is returned by an edit, never by guardian/scooper pair.
         setGuardianNotes(prev => {
-          const existingIndex = prev.findIndex(
-            n => n.guardianId === mapped.guardianId && n.scooperId === mapped.scooperId
-          );
-          if (existingIndex >= 0) {
-            const updated = [...prev];
-            updated[existingIndex] = mapped;
-            return updated;
-          }
-          return [...prev, mapped];
+          const withoutSavedRecord = prev.filter(note => note.id !== mapped.id);
+          return [...withoutSavedRecord, mapped];
         });
         return mapped;
       }

@@ -89,6 +89,13 @@ function optionText(option: any): string {
   return [item.key, item.label, item.icon].filter(Boolean).join(' | ');
 }
 
+export function optionParts(option: any): { key: string; label: string; icon?: string } {
+  const item = normalizeFormOption(option);
+  return item.icon
+    ? { key: item.key, label: item.label, icon: item.icon }
+    : { key: item.key, label: item.label };
+}
+
 export function answerPrimitive(value: any): any {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     for (const key of ['selected', 'bool', 'text', 'number', 'date', 'datetime', 'time', 'value']) {

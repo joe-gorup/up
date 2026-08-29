@@ -14,6 +14,7 @@ import {
   PERMISSION_FEATURES, CONFIGURABLE_ROLES,
   calculateDateFromRelativeDuration, getAccommodationWriteError, hasAccommodationUpdate
 } from "@shared/schema";
+import { buildNotesFeed, plainTextFromRichContent, type NotesFeedEntry } from "@shared/notesFeed";
 import crypto from "crypto";
 import { eq, and, desc, sql, inArray, isNull } from "drizzle-orm";
 import { ObjectStorageService, objectStorageClient } from "./objectStorage";
@@ -29,7 +30,7 @@ import {
   hashPassword, comparePassword, generateToken, authenticateToken, requireRole, requirePermission,
   type AuthUser 
 } from "./auth";
-import { canAccessScooper, canModifyScooperForms, canViewScooperForms, hasFormPermission } from "./formAccess";
+import { canAccessScooper, canModifyScooperForms, canViewScooperForms, canWriteNotes, hasFormPermission } from "./formAccess";
 import { isMeaningfullyAnswered, isQuestionRequired, isQuestionVisible, missingRequiredQuestionPrompts, normalizeConditionalAnswers } from "@shared/formLogic";
 
 // One-shot backfill: for any goal_steps row that has no template_step_id yet
@@ -146,6 +147,100 @@ function pickAllowedFields(body: Record<string, any>, allowedFields: string[]): 
     }
   }
   return result;
+}
+
+function noteAuthorName(employee: { name?: string | null; first_name?: string | null; last_name?: string | null } | undefined): string {
+  if (!employee) return 'Unknown';
+  return `${employee.first_name || ''} ${employee.last_name || ''}`.trim() || employee.name || 'Unknown';
+}
+
+function noteDate(value: Date | string | null | undefined, fallback?: Date | string | null): string {
+  const candidate = value || fallback;
+  const parsed = candidate ? new Date(candidate) : new Date(0);
+  return Number.isNaN(parsed.getTime()) ? new Date(0).toISOString() : parsed.toISOString();
+}
+
+async function loadUnifiedNotes(scooperId: string, viewerId: string, viewerRole: string) {
+  const [guardianRows, coachRows, checkinRows] = await Promise.all([
+    db.select().from(guardian_notes).where(eq(guardian_notes.scooper_id, scooperId)),
+    db.select().from(coach_notes).where(eq(coach_notes.employee_id, scooperId)),
+    db.select().from(coach_checkins).where(eq(coach_checkins.employee_id, scooperId)),
+  ]);
+
+  const authorIds = Array.from(new Set([
+    ...guardianRows.map(note => note.guardian_id),
+    ...coachRows.map(note => note.coach_id),
+    ...checkinRows.map(checkin => checkin.coach_id),
+  ]));
+  const authorRows = authorIds.length > 0
+    ? await db.select({
+        id: employees.id,
+        name: employees.name,
+        first_name: employees.first_name,
+        last_name: employees.last_name,
+        role: employees.role,
+      }).from(employees).where(inArray(employees.id, authorIds))
+    : [];
+  const authorMap = new Map(authorRows.map(author => [author.id, author]));
+
+  const entries: NotesFeedEntry[] = [
+    ...guardianRows.map(note => {
+      const author = authorMap.get(note.guardian_id);
+      return {
+        id: `guardian:${note.id}`,
+        sourceType: 'guardian' as const,
+        sourceId: note.id,
+        body: note.note,
+        title: null,
+        authorId: note.guardian_id,
+        authorName: noteAuthorName(author),
+        authorRole: author?.role || 'Guardian',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
+    ...coachRows.map(note => {
+      const author = authorMap.get(note.coach_id);
+      return {
+        id: `coach:${note.id}`,
+        sourceType: 'coach' as const,
+        sourceId: note.id,
+        body: plainTextFromRichContent(note.content),
+        title: note.title,
+        authorId: note.coach_id,
+        authorName: noteAuthorName(author),
+        authorRole: author?.role || 'Job Coach',
+        createdAt: noteDate(note.created_at, note.updated_at),
+        updatedAt: note.updated_at ? noteDate(note.updated_at) : null,
+      };
+    }),
+    ...checkinRows
+      .filter(checkin => Boolean(checkin.notes?.trim()))
+      .map(checkin => {
+        const author = authorMap.get(checkin.coach_id);
+        return {
+          id: `checkin:${checkin.id}`,
+          sourceType: 'checkin' as const,
+          sourceId: checkin.id,
+          body: checkin.notes!.trim(),
+          title: 'Coach Check-In summary',
+          authorId: checkin.coach_id,
+          authorName: noteAuthorName(author),
+          authorRole: author?.role || 'Job Coach',
+          createdAt: noteDate(checkin.created_at, checkin.checkin_date),
+          updatedAt: null,
+          linked: true,
+        };
+      }),
+  ];
+
+  return buildNotesFeed(entries).map(entry => ({
+    ...entry,
+    createdAt: noteDate(entry.createdAt),
+    updatedAt: entry.updatedAt ? noteDate(entry.updatedAt) : null,
+    canEdit: entry.sourceType !== 'checkin' && entry.authorId === viewerId,
+    canDelete: viewerRole === 'Administrator' && entry.sourceType !== 'checkin',
+  }));
 }
 
 export function buildCoachCheckinPayload({
@@ -3816,6 +3911,198 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Unified Notes Feed
+  app.get("/api/scoopers/:scooperId/notes-feed", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId } = req.params;
+
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+
+      const [notes, canWrite] = await Promise.all([
+        loadUnifiedNotes(scooperId, user.id, user.role),
+        canWriteNotes(user, scooperId),
+      ]);
+
+      res.json({
+        scooper_id: scooperId,
+        notes,
+        permissions: {
+          can_write: canWrite,
+          can_delete_any: user.role === 'Administrator',
+        },
+      });
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId }, 'Failed to fetch unified notes feed');
+      res.status(500).json({ error: 'Failed to fetch notes feed' });
+    }
+  });
+
+  app.post("/api/scoopers/:scooperId/notes-feed", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId } = req.params;
+      const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+
+      if (!body) return res.status(400).json({ error: 'Note body is required' });
+      if (body.length > 10000) return res.status(400).json({ error: 'Note body is too long' });
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canWriteNotes(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have permission to write notes for this profile' });
+      }
+
+      let sourceType: 'guardian' | 'coach';
+      let sourceId: string;
+      if (user.role === 'Guardian') {
+        const [created] = await db.insert(guardian_notes).values({
+          guardian_id: user.id,
+          scooper_id: scooperId,
+          note: body,
+        }).returning({ id: guardian_notes.id });
+        sourceType = 'guardian';
+        sourceId = created.id;
+      } else {
+        const [created] = await db.insert(coach_notes).values({
+          employee_id: scooperId,
+          coach_id: user.id,
+          title: 'Note',
+          content: body,
+        }).returning({ id: coach_notes.id });
+        sourceType = 'coach';
+        sourceId = created.id;
+      }
+
+      const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
+      const createdNote = notes.find(note => note.sourceType === sourceType && note.sourceId === sourceId);
+      logger.info({ scooperId, authorId: user.id, sourceType, sourceId }, 'Unified note created');
+      res.status(201).json(createdNote);
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId }, 'Failed to create unified note');
+      res.status(500).json({ error: 'Failed to create note' });
+    }
+  });
+
+  app.put("/api/scoopers/:scooperId/notes-feed/:sourceType/:sourceId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId, sourceType, sourceId } = req.params;
+      const body = typeof req.body?.body === 'string' ? req.body.body.trim() : '';
+
+      if (!body) return res.status(400).json({ error: 'Note body is required' });
+      if (body.length > 10000) return res.status(400).json({ error: 'Note body is too long' });
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+      if (sourceType !== 'guardian' && sourceType !== 'coach') {
+        return res.status(400).json({ error: 'This feed item cannot be edited' });
+      }
+
+      let authorId: string | undefined;
+      if (sourceType === 'guardian') {
+        const [existing] = await db.select({
+          id: guardian_notes.id,
+          guardian_id: guardian_notes.guardian_id,
+        }).from(guardian_notes).where(and(
+          eq(guardian_notes.id, sourceId),
+          eq(guardian_notes.scooper_id, scooperId),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.guardian_id;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(guardian_notes)
+          .set({ note: body, updated_at: new Date() })
+          .where(eq(guardian_notes.id, sourceId));
+      } else {
+        const [existing] = await db.select({
+          id: coach_notes.id,
+          coach_id: coach_notes.coach_id,
+        }).from(coach_notes).where(and(
+          eq(coach_notes.id, sourceId),
+          eq(coach_notes.employee_id, scooperId),
+        )).limit(1);
+        if (!existing) return res.status(404).json({ error: 'Note not found' });
+        authorId = existing.coach_id;
+        if (authorId !== user.id) return res.status(403).json({ error: 'You can only edit your own notes' });
+        await db.update(coach_notes)
+          .set({ content: body, updated_at: new Date() })
+          .where(eq(coach_notes.id, sourceId));
+      }
+
+      const notes = await loadUnifiedNotes(scooperId, user.id, user.role);
+      const updated = notes.find(note => note.sourceType === sourceType && note.sourceId === sourceId);
+      logger.info({ scooperId, authorId, sourceType, sourceId }, 'Unified note updated');
+      res.json(updated);
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId, sourceId: req.params.sourceId }, 'Failed to update unified note');
+      res.status(500).json({ error: 'Failed to update note' });
+    }
+  });
+
+  app.delete("/api/scoopers/:scooperId/notes-feed/:sourceType/:sourceId", authenticateToken, async (req: Request, res: Response) => {
+    try {
+      const user = (req as any).user as AuthUser;
+      const { scooperId, sourceType, sourceId } = req.params;
+
+      if (user.role !== 'Administrator') {
+        return res.status(403).json({ error: 'Only Administrators can delete feed notes' });
+      }
+      const [scooper] = await db.select({ id: employees.id, role: employees.role })
+        .from(employees)
+        .where(eq(employees.id, scooperId))
+        .limit(1);
+      if (!scooper || scooper.role !== 'Super Scooper') {
+        return res.status(404).json({ error: 'Scooper profile not found' });
+      }
+      if (!(await canAccessScooper(user, scooperId))) {
+        return res.status(403).json({ error: 'You do not have access to this profile' });
+      }
+      if (sourceType === 'guardian') {
+        const deleted = await db.delete(guardian_notes).where(and(
+          eq(guardian_notes.id, sourceId),
+          eq(guardian_notes.scooper_id, scooperId),
+        )).returning({ id: guardian_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else if (sourceType === 'coach') {
+        const deleted = await db.delete(coach_notes).where(and(
+          eq(coach_notes.id, sourceId),
+          eq(coach_notes.employee_id, scooperId),
+        )).returning({ id: coach_notes.id });
+        if (deleted.length === 0) return res.status(404).json({ error: 'Note not found' });
+      } else {
+        return res.status(400).json({ error: 'This feed item cannot be deleted' });
+      }
+
+      logger.info({ scooperId, administratorId: user.id, sourceType, sourceId }, 'Unified note deleted');
+      res.json({ success: true });
+    } catch (error) {
+      logger.error({ error, scooperId: req.params.scooperId, sourceId: req.params.sourceId }, 'Failed to delete unified note');
+      res.status(500).json({ error: 'Failed to delete note' });
+    }
+  });
+
 // Guardian Notes Routes
   // Get all notes for a scooper (viewable by admins/managers/job coaches)
   app.get("/api/guardian-notes/scooper/:scooperId", authenticateToken, async (req: Request, res: Response) => {
@@ -3875,7 +4162,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Create or update a guardian note (upsert - one note per guardian-scooper pair)
+  // Create a guardian note. Guardian notes are timeline entries; each save
+  // creates a new row rather than overwriting the previous entry.
   app.post("/api/guardian-notes", authenticateToken, requirePermission('guardian_notes', 'can_modify'), async (req: Request, res: Response) => {
     try {
       const user = (req as any).user as AuthUser;
@@ -3909,28 +4197,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'You are not linked to this family member' });
       }
       
-      // Check if a note already exists for this pair
-      const [existingNote] = await db.select().from(guardian_notes)
-        .where(and(
-          eq(guardian_notes.guardian_id, guardian_id),
-          eq(guardian_notes.scooper_id, scooper_id)
-        ))
-        .limit(1);
-      
-      if (existingNote) {
-        // Update existing note
-        const [updatedNote] = await db.update(guardian_notes)
-          .set({ note, updated_at: new Date() })
-          .where(eq(guardian_notes.id, existingNote.id))
-          .returning();
-        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: updatedNote.id }, 'Guardian note updated');
-        return res.json(updatedNote);
-      } else {
-        // Create new note
-        const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
-        logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: newNote.id }, 'Guardian note created');
-        return res.json(newNote);
-      }
+      const [newNote] = await db.insert(guardian_notes).values(parsed.data).returning();
+      logger.info({ guardianId: guardian_id, scooperId: scooper_id, noteId: newNote.id }, 'Guardian note created');
+      return res.json(newNote);
     } catch (error) {
       logger.error({ error, body: req.body }, 'Failed to create/update guardian note');
       res.status(500).json({ error: 'Failed to save guardian note' });
