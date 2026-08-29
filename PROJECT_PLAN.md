@@ -2,7 +2,7 @@
 
 **Last updated:** August 21, 2026  
 **Source:** Family/mid-year review feedback + Admin configuration goals  
-**Status:** Planning — design review recommended before major development  
+**Companion:** `ARCHITECTURE_BIG_CHANGES.md` · `WORK_PACKETS.md` · `FORM_ENGINE_SPEC.md` · **`DESIGN_DECISIONS.md`** (locked answers)  
 
 ### Working model (locked)
 
@@ -37,9 +37,9 @@ T1 (manager View Details default) and T2 (accommodations) were briefly merged to
 
 | ID | Topic | Status | Type | Notes |
 |----|--------|--------|------|-------|
-| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | **Ready for Replit** — confirm then fix | Bug / UX | Likely cause: `showSupportExpanded` defaults true only for Administrator |
-| **T2** | Accommodations on profile | **Ready for Replit** — after confirm | Feature | Dedicated field (separate from regulation strategies) |
-| **T3** | Admin-controllable configuration (forms, checklists, field names) | Planned — **design first** | Platform | Strategic theme; see §3 |
+| **T1** | Manager (Ali) missing Service Provider / Job Coach sections | ✅ **Done** (Replit PACKET-001) | Bug / UX | View Details expands for Admin, Shift Lead, Assistant Manager |
+| **T2** | Accommodations on profile | ✅ **Done** (Replit PACKET-002) | Feature | Dedicated field (separate from regulation strategies) |
+| **T3** | Admin-controllable configuration (forms, checklists, field names) | **In progress** — through 003B ✅; **003C next** | Platform | See `FORM_ENGINE_SPEC.md` |
 | **T4** | Mid-year review questions (5 questions from Google Doc) | Blocked on doc + design | Feature | First use of Admin form builder (T3) |
 | **T5** | Unified notes feed (name, date, all authorized users) | Planned | Feature | Replace siloed guardian/coach note UIs |
 | **T6** | Lightweight parent / job coach users (view + notes) | Planned | Feature | Streamlined invite; not full employee profile |
@@ -249,9 +249,7 @@ Report back: what changed, how tested, any blockers
 
 ## 10. Next actions
 
-1. **Replit:** `git pull origin main` — confirm T1/T2 code is gone (reverted).  
-2. **Cursor:** issue first work packet for **T1 investigate + fix** (after Ali confirm).  
-3. **Schedule design review** (§6) before T3/T4/T5/T6.  
-4. **Obtain Google Doc** with five mid-year questions.  
-5. **Lock sequence** (Option A recommended).  
-6. After design review: Cursor writes T3-A tech spec work packet → Replit implements.
+1. ~~PACKET-001 … 003C~~ ✅ **Done** (through 003C Aug 29).  
+2. **Product (now):** **PACKET-004** — Allison enters historical PDF mid-year scores in Reviews UI.  
+3. **Replit (now):** **PACKET-003B-FIX** — dedupe reviews + Forms card + polish (see audit Aug 29).  
+4. **Re-audit** after fix, then **PACKET-004** (Allison data) + **003D**.

@@ -1,0 +1,421 @@
+# Form Engine Spec — “Almost Everything” v1
+
+**Status:** Architect target for design review → Replit implementation  
+**Goal:** One Admin-configurable form platform that can migrate **nearly all** structured content in UP today, without developer releases for wording/options changes.
+
+**Companion:** `ARCHITECTURE_BIG_CHANGES.md`, `PROJECT_PLAN.md`
+
+---
+
+## 1. Scope: what “almost everything” means
+
+### In scope (migrate into form engine + Admin builder)
+
+| Source today | Migrate to |
+|--------------|------------|
+| Mid-year review questions (T4) | `form_templates` |
+| Mentor / Shift Lead cert checklists (T7) | `form_templates` |
+| Coach check-in questionnaire (T3-C) | `form_templates` |
+| ROI consent choice + structured fields (partial) | `form_templates` or linked onboarding template |
+| Custom / future Admin forms | `form_templates` |
+
+### In scope (Profile Field Catalog — T3-B, parallel track)
+
+| Source today | Migrate to |
+|--------------|------------|
+| Interests, Challenges, Regulation Strategies, Accommodations | `profile_field_definitions` + values |
+| Allergies, service providers (structured lists) | same catalog with `value_shape` variants |
+| Contact relationship dropdown options | `option_lists` config (shared with forms) |
+
+### In scope (Notes — T5, uses some types indirectly)
+
+| Source today | Approach |
+|--------------|----------|
+| Guardian notes, coach notes, check-in free text | Unified `profile_notes` feed; coach notes keep `rich_text` body |
+| Check-in structured answers | Stored via form engine when check-ins migrate |
+
+### Out of scope (stay specialized modules)
+
+| Source | Why |
+|--------|-----|
+| Goal assessment **outcomes** + mastery streak logic | Tied to `step_progress`, timers, mastery — not generic Q&A |
+| Goal template **steps** | Already Admin-managed; different lifecycle (assigned goals) |
+| Auth (login/password) | Security module |
+| File storage ACL for coach files | Storage layer; form engine stores **reference** to uploaded file |
+
+**Rule:** Goal assessment can **reuse** `single_select` rendering for outcomes in the UI, but answers stay in `step_progress` — do not force through `form_response_sets`.
+
+---
+
+## 2. Question type catalog (v1 — full list)
+
+### 2.1 Answer types (store in `form_answers.value_json`)
+
+| Type | Admin label | Value shape | Notes |
+|------|-------------|-------------|-------|
+| `free_text` | Short text | `{ "text": "..." }` | Single-line default |
+| `long_text` | Long text | `{ "text": "..." }` | Textarea; multiline flag |
+| `rich_text` | Rich text | `{ "html": "..." }` | TipTap JSON or HTML; coach notes pattern |
+| `yes_no` | Yes / No | `{ "bool": true \| false \| null }` | Null = unanswered |
+| `single_select` | Single choice | `{ "selected": "option_key" }` | **`AppSelect`** (default), chips, or radio — all custom UI; **no native `<select>`** (B23) |
+| `multi_select` | Multiple choice | `{ "selected": ["key", ...] }` | Checkboxes or multi dropdown |
+| `date` | Date | `{ "date": "YYYY-MM-DD" }` | ISO date |
+| `date_time` | Date & time | `{ "datetime": "ISO-8601" }` | **New to app** |
+| `time` | Time only | `{ "time": "HH:mm" }` | Optional; rare but cheap to add |
+| `number` | Number | `{ "number": 123.45 }` | Scores, counts, durations (non-timer) |
+| `scale` | Scale / rating | `{ "value": 4, "max": 5 }` | 1–5, 1–10, Likert; configurable min/max/labels |
+| `email` | Email | `{ "text": "user@..." }` | Validated |
+| `phone` | Phone | `{ "text": "+1..." }` | Validated; reuse `PhoneInput` |
+| `signature` | Signature | `{ "signature": "data:image/png;base64,..." \| storage_path }` | ROI pattern; prefer object storage path in prod |
+| `file` | File upload | `{ "file_id": "uuid", "file_name": "..." }` | Links to existing coach-files / object storage |
+| `repeatable_group` | Repeatable group | `{ "rows": [ { "sub_answers": {...} }, ... ] }` | ROI service providers, multi-contact blocks |
+
+### 2.2 Layout / non-answer types (no `form_answers` row — or answer optional)
+
+| Type | Purpose |
+|------|---------|
+| `section_header` | Category title (Shift Lead cert sections, check-in “Question 3”) |
+| `help_text` | Instructions, legal copy snippet, read-only |
+| `divider` | Visual separator |
+
+### 2.3 Display config (on `form_questions`, not separate types)
+
+```json
+{
+  "display": {
+    "style": "dropdown" | "chips" | "radio" | "checkbox_list",
+    "columns": 1,
+    "show_icons": true,
+    "icon_map": { "good": "👍" }
+  },
+  "options": [
+    { "key": "good", "label": "Good", "icon": "👍", "status": "active" }
+  ],
+  "validation": {
+    "required": true,
+    "min_length": 0,
+    "max_length": 5000,
+    "min": 0,
+    "max": 100,
+    "allowed_file_types": ["application/pdf"],
+    "max_file_size_mb": 10
+  },
+  "placeholder": "...",
+  "default_value": null
+}
+```
+
+**`display.style: "dropdown"`** must render with shared **`AppSelect`** (B23) — never native `<select>`, which looks different per OS/browser.
+
+---
+
+## 3. Form engine features (required for migration)
+
+These are **not** question types — they must ship with v1 or coach check-ins / certs won’t migrate.
+
+| Feature | Used by |
+|---------|---------|
+| **Sections** | Shift Lead certs, long reviews |
+| **Sort order / drag reorder** | All templates |
+| **Soft deactivate** question/section/option | All; legal/history safety |
+| **Template versioning** | Mid-year cycles, cert updates |
+| **Answer snapshot** on save | `{ prompt, question_type, options, value }` per answer |
+| **Conditional visibility** | Coach check-ins (“if yes, show follow-up”) |
+| **Conditional required** | Safety details when safety = yes |
+| **Option-level deactivate** | Hide old dropdown choice without breaking history |
+| **Cycle label** on response set | `2026-mid-year`, `2026-annual` |
+| **Draft vs submitted** | Staff save progress, lock after submit (configurable) |
+| **Duplicate template** | Admin clones last year’s mid-year |
+| **Stable keys** on questions | Analytics across renames (`big_win`, `safety_concern`) |
+
+### Conditional logic model (v1)
+
+Store on `form_questions`:
+
+```json
+{
+  "show_when": {
+    "question_stable_key": "big_win",
+    "operator": "equals",
+    "value": true
+  }
+}
+```
+
+Operators v1: `equals`, `not_equals`, `in`, `not_in`, `is_empty`, `is_not_empty`.
+
+---
+
+## 4. Shared config: option lists
+
+Contact relationship types and other reused dropdowns should not be hardcoded.
+
+```text
+option_lists
+  id, key, label, status
+
+option_list_items
+  id, list_id, key, label, sort_order, status
+```
+
+Forms and profile fields reference `option_list_id` instead of embedding options twice.
+
+**Migrates:** contact relationship dropdown, cert-specific enums if desired.
+
+---
+
+## 5. Data model (updated)
+
+```text
+form_templates
+  id, name, description, form_type, status, version
+  settings_json   -- submit_lock, allow_draft, who_can_fill roles
+  created_by, created_at, updated_at
+
+form_sections
+  id, template_id, title, sort_order, status
+
+form_questions
+  id, template_id, section_id, stable_key
+  prompt, help_text, question_type
+  config_json     -- display, options, validation, conditionals
+  sort_order, status
+
+form_response_sets
+  id, template_id, template_version, employee_id
+  subject_employee_id   -- scooper being reviewed (same as employee_id for mid-year)
+  cycle_label, status, submitted_by, submitted_at
+
+form_answers
+  id, response_set_id, question_id
+  value_json, snapshot_json, answered_by, updated_at
+
+option_lists / option_list_items   -- shared dropdowns
+
+profile_field_definitions          -- T3-B
+  id, key, label, value_shape, option_list_id?, sort_order, status
+
+employees.profile_field_values     -- jsonb map (gradual migration from columns)
+```
+
+### `form_type` enum (v1)
+
+```text
+mid_year_review
+annual_review
+mentor_certification
+shift_lead_certification
+coach_checkin
+roi_onboarding
+employee_intake
+custom
+```
+
+### `form_type` → profile placement (locked)
+
+The Admin **form type** dropdown sets `form_type` and determines where filled responses appear in the app.
+
+| `form_type` | Where it lives | Profile card |
+|-------------|----------------|--------------|
+| `mid_year_review`, `annual_review` | Super Scooper profile | **Reviews** card |
+| `mentor_certification`, `shift_lead_certification` | Existing promotion cert flow | — (cert UI, not a profile card) |
+| `coach_checkin` | Coach check-in flow | — (Phase 3) |
+| `roi_onboarding` | ROI onboarding flow | — |
+| `employee_intake` | TBD until product defines intake UX | — |
+| `custom` | Super Scooper profile | **Forms** card (separate from Reviews) |
+
+**Builder helper text (under dropdown):** “Form type controls where this template appears — Reviews card for employee reviews, Forms card for custom forms, certification flow for certs, etc.”
+
+Each type can also define **who can fill** in template `settings_json.allowed_fill_roles`.
+
+### Admin builder UX — Goal Templates parity (locked B21)
+
+**Reference implementation:** `client/src/components/GoalTemplates.tsx` — Forms & Reviews admin UI must feel like the same product screen, not a separate “form designer.”
+
+| Pattern | Goal Templates (`GoalTemplates.tsx`) | Forms & Reviews (required) |
+|---------|--------------------------------------|------------------------------|
+| List layout | Search bar + **All / Active / Archived** pills + **Create Template** | Same |
+| List body | White **table** card: name + subtitle, counts, status badge, icon actions | Table: name + description, **form type**, question count, status, actions |
+| View | **Full-page read-only** detail with back (X), white info cards, Edit / Duplicate / Archive | Same — show sections + questions in bordered cards (like Goal Steps) |
+| Create / Edit | **`Modal` `size="xl"`** — inline scrollable list of steps | **`Modal` `size="xl"`** — inline scrollable list of questions (grouped by section) |
+| Child rows | Numbered **Step N** cards, Add Step, remove X, fields inside card | Numbered **Question N** cards (or section heading + questions), Add Question, remove X |
+| Actions | Eye / Edit / Copy / Archive icon buttons in table | Same icons + behavior |
+| Archive | Confirm dialog; archived hidden from default filter | Same |
+| Duplicate | Opens create modal prefilled with “(Copy)” | Same |
+| Styling | `rounded-xl`, blue-600 primary, gray-50 table header, green active badge | **Reuse same classes** — do not introduce a new visual system |
+
+**Explicitly do NOT build:**
+- Dedicated `/form-templates/:id/edit` full-page builder or multi-step wizard
+- Drag-from-palette / canvas / left-rail “form designer”
+- Card-grid template list instead of table
+- Tabs like “Build | Preview | Settings” — optional read-only preview only, same as Goal Templates view mode
+
+**Sections in the modal:** Goal Templates use a flat step list. For forms, render sections as **lightweight headings** inside the same scrollable list (e.g. “Section: Job Skills” divider, then question cards). Avoid a separate sections management UI unless it matches the simplicity of “Add Step.”
+
+**`form_type` dropdown:** Lives in the create/edit modal (top fields, beside name/description) with helper text from §5 — not a separate screen.
+
+**No fill from builder (locked B22):** Forms & Reviews is **template management only** — same as Goal Templates (you don’t assign/fill goals from that screen). Do **not** add scooper picker, “Start response,” test fill route, or “Open for employee” actions in the admin builder. Filling happens only from the routed surface (profile Reviews/Forms cards, cert flow, etc.).
+
+**Dropdowns (locked B23):** All builder selects (`form_type`, question type, etc.) use **`AppSelect`** — not `<select>`. Deprecate `SelectInput` wrapping native select for new work.
+
+---
+
+## 6. Migration matrix
+
+| Legacy location | Types needed | Engine features | Phase |
+|-----------------|--------------|-----------------|-------|
+| `EmployeeDetail` mentor checklist | `yes_no`, `section_header` | snapshot, deactivate | **Phase 2** |
+| `EmployeeDetail` shift lead checklist | `yes_no`, `section_header` | sections | **Phase 2** |
+| `CoachCheckin.tsx` | `single_select`, `yes_no`, `long_text`, `section_header` | conditionals, chips display | **Phase 3** |
+| Mid-year Google Doc | all core answer types | cycle_label, draft/submit | **Phase 2** |
+| `OnboardingVerify` ROI | `single_select`, `signature`, `date`, `free_text`, `repeatable_group`, `phone` | onboarding flow wrapper | **Phase 4** |
+| Guardian note modal | `long_text` (via notes feed, not form) | — | **T5** |
+| Coach notes | `rich_text` + title field | notes module | **T5** |
+| Interests/Challenges/etc. | `repeatable_group` of `free_text` OR string_list | profile catalog | **T3-B** |
+| Contact relationships | `option_lists` | — | **T3-B** |
+| Goal assessment outcomes | **Do not migrate** | — | N/A |
+
+---
+
+## 7. Implementation phases (Replit — sliced)
+
+Aiming for “almost everything” does **not** mean one big bang. Ship in layers:
+
+### Phase 1 — Engine core (Replit PACKET-003A)
+- Schema: templates, sections, questions, response_sets, answers
+- Admin CRUD for templates + questions (all **answer types** registered; renderers can stub advanced types)
+- API: list/fill/submit response set
+- Answer snapshot on submit
+- Types fully working: `free_text`, `long_text`, `yes_no`, `single_select`, `multi_select`, `date`, `date_time`, `scale`, `section_header`, `help_text`
+- **`scale` is required in Phase 1** — mid-year review uses 1–5 ratings (`MIDYEAR_REVIEW_QUESTIONS.md`)
+
+### Phase 2 — First migrations (PACKET-003B)
+- **Reviews** profile card (T4) — `form_type` review types; seeded from `MIDYEAR_REVIEW_QUESTIONS.md`
+- **Forms** profile card — `form_type = custom` templates + responses (separate card from Reviews)
+- Cert checklists (T7) with dual-read legacy JSON
+- Seed scripts from hardcoded cert arrays + mid-year question file
+
+### Phase 3 — Conditionals + coach check-in (PACKET-003C)
+- Conditional show/required
+- Chip display style
+- Migrate `CoachCheckin` to load template by `form_type = coach_checkin`
+- Deprecate hardcoded `SETTING_OPTIONS`, etc.
+
+### Phase 4 — Rich + compliance types (PACKET-003D)
+- `rich_text`, `file`, `signature`, `repeatable_group`, `email`, `phone`, `number`, `time`
+- ROI onboarding template (or subset)
+- Wire file/signature to existing storage patterns
+
+### Phase 5 — Profile catalog + option lists (T3-B, **PACKET-007**)
+- `profile_field_definitions`, `profile_field_values`
+- `option_lists` for contacts
+- Gradual migration off hardcoded Support Information labels
+
+### Phase 6 — Notes feed (T5) + invites (T6)
+- Unified feed; link check-in/form submissions as feed entries where useful
+
+---
+
+## 8. Renderer registry (frontend pattern)
+
+One React registry maps `question_type` → component:
+
+```text
+FreeTextInput, LongTextInput, RichTextEditor, YesNoToggle,
+AppSelect, SingleSelectChips, MultiSelect,
+DatePicker, DateTimePicker, TimePicker, NumberInput,
+ScaleInput, EmailInput, PhoneInput, SignaturePad,
+FileUploadField, RepeatableGroup, SectionHeader, HelpText
+```
+
+### Shared `AppSelect` (B23 — all dropdowns)
+
+**Problem:** Native `<select>` menus are rendered by the OS — different on Windows, macOS, iOS, Android. Styled borders on the closed control do not fix the open menu.
+
+**Rule:** One shared component: `client/src/components/ui/AppSelect.tsx` (or refactor `SelectInput` in `FormInput.tsx` to use this internally).
+
+| Requirement | Detail |
+|-------------|--------|
+| Trigger | Same height/padding/radius as `INPUT_BASE_CLASSES` from `FormInput.tsx` |
+| Chevron | `ChevronDown` from lucide-react on the right |
+| Panel | White `rounded-xl` list, `border border-gray-200 shadow-lg`, max-height scroll |
+| Option row | `px-4 py-2.5 hover:bg-gray-50`; selected = `bg-blue-50 text-blue-700` |
+| Keyboard | Arrow keys, Enter, Escape; click outside closes |
+| A11y | `role="listbox"` / `role="option"` or Radix `@radix-ui/react-select` if added |
+
+**Use `AppSelect` in:**
+- Forms & Reviews builder (`form_type`, question type, any enum)
+- Form fill `single_select` when `display.style = dropdown`
+- Goal Templates duration unit (replace native select in `GoalTemplates.tsx`)
+- New dropdowns anywhere in the app
+
+**OK without AppSelect:** `chips`, `radio`, `checkbox_list`, `yes_no` toggles — already custom UI.
+
+**Migration:** Replace native `<select>` when touching a screen; **required** for all form-engine UI in 003A-UX / 003B.
+
+Admin **view** mode shows question structure (read-only, like Goal Template view). **Fill** uses the same question registry in profile cards / cert / check-in flows — not in the builder.
+
+**Domain exception:** `GoalOutcomeButtons` stays in `EmployeeProgress` — not in registry.
+
+---
+
+## 9. Permissions (form engine)
+
+| Action | Default role |
+|--------|----------------|
+| Manage templates | Administrator |
+| Fill mid-year / custom forms | Administrator, Shift Lead (configurable per template) |
+| Fill cert checklist | Administrator (same as today) |
+| Fill coach checkin | Job Coach, Administrator |
+| View submitted answers | Same as profile view ACL |
+| View draft answers | Author + Admin |
+
+Enforce via centralized `canAccessScooper` + template `settings_json.allowed_fill_roles`.
+
+**New permission features (Replit — with form engine / T6):**
+
+| Feature key | Label | Default View | Default Modify | Purpose |
+|-------------|-------|--------------|----------------|---------|
+| `form_responses` | Form & Review Responses | Staff on; Guardian/Job Coach off | Admin + Shift Lead fill | View mid-year & submitted form answers |
+| `external_user_invites` | External User Invites | — | Admin on; others off | Grant access / invite parents & coaches |
+
+---
+
+## 10. What we are explicitly NOT building in v1
+
+- Visual form builder drag-from-palette (list + reorder in Modal is enough; **must match Goal Templates UX** — see §5.1 / B21)
+- Dedicated full-page form designer or wizard separate from Goal Templates patterns
+- **Fill / open form for an employee from the admin builder** (scooper picker, test fill route) — B22
+- Native `<select>` for dropdown menus (B23) — use `AppSelect`
+- Cross-form analytics dashboard
+- Public/anonymous forms
+- PDF export of responses
+- Real-time collaborative editing of drafts
+- Full ROI legal document CMS (link or embed existing doc; capture consent via form types)
+
+---
+
+## 11. Design review — lock these before Phase 1
+
+1. Confirm **full type list** in §2.1 (any removals?)
+2. **Submitted answers editable?** (recommend: Admin only after submit)
+3. **Signature storage:** base64 in DB vs object storage path (recommend path)
+4. **Rich text format:** TipTap JSON vs HTML (recommend TipTap JSON to match coach notes)
+5. **Check-in migration:** replace hardcoded form entirely in Phase 3 vs run parallel
+6. **ROI in form engine** vs separate onboarding module with shared types
+7. **Profile catalog timing:** Phase 5 ok, or pull earlier?
+
+---
+
+## 12. Success criteria (“almost everything”)
+
+Admins can, without a developer:
+
+- [ ] Change mid-year and cert question wording and options  
+- [ ] Add/deactivate questions and sections  
+- [ ] Reconfigure coach check-in questions and conditional follow-ups  
+- [ ] Add/rename/deactivate profile support field labels (Phase 5)  
+- [ ] Reconfigure contact relationship dropdown options  
+- [ ] Clone a template for a new review cycle  
+
+Developers are only needed for **new platform capabilities**, not content edits.
